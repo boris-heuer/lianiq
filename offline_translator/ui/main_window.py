@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import sys
 import threading
 from pathlib import Path
 
@@ -27,6 +28,7 @@ from PySide6.QtWidgets import (
 
 from offline_translator.audio.capture import MicrophoneCapture
 from offline_translator.audio.devices import AudioDevice, list_audio_devices
+from offline_translator.audio.wav import read_pcm16_mono
 from offline_translator.config import AppConfig
 from offline_translator.domain import ConversationMode, Language, TranslationResult
 from offline_translator.pipeline import PipelineRunner, TranslationPipeline
@@ -47,10 +49,16 @@ class UiBridge(QObject):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, config: AppConfig, pipeline: TranslationPipeline) -> None:
+    def __init__(
+        self,
+        config: AppConfig,
+        pipeline: TranslationPipeline,
+        persist_settings: bool = True,
+    ) -> None:
         super().__init__()
         self.config = config
         self.pipeline = pipeline
+        self.persist_settings = persist_settings
         self.bridge = UiBridge()
         self.bridge.result.connect(self._show_result)
         self.bridge.error.connect(self._show_error)
@@ -263,6 +271,29 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(
             "All models are loaded; offline capture is ready." if ready else message
         )
+        if not ready:
+            return
+        if "--diagnostic-wav" in sys.argv:
+            argument_index = sys.argv.index("--diagnostic-wav") + 1
+            if argument_index >= len(sys.argv):
+                self._show_error("--diagnostic-wav requires a WAV file path")
+                return
+            self.start_listening()
+            threading.Thread(
+                target=self._submit_diagnostic_wav,
+                args=(Path(sys.argv[argument_index]),),
+                name="diagnostic-wav-input",
+                daemon=True,
+            ).start()
+        elif "--diagnostic-auto-start" in sys.argv:
+            self.start_listening()
+
+    def _submit_diagnostic_wav(self, path: Path) -> None:
+        try:
+            utterance = read_pcm16_mono(path, self.config.audio.sample_rate)
+            self.runner.submit(utterance)
+        except Exception as exc:  # noqa: BLE001 - diagnostic boundary reports all failures.
+            self.bridge.error.emit(f"Diagnostic WAV failed: {exc}")
 
     @Slot()
     def start_listening(self) -> None:
@@ -370,7 +401,8 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         self.stop_listening()
-        self.config.ui.mode = self.current_mode().value
-        self.config.tts.enabled = self.tts_checkbox.isChecked()
-        self.config.save()
+        if self.persist_settings:
+            self.config.ui.mode = self.current_mode().value
+            self.config.tts.enabled = self.tts_checkbox.isChecked()
+            self.config.save()
         event.accept()

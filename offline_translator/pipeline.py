@@ -10,6 +10,7 @@ from typing import Protocol
 
 import numpy as np
 
+from offline_translator.conversation.routing import TurnRouter
 from offline_translator.domain import (
     AudioUtterance,
     ConversationMode,
@@ -52,6 +53,7 @@ class TranslationPipeline:
         context_sentences: int = 5,
         output_device: int | None = None,
         on_playback_state: Callable[[bool], None] | None = None,
+        turn_router: TurnRouter | None = None,
     ) -> None:
         self.recognizer = recognizer
         self.translator = translator
@@ -60,6 +62,7 @@ class TranslationPipeline:
         self.context = ContextBuffer(context_sentences)
         self.output_device = output_device
         self.on_playback_state = on_playback_state
+        self.turn_router = turn_router or TurnRouter()
 
     def warm_up(self) -> None:
         for component in (self.recognizer, self.translator, self.synthesizer):
@@ -71,14 +74,27 @@ class TranslationPipeline:
     ) -> TranslationResult | None:
         forced_source = mode.forced_source
         started = time.perf_counter()
+        LOGGER.info(
+            "Processing %.3f seconds of audio in mode %s",
+            utterance.samples.size / utterance.sample_rate,
+            mode.value,
+        )
         transcript = self.recognizer.transcribe(
             utterance.samples, utterance.sample_rate, forced_source
         )
         stt_seconds = time.perf_counter() - started
         if not transcript.text.strip():
+            LOGGER.info("Speech recognition returned no text")
             return None
-        source = forced_source or transcript.language
-        target = source.other
+        route = self.turn_router.route(mode, transcript.language)
+        source = route.source
+        target = route.target
+        LOGGER.info(
+            "Speech recognition completed in %.3f seconds; source=%s probability=%.3f",
+            stt_seconds,
+            source.value,
+            transcript.probability,
+        )
 
         translated_started = time.perf_counter()
         translated = self.translator.translate(
@@ -88,6 +104,7 @@ class TranslationPipeline:
             self.context.source_context(source),
         )
         translation_seconds = time.perf_counter() - translated_started
+        LOGGER.info("Translation completed in %.3f seconds", translation_seconds)
         self.context.add(source, transcript.text, translated)
 
         tts_seconds = 0.0
@@ -99,13 +116,15 @@ class TranslationPipeline:
             try:
                 wav_path = self.synthesizer.synthesize(translated, target)
                 tts_seconds = time.perf_counter() - tts_started
+                LOGGER.info("Speech synthesis completed in %.3f seconds", tts_seconds)
                 self.playback(wav_path, self.output_device)
+                LOGGER.info("Audio playback completed")
             finally:
                 if wav_path:
                     wav_path.unlink(missing_ok=True)
                 if self.on_playback_state:
                     self.on_playback_state(False)
-        return TranslationResult(
+        result = TranslationResult(
             source_text=transcript.text,
             translated_text=translated,
             source_language=source,
@@ -114,6 +133,8 @@ class TranslationPipeline:
             translation_seconds=translation_seconds,
             tts_seconds=tts_seconds,
         )
+        LOGGER.info("Pipeline completed in %.3f seconds", result.total_seconds)
+        return result
 
 
 class PipelineRunner:
@@ -159,14 +180,23 @@ class PipelineRunner:
                 pass
             self.on_error("The audio queue was full; the oldest pending segment was dropped.")
 
-    def stop(self, timeout: float = 3.0) -> None:
+    def stop(self, timeout: float = 10.0) -> None:
         self._stop.set()
+        while True:
+            try:
+                self._queue.get_nowait()
+                self._queue.task_done()
+            except queue.Empty:
+                break
         try:
             self._queue.put_nowait(None)
         except queue.Full:
             pass
         if self._thread:
             self._thread.join(timeout=timeout)
+            if self._thread.is_alive():
+                LOGGER.warning("Pipeline worker did not stop within %.1f seconds", timeout)
+                return
         self._thread = None
 
     def _run(self) -> None:

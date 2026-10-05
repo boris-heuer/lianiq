@@ -5,32 +5,12 @@ import time
 import wave
 from pathlib import Path
 
-import numpy as np
-
 from offline_translator.app import build_pipeline
+from offline_translator.audio.wav import read_pcm16_mono
 from offline_translator.config import AppConfig
-from offline_translator.domain import AudioUtterance, ConversationMode, Language
+from offline_translator.domain import ConversationMode, Language
 
 MAX_PROCESSING_SECONDS = 3.0
-
-
-def read_and_resample(path: Path, target_rate: int = 16_000) -> AudioUtterance:
-    with wave.open(str(path), "rb") as wav_file:
-        if wav_file.getnchannels() != 1 or wav_file.getsampwidth() != 2:
-            raise ValueError(f"Expected mono PCM16 WAV: {path}")
-        source_rate = wav_file.getframerate()
-        samples = np.frombuffer(wav_file.readframes(wav_file.getnframes()), dtype=np.int16)
-    float_samples = samples.astype(np.float32) / 32768.0
-    if source_rate != target_rate:
-        old_positions = np.arange(len(float_samples), dtype=np.float64)
-        new_positions = np.linspace(
-            0,
-            len(float_samples) - 1,
-            round(len(float_samples) * target_rate / source_rate),
-        )
-        float_samples = np.interp(new_positions, old_positions, float_samples).astype(np.float32)
-    return AudioUtterance(float_samples, target_rate)
-
 
 def validate_wav(path: Path, _output_device: int | None) -> None:
     with wave.open(str(path), "rb") as wav_file:
@@ -64,7 +44,7 @@ def main() -> int:
     for source_text, source_language, mode in cases:
         source_wav = synthesizer.synthesize(source_text, source_language)
         try:
-            utterance = read_and_resample(source_wav)
+            utterance = read_pcm16_mono(source_wav)
         finally:
             source_wav.unlink(missing_ok=True)
         result = pipeline.process(utterance, mode)

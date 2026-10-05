@@ -75,7 +75,7 @@ class FasterWhisperEngine:
             word_timestamps=False,
         )
         text = " ".join(segment.text.strip() for segment in segments).strip()
-        detected = _normalize_language(info.language)
+        detected = _resolve_detected_language(info.language, text)
         probability = float(getattr(info, "language_probability", 0.0))
         return Transcript(
             text=text,
@@ -92,3 +92,20 @@ def _normalize_language(value: str) -> Language:
     if normalized in {"zh", "cmn"}:
         return Language.MANDARIN
     raise ValueError(f"Detected language is not supported: {value}")
+
+
+def _resolve_detected_language(value: str, text: str) -> Language:
+    try:
+        return _normalize_language(value)
+    except ValueError:
+        inferred = (
+            Language.MANDARIN
+            if any("\u3400" <= character <= "\u9fff" for character in text)
+            else Language.GERMAN
+        )
+        LOGGER.warning(
+            "Whisper detected unsupported language '%s'; inferred '%s' from the transcript",
+            value,
+            inferred.value,
+        )
+        return inferred

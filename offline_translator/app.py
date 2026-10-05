@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
 
 from offline_translator.audio.playback import play_wav
@@ -45,15 +46,20 @@ def build_pipeline(config: AppConfig) -> tuple[TranslationPipeline, PiperEngine]
 def main() -> int:
     config = AppConfig.load()
     configure_logging(PROJECT_ROOT / "logs", config.ui.log_level)
+    os.environ.setdefault("QT_OPENGL", "software")
+    os.environ.setdefault("QT_QUICK_BACKEND", "software")
     try:
+        from PySide6.QtCore import QCoreApplication, Qt
         from PySide6.QtWidgets import QApplication
 
         from offline_translator.ui.main_window import MainWindow
     except ImportError as exc:
         logging.getLogger(__name__).exception("GUI dependency import failed")
-        print(f"GUI dependency is missing: {exc}", file=sys.stderr)
+        if sys.stderr is not None:
+            print(f"GUI dependency is missing: {exc}", file=sys.stderr)
         return 2
 
+    QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_UseSoftwareOpenGL)
     application = QApplication(sys.argv)
     application.setApplicationName("Offline German-Mandarin Interpreter")
     pipeline, synthesizer = build_pipeline(config)

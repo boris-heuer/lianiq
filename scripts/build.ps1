@@ -9,6 +9,12 @@ if (-not (Test-Path -LiteralPath $Python)) {
     throw 'The virtual environment is missing. Run scripts\setup.ps1 first.'
 }
 
+$PiperRoot = (& $Python -c 'from pathlib import Path; import piper; print(Path(piper.__file__).resolve().parent)').Trim()
+$PiperData = Join-Path $PiperRoot 'espeak-ng-data'
+if (-not (Test-Path -LiteralPath $PiperData)) {
+    throw "Piper eSpeak data is missing: $PiperData"
+}
+
 Push-Location $ProjectRoot
 try {
     & $Python -m PyInstaller `
@@ -17,6 +23,7 @@ try {
         --onedir `
         --windowed `
         --name OfflineInterpreter `
+        --add-data "$PiperData;piper/espeak-ng-data" `
         --collect-all ctranslate2 `
         --collect-all tokenizers `
         run_app.py
@@ -28,6 +35,10 @@ try {
     if ($LASTEXITCODE -ge 8) { throw "Model copy failed ($LASTEXITCODE)." }
     Copy-Item -LiteralPath (Join-Path $ProjectRoot 'config') `
         -Destination (Join-Path $ProjectRoot 'dist\OfflineInterpreter\config') -Recurse -Force
+    $PackagedPiperData = Join-Path $ProjectRoot 'dist\OfflineInterpreter\_internal\piper\espeak-ng-data'
+    if (-not (Test-Path -LiteralPath $PackagedPiperData)) {
+        throw 'Packaged Piper eSpeak data is missing.'
+    }
     Write-Host 'Build is ready under dist\OfflineInterpreter.'
 }
 finally {

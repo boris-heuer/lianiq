@@ -43,8 +43,13 @@ class PiperEngine:
         return voice
 
     def warm_up(self) -> None:
-        self._load(Language.GERMAN)
-        self._load(Language.MANDARIN)
+        samples = {
+            Language.GERMAN: "Hallo.",
+            Language.MANDARIN: "你好。",
+        }
+        for language, text in samples.items():
+            output = self.synthesize(text, language)
+            output.unlink(missing_ok=True)
 
     def synthesize(self, text: str, language: Language) -> Path:
         voice = self._load(language)

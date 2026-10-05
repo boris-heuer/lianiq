@@ -27,6 +27,7 @@ class MicrophoneCapture:
         self.on_error = on_error
         self._stream = None
         self._muted = threading.Event()
+        self._segmenter_lock = threading.Lock()
         self._segmenter = self._new_segmenter()
 
     def _new_segmenter(self) -> UtteranceSegmenter:
@@ -47,7 +48,8 @@ class MicrophoneCapture:
     def set_muted(self, muted: bool) -> None:
         if muted:
             self._muted.set()
-            self._segmenter.reset()
+            with self._segmenter_lock:
+                self._segmenter.reset()
         else:
             self._muted.clear()
 
@@ -75,7 +77,8 @@ class MicrophoneCapture:
         if stream is not None:
             stream.stop()
             stream.close()
-        self._segmenter.reset()
+        with self._segmenter_lock:
+            self._segmenter.reset()
         LOGGER.info("Microphone capture stopped")
 
     def _callback(self, indata: np.ndarray, _frames: int, _time: object, status: object) -> None:
@@ -88,7 +91,8 @@ class MicrophoneCapture:
             if self.on_level:
                 level = float(np.sqrt(np.mean(np.square(frame), dtype=np.float64)))
                 self.on_level(min(level / max(self.config.start_rms * 3, 0.001), 1.0))
-            samples = self._segmenter.push(frame)
+            with self._segmenter_lock:
+                samples = self._segmenter.push(frame)
             if samples is not None:
                 self.on_utterance(AudioUtterance(samples, self.config.sample_rate))
         except Exception as exc:  # PortAudio callbacks must never leak exceptions.

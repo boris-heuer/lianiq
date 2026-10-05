@@ -39,6 +39,11 @@ Microphone processing is muted while Piper speaks, preventing the application fr
 its own output. If the bounded queue fills, the oldest pending segment is dropped to prevent the
 conversation from accumulating increasing delay.
 
+Automatic mode detects and routes every completed utterance independently. It never assumes that
+participants alternate, so any number of German or Mandarin turns may occur consecutively. See
+[`docs/conversation-architecture.md`](docs/conversation-architecture.md) for multi-participant
+scenarios, overlap limitations, and the TDD strategy.
+
 ## Windows installation
 
 Run in PowerShell from the project directory:
@@ -94,7 +99,11 @@ translation, and TTS models without requiring a person to speak:
 
 ```powershell
 .\.venv\Scripts\python.exe .\scripts\self_test.py
+.\.venv\Scripts\python.exe .\scripts\ui_self_test.py
 ```
+
+The UI self-test opens the real application window, starts the microphone, injects deterministic
+speech, renders the result, plays the translated voice, and closes after a successful turn.
 
 ## Configuration and glossary
 
@@ -143,6 +152,8 @@ and handles the large model files more predictably than a single executable.
 - Runtime code makes no network requests; all model loaders use local paths only.
 - Transcript export happens only after the user chooses a local destination.
 - Rotating logs are stored in `logs\offline-interpreter.log` and never contain audio.
+- Native faults are written to `logs\native-crash.log`; Qt uses software rendering for stability
+  on the integrated Radeon GPU.
 - Missing dependencies and models produce actionable error messages.
 - `scripts\doctor.py` validates dependencies and every required model file.
 - `scripts\self_test.py` validates both complete model pipelines against the three-second target.

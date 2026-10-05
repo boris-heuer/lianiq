@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+
 import numpy as np
 
 from offline_translator.domain import (
@@ -8,7 +10,7 @@ from offline_translator.domain import (
     Language,
     Transcript,
 )
-from offline_translator.pipeline import TranslationPipeline
+from offline_translator.pipeline import PipelineRunner, TranslationPipeline
 
 
 class FakeRecognizer:
@@ -59,3 +61,28 @@ def test_manual_mode_forces_whisper_language() -> None:
 def test_empty_transcript_is_ignored() -> None:
     pipeline = TranslationPipeline(FakeRecognizer(text="  "), FakeTranslator(), None, None)
     assert pipeline.process(utterance(), ConversationMode.AUTO) is None
+
+
+def test_runner_waits_for_active_processing_during_stop() -> None:
+    started = threading.Event()
+    release = threading.Event()
+
+    class BlockingPipeline:
+        def process(self, _utterance, _mode):
+            started.set()
+            release.wait(timeout=1.0)
+
+    runner = PipelineRunner(
+        BlockingPipeline(),
+        mode_provider=lambda: ConversationMode.AUTO,
+        on_result=lambda _result: None,
+        on_error=lambda _message: None,
+    )
+    runner.start()
+    runner.submit(utterance())
+    assert started.wait(timeout=1.0)
+    threading.Timer(0.05, release.set).start()
+
+    runner.stop(timeout=1.0)
+
+    assert runner._thread is None
