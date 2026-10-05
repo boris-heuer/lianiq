@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 
 from offline_translator.domain import Language
+from offline_translator.hardware import resolve_compute_device
 from offline_translator.translation.glossary import Glossary
 
 LOGGER = logging.getLogger(__name__)
@@ -24,7 +25,7 @@ class MarianTranslator:
         }
         self.glossary = glossary
         self.cpu_threads = cpu_threads
-        self.device = device
+        self.device = resolve_compute_device(device)
         self._loaded: dict[tuple[Language, Language], tuple[object, object]] = {}
 
     def _load(self, source: Language, target: Language):

@@ -7,6 +7,7 @@ import numpy as np
 
 from offline_translator.config import SpeechToTextConfig
 from offline_translator.domain import Language, Transcript
+from offline_translator.hardware import ctranslate2_cuda_available, resolve_compute_device
 
 LOGGER = logging.getLogger(__name__)
 
@@ -15,6 +16,7 @@ class FasterWhisperEngine:
     def __init__(self, config: SpeechToTextConfig, model_path: Path) -> None:
         self.config = config
         self.model_path = model_path
+        self.device = resolve_compute_device(config.device, ctranslate2_cuda_available())
         self._model = None
 
     def _ensure_loaded(self):
@@ -30,10 +32,13 @@ class FasterWhisperEngine:
         except ImportError as exc:
             raise RuntimeError("faster-whisper is not installed") from exc
         LOGGER.info("Loading Faster-Whisper from %s", self.model_path)
+        compute_type = self.config.compute_type
+        if self.device == "cuda" and compute_type == "int8":
+            compute_type = "int8_float16"
         self._model = WhisperModel(
             str(self.model_path),
-            device=self.config.device,
-            compute_type=self.config.compute_type,
+            device=self.device,
+            compute_type=compute_type,
             cpu_threads=self.config.cpu_threads,
             num_workers=1,
             local_files_only=True,

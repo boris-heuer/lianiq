@@ -12,7 +12,7 @@
   },
   "speech_to_text": {
     "model_path": "models/faster-whisper-small",
-    "device": "cpu",
+    "device": "auto",
     "compute_type": "int8",
     "cpu_threads": 8,
     "beam_size": 1
@@ -21,7 +21,7 @@
     "de_zh_model_path": "models/opus-mt-de-zh",
     "zh_de_model_path": "models/opus-mt-zh-de",
     "cpu_threads": 8,
-    "device": "cpu",
+    "device": "auto",
     "context_sentences": 5,
     "glossary_path": "config/glossary.json"
   },
@@ -30,7 +30,7 @@
     "de_voice_path": "models/piper/de_DE-thorsten-medium.onnx",
     "zh_voice_path": "models/piper/zh_CN-huayan-medium.onnx",
     "length_scale": 1.0,
-    "use_cuda": false
+    "device": "auto"
   },
   "ui": {
     "mode": "auto",

@@ -19,6 +19,10 @@ threads. MarianMT also uses eight CPU threads. The integrated Radeon is delibera
 through an unreliable CUDA compatibility layer. Measure actual latency on this device with
 `scripts/benchmark.py`.
 
+The default `auto` device setting selects CUDA independently for CTranslate2, PyTorch, and ONNX
+Runtime when each backend reports a usable NVIDIA GPU. Any unavailable backend falls back to the
+CPU, so a partial or missing CUDA installation does not prevent the application from starting.
+
 ## Architecture
 
 ```text
@@ -85,6 +89,13 @@ Use a 16 kHz mono PCM16 WAV file with a spoken test sentence:
 The benchmark returns exit code `0` when end-to-end processing, including voice output, takes no
 more than three seconds. Use `--without-tts` to measure STT and translation only.
 
+Run the fully offline synthetic self-test to exercise both language directions through real STT,
+translation, and TTS models without requiring a person to speak:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\self_test.py
+```
+
 ## Configuration and glossary
 
 [`config/settings.json`](config/settings.json) contains audio thresholds, device selection, model
@@ -134,6 +145,7 @@ and handles the large model files more predictably than a single executable.
 - Rotating logs are stored in `logs\offline-interpreter.log` and never contain audio.
 - Missing dependencies and models produce actionable error messages.
 - `scripts\doctor.py` validates dependencies and every required model file.
+- `scripts\self_test.py` validates both complete model pipelines against the three-second target.
 
 ## Model sources and licensing
 

@@ -132,11 +132,10 @@ class MainWindow(QMainWindow):
         self.tts_checkbox.toggled.connect(self._toggle_tts)
         controls.addWidget(self.tts_checkbox, 1, 4)
         self.gpu_checkbox = QCheckBox("CUDA GPU")
-        self.gpu_checkbox.setChecked(self.config.speech_to_text.device == "cuda")
+        self.gpu_checkbox.setChecked(getattr(self.pipeline.recognizer, "device", "cpu") == "cuda")
         self.gpu_checkbox.setEnabled(False)
-        self.gpu_checkbox.setToolTip(
-            "This EliteBook has no CUDA-capable NVIDIA GPU; CPU INT8 is active."
-        )
+        runtime_device = getattr(self.pipeline.recognizer, "device", "cpu").upper()
+        self.gpu_checkbox.setToolTip(f"Active inference device: {runtime_device}")
         controls.addWidget(self.gpu_checkbox, 1, 5)
         controls.setColumnStretch(1, 2)
         controls.setColumnStretch(2, 2)

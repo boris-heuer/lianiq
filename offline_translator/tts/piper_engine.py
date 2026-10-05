@@ -5,6 +5,7 @@ import wave
 from pathlib import Path
 
 from offline_translator.domain import Language
+from offline_translator.hardware import resolve_onnx_device
 
 
 class PiperEngine:
@@ -15,14 +16,14 @@ class PiperEngine:
         de_voice_path: Path,
         zh_voice_path: Path,
         length_scale: float = 1.0,
-        use_cuda: bool = False,
+        device: str = "auto",
     ) -> None:
         self.voices = {
             Language.GERMAN: de_voice_path,
             Language.MANDARIN: zh_voice_path,
         }
         self.length_scale = length_scale
-        self.use_cuda = use_cuda
+        self.device = resolve_onnx_device(device)
         self._loaded: dict[Language, object] = {}
 
     def _load(self, language: Language):
@@ -37,7 +38,7 @@ class PiperEngine:
             from piper import PiperVoice
         except ImportError as exc:
             raise RuntimeError("piper-tts is not installed") from exc
-        voice = PiperVoice.load(str(voice_path), use_cuda=self.use_cuda)
+        voice = PiperVoice.load(str(voice_path), use_cuda=self.device == "cuda")
         self._loaded[language] = voice
         return voice
 

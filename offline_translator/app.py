@@ -29,7 +29,7 @@ def build_pipeline(config: AppConfig) -> tuple[TranslationPipeline, PiperEngine]
         AppConfig.resolve(config.tts.de_voice_path),
         AppConfig.resolve(config.tts.zh_voice_path),
         length_scale=config.tts.length_scale,
-        use_cuda=config.tts.use_cuda,
+        device=config.tts.device,
     )
     pipeline = TranslationPipeline(
         recognizer,
