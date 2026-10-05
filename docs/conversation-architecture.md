@@ -22,6 +22,25 @@ interpretation while capture continues to segment later turns. It does not mean 
 people who speak over each other. Reliable overlap handling requires multiple microphone channels
 or a future source-separation and speaker-diarization model.
 
+## Call bridge extension
+
+The planned call bridge extends the same modular monolith with two isolated audio lanes:
+
+- a fixed German-to-Mandarin lane from the local headset microphone to the call application's
+  virtual microphone; and
+- a fixed Mandarin-to-German lane from the call application's virtual speaker to the local
+  headset output.
+
+Unlike single-microphone automatic mode, a call-bridge lane does not infer its translation
+direction from the previous turn or from speaker identity. Its physical or virtual input endpoint
+defines the source language. The two lanes may capture and process audio concurrently while
+preserving order independently within each lane.
+
+See [`call-bridge-architecture.md`](call-bridge-architecture.md) for the design,
+[`call-bridge-implementation-plan.md`](call-bridge-implementation-plan.md) for the TDD delivery
+plan, and [`call-bridge-operator-setup.md`](call-bridge-operator-setup.md) for the proposed Windows
+device mapping.
+
 ## Conversation scenarios
 
 The executable synthetic cases live in `tests/test_conversation_routing.py`.

@@ -44,6 +44,20 @@ participants alternate, so any number of German or Mandarin turns may occur cons
 [`docs/conversation-architecture.md`](docs/conversation-architecture.md) for multi-participant
 scenarios, overlap limitations, and the TDD strategy.
 
+## Planned call bridge
+
+The planned full-duplex call bridge will place the application between a local headset and a call
+application such as WeChat. Two independent, fixed-direction translation lanes will connect the
+physical headset to two virtual audio cables without exposing the physical microphone directly to
+the call application.
+
+- [`docs/call-bridge-architecture.md`](docs/call-bridge-architecture.md) defines the technical
+  architecture and audio routing decisions.
+- [`docs/call-bridge-implementation-plan.md`](docs/call-bridge-implementation-plan.md) defines the
+  TDD work order, synthetic scenarios, and acceptance gates.
+- [`docs/call-bridge-operator-setup.md`](docs/call-bridge-operator-setup.md) defines the proposed
+  Windows and WeChat device mapping. The feature is not implemented yet.
+
 ## Windows installation
 
 Run in PowerShell from the project directory:
