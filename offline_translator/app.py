@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import sys
 
 from offline_translator.audio.playback import play_wav
@@ -49,6 +50,7 @@ def main() -> int:
 
         from offline_translator.ui.main_window import MainWindow
     except ImportError as exc:
+        logging.getLogger(__name__).exception("GUI dependency import failed")
         print(f"GUI dependency is missing: {exc}", file=sys.stderr)
         return 2
 

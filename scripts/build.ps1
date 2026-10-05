@@ -19,11 +19,13 @@ try {
         --name OfflineInterpreter `
         --collect-all ctranslate2 `
         --collect-all tokenizers `
-        --collect-all piper `
         run_app.py
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed ($LASTEXITCODE)." }
-    Copy-Item -LiteralPath (Join-Path $ProjectRoot 'models') `
-        -Destination (Join-Path $ProjectRoot 'dist\OfflineInterpreter\models') -Recurse -Force
+    $ModelSource = Join-Path $ProjectRoot 'models'
+    $ModelDestination = Join-Path $ProjectRoot 'dist\OfflineInterpreter\models'
+    New-Item -ItemType Directory -Path $ModelDestination -Force | Out-Null
+    & robocopy $ModelSource $ModelDestination /E /XD '.cache' /XF 'tf_model.h5' | Out-Null
+    if ($LASTEXITCODE -ge 8) { throw "Model copy failed ($LASTEXITCODE)." }
     Copy-Item -LiteralPath (Join-Path $ProjectRoot 'config') `
         -Destination (Join-Path $ProjectRoot 'dist\OfflineInterpreter\config') -Recurse -Force
     Write-Host 'Build is ready under dist\OfflineInterpreter.'
