@@ -25,9 +25,11 @@ real-call gates remain separately documented in
 - [x] Thin builds exclude model weights by default; model inclusion is explicit and manifest-bound.
 - [x] Call Bridge is disabled by default, uses explicit stable endpoint identities, and fails closed.
 - [x] Automated evidence distinguishes mechanism checks from hardware/application acceptance.
-- [ ] Branch protection/rules, vulnerability reporting, dependency alerts, and secret scanning are
-      enabled on the public GitHub repository.
-- [ ] Required GitHub CI and CodeQL checks pass on the exact merge candidate.
+- [x] Branch protection, private vulnerability reporting, dependency alerts, secret scanning, and
+      push protection are enabled on the public GitHub repository.
+- [x] Required GitHub CI and CodeQL checks passed on the exact merge candidate in
+      [PR #1](https://github.com/boris-heuer/offline-german-mandarin-interpreter/pull/1), with no
+      open CodeQL alert.
 
 ## Phase 3 — stars and competency evidence
 
@@ -36,13 +38,17 @@ real-call gates remain separately documented in
 - [x] Contribution, conduct, security, support, roadmap, changelog, and citation files are present.
 - [x] Issue and pull-request templates are present.
 - [x] A purpose-built social-preview asset is versioned under `docs/assets/`.
-- [ ] Repository description, topics, social preview, and public visibility are configured on GitHub.
-- [ ] Initial contributor-friendly issues are published and labelled.
-- [ ] A source-only `v0.1.0` release is published; no unsigned binary or unreviewed model is attached.
+- [x] Repository description, topics, social preview, and public visibility are configured on GitHub.
+- [x] Initial contributor-friendly issues are published and labelled
+      ([#3](https://github.com/boris-heuer/offline-german-mandarin-interpreter/issues/3),
+      [#4](https://github.com/boris-heuer/offline-german-mandarin-interpreter/issues/4), and
+      [#5](https://github.com/boris-heuer/offline-german-mandarin-interpreter/issues/5)).
+- [x] The source-only [`v0.1.0`](https://github.com/boris-heuer/offline-german-mandarin-interpreter/releases/tag/v0.1.0)
+      release is published with no unsigned binary or unreviewed model attached.
 
 ## External launch gate
 
-Publication is complete only when all unchecked rows above have evidence from the remote repository.
-The Call Bridge may remain experimental after source publication. It becomes production `SystemOK`
-only after every packaged two-cable, disconnect/reconnect, latency, and real WeChat call row in the
-operator checklist has passed on the target Windows system.
+The source-publication gate is complete. The Call Bridge remains experimental after source
+publication. It becomes production `SystemOK` only after every packaged two-cable,
+disconnect/reconnect, latency, and real WeChat call row in the operator checklist has passed on the
+target Windows system.
