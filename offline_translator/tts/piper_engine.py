@@ -26,14 +26,27 @@ class PiperEngine:
         self.device = resolve_onnx_device(device)
         self._loaded: dict[Language, object] = {}
 
+    def validate_voice_files(
+        self, languages: tuple[Language, ...] = (Language.GERMAN, Language.MANDARIN)
+    ) -> None:
+        missing: list[Path] = []
+        for language in languages:
+            voice_path = self.voices[language]
+            for required in (voice_path, Path(f"{voice_path}.json")):
+                if not required.is_file():
+                    missing.append(required)
+        if missing:
+            paths = ", ".join(str(path) for path in missing)
+            raise FileNotFoundError(
+                "Piper voice artifacts are missing: "
+                f"{paths}. Provision license-reviewed voice and metadata files first."
+            )
+
     def _load(self, language: Language):
         if language in self._loaded:
             return self._loaded[language]
         voice_path = self.voices[language]
-        if not voice_path.exists() or not Path(f"{voice_path}.json").exists():
-            raise FileNotFoundError(
-                f"Piper voice is missing: {voice_path}. Run scripts/download_models.py first."
-            )
+        self.validate_voice_files((language,))
         try:
             from piper import PiperVoice
         except ImportError as exc:

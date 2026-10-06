@@ -2,12 +2,31 @@
 
 ## Status and scope
 
-Planned. The objective is a test-driven Windows call bridge for WeChat and other applications that
+Implemented through Phase 5 on 2026-10-06. Phase 6 hardware and two-party acceptance remains an
+operator gate because this workstation currently has no two-cable virtual-audio setup. The
+objective is a test-driven Windows call bridge for WeChat and other applications that
 can select standard Windows microphone and speaker endpoints.
 
 The first milestone provides full-duplex capture with utterance-based translation. It does not
 include streaming partial translations, speaker diarization, overlapping-speaker separation, a
 custom virtual audio driver, or automatic configuration of WeChat.
+
+## Risk assessment and mitigations
+
+| Risk | Impact | Mitigation in the implementation | Residual risk / trigger |
+|---|---|---|---|
+| Numeric PortAudio indices change | Audio can bind to the wrong endpoint after reboot | Persist the opaque Windows MMDevice identity, resolve the current WASAPI index at runtime, and reject missing or ambiguous matches | A driver reinstall can replace an MMDevice identity; the operator must select the endpoint again |
+| Duplicate or misleading device names | TX/RX roles can be crossed | Names are display-only; role validation uses unique IDs and capture/render capability, and one endpoint cannot fill two roles | Indistinguishable native-to-PortAudio mappings fail closed instead of guessing |
+| Device disappears during a call | Default-device fallback could leak audio | Every stream has an explicit runtime index; loss mutes and stops only the affected lane; a two-second inventory check rebinds only the same identity | Driver failures that do not surface through PortAudio until the next callback can delay detection by one poll interval |
+| Two lanes overload the CPU | Increasing latency and callback starvation | Model work runs off callbacks behind a two-permit scheduler; each lane has a two-item queue and a four-second age limit | The packaged real-model self-test is authoritative for the supported hardware profile |
+| Audio callback performs blocking work | Dropouts or deadlocks | The callback only copies into a bounded ring buffer and signals a worker; downmix, resampling, VAD, and models run elsewhere | PortAudio/driver callback failures still depend on the host driver reporting an error |
+| Translation or TTS fails | Original or partial audio could cross the route | Output is played only after all inference stages succeed; failures emit sanitized categories and leave the target silent | No `pass_original` policy is implemented |
+| Logs expose speech or user device identity | Privacy breach | Metrics exclude transcript/PCM; diagnostics omit endpoint IDs and display names | Application transcript export remains a separate explicit conversation-mode action |
+| Virtual-driver redistribution is unlicensed | Legal and supply-chain exposure | No virtual driver is bundled; operator installs it separately | Bundling requires a separate license, provenance, and signing review |
+| Bluetooth profile changes | Quality degradation or endpoint replacement | Endpoint capability is re-read on recovery and the operator guide recommends wired/USB fallback | Bluetooth behavior remains hardware/driver-specific |
+
+The SystemOK evidence and remaining environment gates are recorded in
+[`call-bridge-system-ok.md`](call-bridge-system-ok.md).
 
 ## Acceptance criteria
 
@@ -27,8 +46,8 @@ custom virtual audio driver, or automatic configuration of WeChat.
 
 | ID | Timeline | Synthetic data | Expected output |
 |---|---|---|---|
-| CB-01 | Outbound only | Local A: `Guten Morgen.` | One Mandarin utterance on TX; no Bose playback |
-| CB-02 | Inbound only | Remote B: `我们下午三点开会。` | One German utterance on Bose; no TX output |
+| CB-01 | Outbound only | Local A: `Guten Morgen.` | One Mandarin utterance on TX; no local-headset playback |
+| CB-02 | Inbound only | Remote B: `我们下午三点开会。` | One German utterance on local headphones; no TX output |
 | CB-03 | Consecutive outbound | A: `Ich habe zwei Fragen.` then A: `Die erste betrifft den Preis.` | Two ordered Mandarin outputs |
 | CB-04 | Consecutive inbound | B: `好的。`, B: `请继续。`, C: `我同意。` | Three ordered German outputs |
 | CB-05 | Full duplex | Local and remote PCM begin within 100 ms | Both lanes finish independently without cross-routing |
@@ -224,6 +243,10 @@ possible.
 - Documentation and configuration examples match the shipped UI.
 - Third-party driver licensing is documented; no unapproved driver is redistributed.
 - The implementation commit and CI status are available remotely.
+
+Current closure status: the source-level and synthetic gates are implemented. Real-model,
+packaged two-cable, and WeChat rows must all pass before the feature is called production
+`SystemOK`; absence of the required virtual endpoints is not treated as a pass.
 
 ## Deferred work
 

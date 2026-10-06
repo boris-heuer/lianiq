@@ -5,7 +5,7 @@ import sys
 import threading
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Qt, Signal, Slot
+from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -27,11 +27,25 @@ from PySide6.QtWidgets import (
 )
 
 from offline_translator.audio.capture import MicrophoneCapture
+from offline_translator.audio.capture_stream import EndpointCaptureStream
 from offline_translator.audio.devices import AudioDevice, list_audio_devices
+from offline_translator.audio.endpoints import list_audio_endpoints
+from offline_translator.audio.playback_stream import EndpointPlaybackStream
 from offline_translator.audio.wav import read_pcm16_mono
+from offline_translator.call_bridge.contracts import (
+    BridgeEvent,
+    BridgeEventKind,
+    BridgeState,
+    EndpointRole,
+    LaneId,
+)
+from offline_translator.call_bridge.controller import FullDuplexBridgeController
+from offline_translator.call_bridge.inference_scheduler import InferenceScheduler
+from offline_translator.call_bridge.translation_lane import TranslationLane
 from offline_translator.config import AppConfig
 from offline_translator.domain import ConversationMode, Language, TranslationResult
 from offline_translator.pipeline import PipelineRunner, TranslationPipeline
+from offline_translator.ui.call_bridge_panel import CallBridgePanel
 
 MODE_LABELS = {
     "Automatic": ConversationMode.AUTO,
@@ -46,6 +60,9 @@ class UiBridge(QObject):
     busy = Signal(bool)
     level = Signal(float)
     models_ready = Signal(bool, str)
+    call_bridge_event = Signal(object)
+    call_bridge_level = Signal(object, float)
+    call_bridge_capture_fault = Signal(object, str)
 
 
 class MainWindow(QMainWindow):
@@ -65,8 +82,16 @@ class MainWindow(QMainWindow):
         self.bridge.busy.connect(self._show_busy)
         self.bridge.level.connect(self._show_level)
         self.bridge.models_ready.connect(self._models_ready)
+        self.bridge.call_bridge_event.connect(self._show_call_bridge_event)
+        self.bridge.call_bridge_level.connect(self._show_call_bridge_level)
+        self.bridge.call_bridge_capture_fault.connect(self._handle_call_bridge_capture_fault)
         self.history: list[tuple[str, str, str, str]] = []
         self.devices: list[AudioDevice] = []
+        self.call_bridge_controller: FullDuplexBridgeController | None = None
+        self._models_are_ready = False
+        self._endpoint_monitor = QTimer(self)
+        self._endpoint_monitor.setInterval(2_000)
+        self._endpoint_monitor.timeout.connect(self._reconcile_call_bridge_endpoints)
 
         self.setWindowTitle("Offline Interpreter · German ↔ Mandarin")
         self.resize(1120, 720)
@@ -167,6 +192,12 @@ class MainWindow(QMainWindow):
         action_row.addWidget(export_button)
         layout.addLayout(action_row)
 
+        self.call_bridge_panel = CallBridgePanel(self.config.call_bridge)
+        self.call_bridge_panel.start_requested.connect(self.start_call_bridge)
+        self.call_bridge_panel.stop_requested.connect(self.stop_call_bridge)
+        self.call_bridge_panel.route_test_requested.connect(self._run_call_bridge_route_test)
+        layout.addWidget(self.call_bridge_panel)
+
         splitter = QSplitter(Qt.Horizontal)
         source_panel, self.source_text = self._text_panel(
             "Original", "Speak in German or Mandarin …"
@@ -227,6 +258,13 @@ class MainWindow(QMainWindow):
                 self.output_combo.addItem(device.name, device.index)
         self._select_device(self.input_combo, self.config.audio.input_device)
         self._select_device(self.output_combo, self.config.audio.output_device)
+        try:
+            inventory = list_audio_endpoints()
+        except (RuntimeError, ValueError) as exc:
+            self.call_bridge_panel.set_endpoints([])
+            self.call_bridge_panel.set_state("unavailable", str(exc))
+        else:
+            self.call_bridge_panel.set_endpoints(inventory.endpoints)
 
     @staticmethod
     def _select_device(combo: QComboBox, index: int | None) -> None:
@@ -266,7 +304,9 @@ class MainWindow(QMainWindow):
 
     @Slot(bool, str)
     def _models_ready(self, ready: bool, message: str) -> None:
+        self._models_are_ready = ready
         self.start_button.setEnabled(ready)
+        self.call_bridge_panel.set_models_ready(ready)
         self.state_label.setText("Ready" if ready else "Model error")
         self.statusBar().showMessage(
             "All models are loaded; offline capture is ready." if ready else message
@@ -297,6 +337,9 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def start_listening(self) -> None:
+        if self.call_bridge_controller is not None:
+            self._show_error("Stop call bridge mode before starting conversation capture")
+            return
         try:
             self.config.audio.input_device = self.input_combo.currentData()
             self.config.audio.output_device = self.output_combo.currentData()
@@ -317,13 +360,211 @@ class MainWindow(QMainWindow):
     def stop_listening(self) -> None:
         self.capture.stop()
         self.runner.stop()
-        self.start_button.setEnabled(True)
+        self.start_button.setEnabled(self._models_are_ready)
         self.stop_button.setEnabled(False)
         self.input_combo.setEnabled(True)
         self.output_combo.setEnabled(True)
         self.level_bar.setValue(0)
         self.state_label.setText("Ready")
         self.statusBar().showMessage("Capture stopped")
+
+    @Slot()
+    def start_call_bridge(self) -> None:
+        if self.call_bridge_controller is not None:
+            return
+        if self.capture.running:
+            self.stop_listening()
+        try:
+            assignments = self.call_bridge_panel.assignments()
+            synthesizer = getattr(self, "_synthesizer", None)
+            if synthesizer is None:
+                raise RuntimeError("Call bridge requires the local speech synthesizer")
+            synthesizer.validate_voice_files()
+            scheduler = InferenceScheduler(max_concurrent=2)
+            outbound_playback = EndpointPlaybackStream(
+                assignments[EndpointRole.CALL_MICROPHONE_RENDER]
+            )
+            inbound_playback = EndpointPlaybackStream(assignments[EndpointRole.LOCAL_HEADPHONES])
+            outbound_lane = TranslationLane(
+                LaneId.OUTBOUND,
+                Language.GERMAN,
+                Language.MANDARIN,
+                self.pipeline.recognizer,
+                self.pipeline.translator,
+                synthesizer,
+                outbound_playback.play,
+                scheduler,
+                max_pending_age_ms=self.config.call_bridge.max_pending_age_ms,
+                on_result=self.bridge.result.emit,
+                on_event=self.bridge.call_bridge_event.emit,
+            )
+            inbound_lane = TranslationLane(
+                LaneId.INBOUND,
+                Language.MANDARIN,
+                Language.GERMAN,
+                self.pipeline.recognizer,
+                self.pipeline.translator,
+                synthesizer,
+                inbound_playback.play,
+                scheduler,
+                max_pending_age_ms=self.config.call_bridge.max_pending_age_ms,
+                on_result=self.bridge.result.emit,
+                on_event=self.bridge.call_bridge_event.emit,
+            )
+            outbound_capture = EndpointCaptureStream(
+                assignments[EndpointRole.LOCAL_MICROPHONE],
+                self.config.audio,
+                outbound_lane.submit,
+                on_level=lambda level: self.bridge.call_bridge_level.emit(
+                    EndpointRole.LOCAL_MICROPHONE, level
+                ),
+                on_error=lambda message: self.bridge.call_bridge_capture_fault.emit(
+                    EndpointRole.LOCAL_MICROPHONE, message
+                ),
+            )
+            inbound_capture = EndpointCaptureStream(
+                assignments[EndpointRole.CALL_SPEAKER_CAPTURE],
+                self.config.audio,
+                inbound_lane.submit,
+                on_level=lambda level: self.bridge.call_bridge_level.emit(
+                    EndpointRole.CALL_SPEAKER_CAPTURE, level
+                ),
+                on_error=lambda message: self.bridge.call_bridge_capture_fault.emit(
+                    EndpointRole.CALL_SPEAKER_CAPTURE, message
+                ),
+            )
+            controller = FullDuplexBridgeController(
+                assignments,
+                outbound_lane,
+                inbound_lane,
+                outbound_capture,
+                inbound_capture,
+                on_event=self.bridge.call_bridge_event.emit,
+                endpoint_ports={
+                    EndpointRole.LOCAL_MICROPHONE: outbound_capture,
+                    EndpointRole.CALL_MICROPHONE_RENDER: outbound_playback,
+                    EndpointRole.CALL_SPEAKER_CAPTURE: inbound_capture,
+                    EndpointRole.LOCAL_HEADPHONES: inbound_playback,
+                },
+            )
+            self.call_bridge_controller = controller
+            controller.start()
+        except Exception as exc:  # noqa: BLE001 - GUI boundary reports setup failures.
+            self.call_bridge_controller = None
+            self._show_error(str(exc))
+            return
+        self.call_bridge_panel.apply_to_config()
+        self.call_bridge_panel.set_running(True)
+        self._endpoint_monitor.start()
+        self.start_button.setEnabled(False)
+        self.mode_combo.setEnabled(False)
+        self.input_combo.setEnabled(False)
+        self.output_combo.setEnabled(False)
+        self.statusBar().showMessage("Fail-closed full-duplex call bridge is active")
+
+    @Slot()
+    def stop_call_bridge(self) -> None:
+        self._endpoint_monitor.stop()
+        controller, self.call_bridge_controller = self.call_bridge_controller, None
+        if controller is not None and not controller.stop(timeout=10.0):
+            self._show_error("Call bridge workers did not stop within the shutdown contract")
+        self.call_bridge_panel.set_running(False)
+        self.start_button.setEnabled(self._models_are_ready)
+        self.mode_combo.setEnabled(True)
+        self.input_combo.setEnabled(True)
+        self.output_combo.setEnabled(True)
+        for role in (EndpointRole.LOCAL_MICROPHONE, EndpointRole.CALL_SPEAKER_CAPTURE):
+            self.call_bridge_panel.set_level(role, 0.0)
+        self.statusBar().showMessage("Call bridge stopped; all explicit endpoints were released")
+
+    @Slot()
+    def _reconcile_call_bridge_endpoints(self) -> None:
+        if self.call_bridge_controller is None:
+            return
+        try:
+            inventory = list_audio_endpoints()
+            self.call_bridge_controller.reconcile_endpoints(inventory)
+        except (RuntimeError, ValueError) as exc:
+            self.statusBar().showMessage(f"Endpoint recovery check failed: {exc}", 10_000)
+
+    @Slot(object, str)
+    def _handle_call_bridge_capture_fault(self, role: EndpointRole, message: str) -> None:
+        if self.call_bridge_controller is not None:
+            self.call_bridge_controller.endpoint_lost(role)
+        self.statusBar().showMessage(f"Call bridge capture muted: {message}", 15_000)
+
+    @Slot(object)
+    def _show_call_bridge_event(self, event: BridgeEvent) -> None:
+        if event.kind is BridgeEventKind.STATE:
+            self.call_bridge_panel.set_state(event.category)
+        elif event.kind is BridgeEventKind.ERROR:
+            if event.category == "playback_failure" and self.call_bridge_controller is not None:
+                output_role = (
+                    EndpointRole.CALL_MICROPHONE_RENDER
+                    if event.lane_id is LaneId.OUTBOUND
+                    else EndpointRole.LOCAL_HEADPHONES
+                )
+                self.call_bridge_controller.endpoint_lost(output_role)
+            self.call_bridge_panel.set_state(BridgeState.DEGRADED, event.category)
+            self.statusBar().showMessage(
+                f"Call bridge {event.lane_id.value if event.lane_id else ''} failed closed: "
+                f"{event.category}",
+                15_000,
+            )
+        elif event.kind is BridgeEventKind.DROPPED:
+            self.statusBar().showMessage(
+                f"Call bridge dropped stale work: {event.category}", 10_000
+            )
+        elif event.kind is BridgeEventKind.ENDPOINT:
+            self.call_bridge_panel.set_state(
+                BridgeState.DEGRADED if event.category == "endpoint_lost" else BridgeState.RUNNING,
+                event.message,
+            )
+
+    @Slot(object, float)
+    def _show_call_bridge_level(self, role: EndpointRole, level: float) -> None:
+        self.call_bridge_panel.set_level(role, level)
+
+    @Slot(object)
+    def _run_call_bridge_route_test(self, role: EndpointRole) -> None:
+        if self.call_bridge_controller is not None:
+            self._show_error("Stop the call bridge before running an isolated route test")
+            return
+        try:
+            assignments = self.call_bridge_panel.assignments()
+            synthesizer = getattr(self, "_synthesizer", None)
+            if synthesizer is None:
+                raise RuntimeError("Speech synthesizer is unavailable")
+            endpoint = assignments[role]
+        except Exception as exc:  # noqa: BLE001 - UI validation boundary.
+            self._show_error(str(exc))
+            return
+
+        def run_test() -> None:
+            language = (
+                Language.MANDARIN
+                if role is EndpointRole.CALL_MICROPHONE_RENDER
+                else Language.GERMAN
+            )
+            text = "通话麦克风测试。" if language is Language.MANDARIN else "Kopfhörer-Test."
+            path = None
+            try:
+                path = synthesizer.synthesize(text, language)
+                EndpointPlaybackStream(endpoint).play(path)
+                self.bridge.call_bridge_event.emit(
+                    BridgeEvent(None, BridgeEventKind.ENDPOINT, "route_test_passed", role.value)
+                )
+            except Exception as exc:  # noqa: BLE001 - diagnostic boundary.
+                self.bridge.call_bridge_event.emit(
+                    BridgeEvent(
+                        None, BridgeEventKind.ERROR, type(exc).__name__, "route_test_failed"
+                    )
+                )
+            finally:
+                if path is not None:
+                    path.unlink(missing_ok=True)
+
+        threading.Thread(target=run_test, name="call-bridge-route-test", daemon=True).start()
 
     def _submit_audio(self, utterance) -> None:
         self.runner.submit(utterance)
@@ -400,8 +641,10 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Transcript saved: {path}", 10_000)
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        self.stop_call_bridge()
         self.stop_listening()
         if self.persist_settings:
+            self.call_bridge_panel.apply_to_config()
             self.config.ui.mode = self.current_mode().value
             self.config.tts.enabled = self.tts_checkbox.isChecked()
             self.config.save()

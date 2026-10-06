@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use this prototype in research, please cite it using this metadata."
+title: "Offline German-Mandarin Interpreter"
+type: software
+version: "0.1.0"
+date-released: 2026-10-06
+authors:
+  - family-names: "Heuer"
+    given-names: "Boris"
+    alias: "boris-heuer"
+repository-code: "https://github.com/boris-heuer/offline-german-mandarin-interpreter"
+license: "GPL-3.0-or-later"
+abstract: "A Windows prototype for local, utterance-based German-Mandarin speech translation."
+keywords:
+  - speech translation
+  - offline
+  - German
+  - Mandarin
+  - Windows

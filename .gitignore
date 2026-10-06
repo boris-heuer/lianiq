@@ -10,3 +10,4 @@ dist/
 logs/
 models/
 config/settings.local.json
+.package-smoke/
