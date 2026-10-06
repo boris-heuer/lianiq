@@ -2,8 +2,10 @@
 
 ## Status
 
-Proposed. This document defines the target architecture for connecting the offline interpreter to
-a desktop call application such as WeChat. It does not claim that the feature is implemented.
+Implemented as an experimental feature. Source-level and deterministic test gates are complete;
+packaged hardware routing and a real two-party call must still pass before production SystemOK.
+This document describes the implemented architecture for connecting the offline interpreter to a
+desktop call application such as WeChat.
 
 ## Objective
 
@@ -36,8 +38,8 @@ not hard-code a particular virtual-cable vendor or device display name.
 ```mermaid
 flowchart LR
     subgraph Local[Local user]
-        BoseMic[Bose microphone]
-        BosePhones[Bose headphones]
+        HeadsetMic[Physical headset microphone]
+        Headphones[Physical headset headphones]
     end
 
     subgraph Interpreter[Offline Interpreter]
@@ -67,7 +69,7 @@ flowchart LR
 
     Remote[Remote participant]
 
-    BoseMic -->|German PCM| TX
+    HeadsetMic -->|German PCM| TX
     TX -->|Mandarin PCM| TXRender
     TXCapture --> CallMic
     Network -->|Mandarin audio| Remote
@@ -75,7 +77,7 @@ flowchart LR
     Remote -->|Mandarin speech| Network
     CallSpeaker --> RXRender
     RXCapture --> RX
-    RX -->|German PCM| BosePhones
+    RX -->|German PCM| Headphones
 ```
 
 Virtual-cable names are counterintuitive on common Windows drivers: an application writes to the

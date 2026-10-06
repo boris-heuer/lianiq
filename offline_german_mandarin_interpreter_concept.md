@@ -1,4 +1,9 @@
-# Project: Offline Real-Time German-Mandarin Interpreter for Windows
+# Historical Project Concept: Offline Real-Time German-Mandarin Interpreter for Windows
+
+> This is the original aspirational concept, retained as design history. It is not the current
+> product specification or evidence of delivered behavior. The [README](README.md),
+> [engineering case study](docs/engineering-case-study.md), and
+> [Call Bridge evidence](docs/call-bridge-system-ok.md) describe the implemented scope and limits.
 
 ## Goal
 
@@ -65,7 +70,7 @@ Microphone
 
 ## Technical requirements
 
-- Python 3.11 or later
+- Python 3.12
 - Modern desktop UI
 - PySide6 preferred; Qt or Tkinter only if required
 
@@ -132,7 +137,7 @@ translator/
 ## Deliverables
 
 1. Complete source code
-2. `requirements.txt`
+2. `requirements-lock.txt`
 3. Installation guide
 4. Windows build guide
 5. Step-by-step explanation
@@ -140,6 +145,6 @@ translator/
 7. Error handling
 8. Logging
 
-The code must be production-ready, modular, and maintainable. The final product is a local,
-privacy-preserving German-Mandarin conversation interpreter for a Windows laptop with natural
-real-time communication and no more than one to three seconds of latency.
+This was the original target: production-ready, modular, maintainable, local, privacy-preserving,
+and one-to-three-second utterance latency. The current prototype does not claim that every target
+has been met; use the current evidence documents linked above for status.

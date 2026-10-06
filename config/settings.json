@@ -26,14 +26,23 @@
     "glossary_path": "config/glossary.json"
   },
   "tts": {
-    "enabled": true,
+    "enabled": false,
     "de_voice_path": "models/piper/de_DE-thorsten-medium.onnx",
-    "zh_voice_path": "models/piper/zh_CN-huayan-medium.onnx",
+    "zh_voice_path": "models/piper/zh_CN-user-provided.onnx",
     "length_scale": 1.0,
     "device": "auto"
   },
   "ui": {
     "mode": "auto",
     "log_level": "INFO"
+  },
+  "call_bridge": {
+    "enabled": false,
+    "local_microphone_endpoint_id": null,
+    "call_microphone_render_endpoint_id": null,
+    "call_speaker_capture_endpoint_id": null,
+    "local_headphones_endpoint_id": null,
+    "failure_policy": "mute",
+    "max_pending_age_ms": 4000
   }
 }

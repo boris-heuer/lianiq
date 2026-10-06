@@ -38,7 +38,7 @@ preserving order independently within each lane.
 
 See [`call-bridge-architecture.md`](call-bridge-architecture.md) for the design,
 [`call-bridge-implementation-plan.md`](call-bridge-implementation-plan.md) for the TDD delivery
-plan, and [`call-bridge-operator-setup.md`](call-bridge-operator-setup.md) for the proposed Windows
+plan, and [`call-bridge-operator-setup.md`](call-bridge-operator-setup.md) for the experimental Windows
 device mapping.
 
 ## Conversation scenarios
