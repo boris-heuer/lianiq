@@ -13,8 +13,9 @@ real-call gates remain separately documented in
 - [x] Safe tracked defaults contain no machine-specific endpoint identities.
 - [x] Runtime endpoint identities are written only to ignored `config/settings.local.json`.
 - [x] Python 3.12 Windows dependencies are hash-locked in `requirements-lock.txt`.
-- [ ] The complete tree is committed and pushed to GitHub.
-- [ ] A fresh clone from GitHub installs, tests, builds a wheel, and imports that wheel.
+- [x] The complete tree is committed and pushed to GitHub.
+- [x] A fresh clone from GitHub installs, tests, builds a wheel and Windows application, imports the
+      wheel, and starts the packaged application without reusing the source workspace.
 
 ## Phase 2 — technical publication readiness
 
