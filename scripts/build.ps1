@@ -29,17 +29,33 @@ try {
     if (Test-Path -LiteralPath $ApplicationOutput) {
         Remove-Item -LiteralPath $ApplicationOutput -Recurse -Force
     }
-    & $Python -m PyInstaller `
-        --noconfirm `
-        --clean `
-        --onedir `
-        --windowed `
-        --name lianiq `
-        --add-data "$PiperData;piper/espeak-ng-data" `
-        --collect-all ctranslate2 `
-        --collect-all tokenizers `
-        run_app.py
-    if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed ($LASTEXITCODE)." }
+    # PySide 6.11 uses the Windows system ICU shim. Keep unrelated ICU builds
+    # from the caller's PATH out of PyInstaller's dependency resolution.
+    $OriginalBuildPath = $env:PATH
+    $env:PATH = @(
+        (Join-Path $env:SystemRoot 'System32')
+        $env:SystemRoot
+        (Join-Path $env:SystemRoot 'System32\Wbem')
+    ) -join ';'
+    try {
+        & $Python -m PyInstaller `
+            --noconfirm `
+            --clean `
+            --onedir `
+            --windowed `
+            --name lianiq `
+            --add-data "$PiperData;piper/espeak-ng-data" `
+            --collect-all ctranslate2 `
+            --collect-all tokenizers `
+            run_app.py
+        if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed ($LASTEXITCODE)." }
+    }
+    finally {
+        $env:PATH = $OriginalBuildPath
+    }
+    if (Test-Path -LiteralPath (Join-Path $ApplicationOutput '_internal\icuuc.dll')) {
+        throw 'Build contains a non-system ICU shim; refusing a PATH-dependent package.'
+    }
     if ($IncludeModels) {
         $ModelSource = Join-Path $ProjectRoot 'models'
         if (-not (Test-Path -LiteralPath $ModelSource -PathType Container)) {
