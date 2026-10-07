@@ -20,6 +20,14 @@ are local after the one-time model download.
 The image above is the repository social-preview asset; it is an abstract illustration, not an
 application screenshot or a performance claim.
 
+### Application UI
+
+![Sanitized lianiq application window with the experimental Call Bridge disabled](docs/assets/application-ui.png)
+
+This screenshot is captured from the Windows application with generic device selections, empty
+transcript panels, and the experimental Call Bridge disabled. It demonstrates the current UI only;
+it is not evidence that the hardware, latency, reconnect, or real-call acceptance gates passed.
+
 ## Reference system and portability
 
 The defaults were developed on this reference system:
@@ -179,6 +187,7 @@ code.
 ```powershell
 .\.venv\Scripts\python.exe -m pytest
 .\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe .\scripts\check_markdown_links.py
 ```
 
 Most automated tests use deterministic fakes and do not require a microphone, virtual cables, or

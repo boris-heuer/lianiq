@@ -45,6 +45,9 @@ jobs:
       - name: Lint
         run: python -m ruff check .
 
+      - name: Validate local Markdown links
+        run: python scripts/check_markdown_links.py
+
       - name: Test
         run: python -m pytest
 

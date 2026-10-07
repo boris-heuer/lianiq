@@ -84,17 +84,35 @@ If audio quality or stability is unacceptable:
 3. use a wired or USB connection if the headset supports it; or
 4. use the headset only for playback and a separate USB microphone for capture.
 
-## Troubleshooting boundaries
+## Windows audio troubleshooting matrix
 
-| Symptom | First check |
-|---|---|
-| Remote participant hears the original German voice | WeChat is still using the physical microphone |
-| No remote audio reaches the interpreter | WeChat speaker is not assigned to the RX playback endpoint |
-| Remote hears Windows sounds | TX cable is configured as a system default output or is being mixed externally |
-| Interpreter translates its own output | TX and RX cable roles are crossed or externally monitored |
-| Device selection changes after reboot | Persisted runtime index was used instead of stable endpoint identity |
-| Headset audio becomes mono | Bluetooth communication profile or missing LE Audio support |
-| Translation falls increasingly behind | Queue-age limit or model scheduling is not enforcing bounded latency |
+Keep call-bridge mode stopped while changing endpoint assignments. A missing, ambiguous, or
+wrong-direction endpoint is an unsafe route: leave the affected lane muted until the explicit
+assignment and its signal path are verified. Never substitute a Windows default device.
+
+| Symptom | Deterministic software checks | Safe remediation | Evidence boundary |
+|---|---|---|---|
+| A configured endpoint is missing after reboot, reconnect, or driver update | Run `scripts/call_bridge_diagnostics.py`; confirm that the saved role is reported unavailable rather than rebound to a numeric index or default device | Stop the bridge, reconnect the exact device, refresh the inventory, and explicitly select its stable endpoint again. If Windows created a new identity, treat it as a new device | A successful inventory lookup proves identity resolution only. Repeat the isolated route test and the disconnect/reconnect hardware gate |
+| A virtual cable appears only on the wrong capture/render side | In Windows Sound settings, verify that the cable's playback endpoint (generic example: `TX playback`) is paired with its recording endpoint (`TX recording`). Check that the lianiq role selector exposes only the required flow | Reassign the lane using the paired endpoints: lianiq renders to TX playback while the call application captures TX recording; the call application renders to RX playback while lianiq captures RX recording | Correct capabilities and assignment validation do not prove that the driver transports audio between the pair |
+| The selected microphone or RX input level does not move | Confirm the application holding the source is producing audio, the relevant endpoint is not muted in Windows, and the expected lianiq lane meter is the only meter moving | Stop the bridge, correct the source application's explicit endpoint, then run the isolated route test before restarting. Do not enable listen/monitor loops to force meter activity | Meter movement proves signal arrival, not translation accuracy, latency, or remote-call delivery |
+| The remote participant hears the original German voice | Verify that the call application microphone is the paired TX recording endpoint and not the physical microphone or a Windows default | Mute or leave the call, select TX recording explicitly, and repeat the outbound route test before unmuting | Only a two-party real call proves that the remote participant receives synthesized Mandarin and no original microphone path |
+| No remote audio reaches lianiq | Verify that the call application speaker is RX playback and lianiq's call-speaker input is the paired RX recording endpoint | Select both sides of the RX pair explicitly, keep the inbound lane muted until its meter and isolated playback test pass | Local playback and meter checks do not replace the real WeChat inbound acceptance gate |
+| TX and RX activity appears on the opposite lane or the interpreter translates its own output | Compare every role with the required endpoint-mapping table; confirm TX and RX pairs are independent and Windows monitoring is disabled | Stop the bridge, remove crossed assignments or external monitoring, and rerun both isolated route tests | Software role validation rejects duplicate identities but cannot detect every external mixer or driver loop |
+| Audio stops after disconnect and does not resume after reconnect | Confirm the affected lane reports endpoint loss and remains muted; verify the reappearing endpoint has the same stable identity | Reconnect the same endpoint and allow the inventory check to rebind that identity. If identity changed or is ambiguous, stop and select it again manually | Automatic recovery is acceptable only for the same stable identity; complete the packaged disconnect/reconnect gate before SystemOK |
+| Remote hears Windows notification sounds | Check that TX playback is not a system default output and no external mixer sends desktop audio into TX | Remove the system-default or mixer route and repeat the outbound isolation test | A local isolation test must still be followed by a real-call confirmation |
+| Headset audio becomes mono | Check which Bluetooth communication profile Windows activated and whether the adapter, driver, and headset support LE Audio during microphone use | Update supported drivers, test documented endpoint variants, or use USB/wired playback or a separate microphone | This is a hardware/profile limitation, not a software pass or failure |
+| Translation falls increasingly behind | Run the deterministic self-test and inspect sanitized dropped-work/latency categories; confirm the bounded queue and age limit are active | Stop the call, reduce host load, and use the validated model profile. Do not remove queue or age bounds to hide overload | Synthetic timing is diagnostic evidence only; packaged two-lane latency under a real call remains required |
+
+The following checks are deterministic and safe to repeat without a call:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\call_bridge_self_test.py
+.\.venv\Scripts\python.exe .\scripts\call_bridge_diagnostics.py
+```
+
+They validate contracts, configuration, and sanitized diagnostics. They do not satisfy the
+two-cable signal-isolation, packaged latency, disconnect/reconnect, or two-party WeChat gates in
+the acceptance checklist.
 
 ## Rollback
 

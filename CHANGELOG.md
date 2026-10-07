@@ -4,6 +4,11 @@ All notable user-visible changes are documented here.
 
 ## Unreleased
 
+### Added
+
+- A sanitized application screenshot, repository-owned Markdown link validation, and a fail-closed
+  Windows audio troubleshooting matrix.
+
 ### Changed
 
 - Renamed the product, repository metadata, Python package, command, Windows executable, and
