@@ -29,7 +29,7 @@ def status(ok: bool, name: str, detail: str = "") -> bool:
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Validate an offline interpreter installation.")
+    parser = argparse.ArgumentParser(description="Validate a lianiq installation.")
     parser.add_argument(
         "--require-mandarin-voice",
         action="store_true",

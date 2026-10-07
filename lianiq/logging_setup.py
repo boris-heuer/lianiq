@@ -17,7 +17,7 @@ def configure_logging(log_dir: Path, level: str = "INFO") -> None:
         "%(asctime)s | %(levelname)s | %(name)s | %(message)s", "%Y-%m-%d %H:%M:%S"
     )
     file_handler = RotatingFileHandler(
-        log_dir / "offline-interpreter.log",
+        log_dir / "lianiq.log",
         maxBytes=2_000_000,
         backupCount=3,
         encoding="utf-8",

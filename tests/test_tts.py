@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from offline_translator.domain import Language
-from offline_translator.tts.piper_engine import PiperEngine
+from lianiq.domain import Language
+from lianiq.tts.piper_engine import PiperEngine
 
 
 def test_warm_up_runs_real_synthesis_for_both_languages(tmp_path, monkeypatch) -> None:

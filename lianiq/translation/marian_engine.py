@@ -3,9 +3,9 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from offline_translator.domain import Language
-from offline_translator.hardware import resolve_compute_device
-from offline_translator.translation.glossary import Glossary
+from lianiq.domain import Language
+from lianiq.hardware import resolve_compute_device
+from lianiq.translation.glossary import Glossary
 
 LOGGER = logging.getLogger(__name__)
 

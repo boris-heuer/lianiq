@@ -21,7 +21,7 @@ Push-Location $ProjectRoot
 try {
     $DistRoot = [System.IO.Path]::GetFullPath((Join-Path $ProjectRoot 'dist')).TrimEnd('\') + '\'
     $ApplicationOutput = [System.IO.Path]::GetFullPath(
-        (Join-Path $ProjectRoot 'dist\OfflineInterpreter')
+        (Join-Path $ProjectRoot 'dist\lianiq')
     )
     if (-not $ApplicationOutput.StartsWith($DistRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
         throw "Unsafe application output path: $ApplicationOutput"
@@ -34,7 +34,7 @@ try {
         --clean `
         --onedir `
         --windowed `
-        --name OfflineInterpreter `
+        --name lianiq `
         --add-data "$PiperData;piper/espeak-ng-data" `
         --collect-all ctranslate2 `
         --collect-all tokenizers `
@@ -50,11 +50,11 @@ try {
             throw 'IncludeModels requires models\model-manifest.json from scripts\download_models.py.'
         }
         $Manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
-        $ModelDestination = Join-Path $ProjectRoot 'dist\OfflineInterpreter\models'
+        $ModelDestination = Join-Path $ProjectRoot 'dist\lianiq\models'
         New-Item -ItemType Directory -Path $ModelDestination -Force | Out-Null
         $ModelSourceRoot = [System.IO.Path]::GetFullPath($ModelSource).TrimEnd('\') + '\'
         $PackageRoot = [System.IO.Path]::GetFullPath(
-            (Join-Path $ProjectRoot 'dist\OfflineInterpreter')
+            (Join-Path $ProjectRoot 'dist\lianiq')
         ).TrimEnd('\') + '\'
         foreach ($Artifact in $Manifest.artifacts) {
             $RelativePath = [string]$Artifact.path
@@ -83,17 +83,17 @@ try {
             (Join-Path $ModelDestination 'model-manifest.json') -Force
         Write-Warning 'Only manifest-listed models were included. Verify their licenses before redistribution.'
     }
-    $PackagedConfig = Join-Path $ProjectRoot 'dist\OfflineInterpreter\config'
+    $PackagedConfig = Join-Path $ProjectRoot 'dist\lianiq\config'
     New-Item -ItemType Directory -Path $PackagedConfig -Force | Out-Null
     foreach ($ConfigName in @('settings.json', 'glossary.json')) {
         Copy-Item -LiteralPath (Join-Path $ProjectRoot "config\$ConfigName") `
             -Destination (Join-Path $PackagedConfig $ConfigName) -Force
     }
-    $PackagedPiperData = Join-Path $ProjectRoot 'dist\OfflineInterpreter\_internal\piper\espeak-ng-data'
+    $PackagedPiperData = Join-Path $ProjectRoot 'dist\lianiq\_internal\piper\espeak-ng-data'
     if (-not (Test-Path -LiteralPath $PackagedPiperData)) {
         throw 'Packaged Piper eSpeak data is missing.'
     }
-    Write-Host 'Build is ready under dist\OfflineInterpreter.'
+    Write-Host 'Build is ready under dist\lianiq.'
     if (-not $IncludeModels) {
         Write-Host 'This is a thin build without model weights. Provision reviewed models separately.'
     }

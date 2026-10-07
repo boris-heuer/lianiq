@@ -3,10 +3,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from offline_translator.audio.endpoints import list_audio_endpoints
-from offline_translator.call_bridge.contracts import BridgeState, EndpointFlow, EndpointRole
-from offline_translator.call_bridge.health import write_sanitized_diagnostic
-from offline_translator.config import AppConfig
+from lianiq.audio.endpoints import list_audio_endpoints
+from lianiq.call_bridge.contracts import BridgeState, EndpointFlow, EndpointRole
+from lianiq.call_bridge.health import write_sanitized_diagnostic
+from lianiq.config import AppConfig
 
 
 def main() -> int:

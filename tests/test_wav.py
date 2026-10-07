@@ -5,7 +5,7 @@ import wave
 import numpy as np
 import pytest
 
-from offline_translator.audio.wav import read_pcm16_mono
+from lianiq.audio.wav import read_pcm16_mono
 
 
 def write_wav(path, samples: np.ndarray, sample_rate: int, channels: int = 1) -> None:

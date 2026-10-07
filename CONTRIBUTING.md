@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for improving the interpreter. Contributions are welcome through focused issues and pull
+Thanks for improving `lianiq`. Contributions are welcome through focused issues and pull
 requests.
 
 ## Before changing code

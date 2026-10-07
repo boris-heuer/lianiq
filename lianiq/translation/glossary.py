@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from offline_translator.domain import Language
+from lianiq.domain import Language
 
 
 class Glossary:

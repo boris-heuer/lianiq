@@ -9,9 +9,9 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QApplication
 
-from offline_translator.call_bridge.contracts import AudioEndpointRef, EndpointFlow, EndpointRole
-from offline_translator.config import CallBridgeConfig
-from offline_translator.ui.call_bridge_panel import CallBridgePanel
+from lianiq.call_bridge.contracts import AudioEndpointRef, EndpointFlow, EndpointRole
+from lianiq.config import CallBridgeConfig
+from lianiq.ui.call_bridge_panel import CallBridgePanel
 
 
 @pytest.fixture(scope="module")

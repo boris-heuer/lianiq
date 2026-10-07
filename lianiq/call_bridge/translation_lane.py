@@ -9,15 +9,15 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Protocol
 
-from offline_translator.call_bridge.contracts import (
+from lianiq.call_bridge.contracts import (
     BridgeEvent,
     BridgeEventKind,
     LaneId,
 )
-from offline_translator.call_bridge.health import LaneHealthSnapshot
-from offline_translator.call_bridge.inference_scheduler import InferenceScheduler
-from offline_translator.domain import AudioUtterance, Language, TranslationResult
-from offline_translator.pipeline import SpeechRecognizer, Synthesizer, Translator
+from lianiq.call_bridge.health import LaneHealthSnapshot
+from lianiq.call_bridge.inference_scheduler import InferenceScheduler
+from lianiq.domain import AudioUtterance, Language, TranslationResult
+from lianiq.pipeline import SpeechRecognizer, Synthesizer, Translator
 
 LOGGER = logging.getLogger(__name__)
 

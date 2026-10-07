@@ -3,13 +3,13 @@ from __future__ import annotations
 import sys
 import wave
 
-from offline_translator.app import build_pipeline
-from offline_translator.audio.wav import read_pcm16_mono
-from offline_translator.call_bridge.contracts import LaneId
-from offline_translator.call_bridge.inference_scheduler import InferenceScheduler
-from offline_translator.call_bridge.translation_lane import TranslationLane
-from offline_translator.config import AppConfig
-from offline_translator.domain import Language
+from lianiq.app import build_pipeline
+from lianiq.audio.wav import read_pcm16_mono
+from lianiq.call_bridge.contracts import LaneId
+from lianiq.call_bridge.inference_scheduler import InferenceScheduler
+from lianiq.call_bridge.translation_lane import TranslationLane
+from lianiq.config import AppConfig
+from lianiq.domain import Language
 
 MAX_END_TO_END_SECONDS = 3.0
 WAIT_TIMEOUT_SECONDS = 30.0

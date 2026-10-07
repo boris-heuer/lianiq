@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from offline_translator.domain import Language
-from offline_translator.translation.context import ContextBuffer
-from offline_translator.translation.glossary import Glossary
+from lianiq.domain import Language
+from lianiq.translation.context import ContextBuffer
+from lianiq.translation.glossary import Glossary
 
 
 def test_context_is_bounded_and_filtered_by_language() -> None:

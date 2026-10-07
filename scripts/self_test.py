@@ -5,10 +5,10 @@ import time
 import wave
 from pathlib import Path
 
-from offline_translator.app import build_pipeline
-from offline_translator.audio.wav import read_pcm16_mono
-from offline_translator.config import AppConfig
-from offline_translator.domain import ConversationMode, Language
+from lianiq.app import build_pipeline
+from lianiq.audio.wav import read_pcm16_mono
+from lianiq.config import AppConfig
+from lianiq.domain import ConversationMode, Language
 
 MAX_PROCESSING_SECONDS = 3.0
 

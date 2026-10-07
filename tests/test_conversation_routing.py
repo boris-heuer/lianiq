@@ -5,9 +5,9 @@ from dataclasses import dataclass
 import numpy as np
 import pytest
 
-from offline_translator.conversation.routing import TurnRouter
-from offline_translator.domain import AudioUtterance, ConversationMode, Language, Transcript
-from offline_translator.pipeline import TranslationPipeline
+from lianiq.conversation.routing import TurnRouter
+from lianiq.domain import AudioUtterance, ConversationMode, Language, Transcript
+from lianiq.pipeline import TranslationPipeline
 
 
 @dataclass(frozen=True, slots=True)

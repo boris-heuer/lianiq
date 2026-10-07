@@ -5,9 +5,9 @@ from pathlib import Path
 
 import numpy as np
 
-from offline_translator.config import SpeechToTextConfig
-from offline_translator.domain import Language, Transcript
-from offline_translator.hardware import ctranslate2_cuda_available, resolve_compute_device
+from lianiq.config import SpeechToTextConfig
+from lianiq.domain import Language, Transcript
+from lianiq.hardware import ctranslate2_cuda_available, resolve_compute_device
 
 LOGGER = logging.getLogger(__name__)
 

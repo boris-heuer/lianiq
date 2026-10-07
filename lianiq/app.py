@@ -4,14 +4,14 @@ import logging
 import os
 import sys
 
-from offline_translator.audio.playback import play_wav
-from offline_translator.config import PROJECT_ROOT, AppConfig
-from offline_translator.logging_setup import configure_logging
-from offline_translator.pipeline import TranslationPipeline
-from offline_translator.stt.faster_whisper_engine import FasterWhisperEngine
-from offline_translator.translation.glossary import Glossary
-from offline_translator.translation.marian_engine import MarianTranslator
-from offline_translator.tts.piper_engine import PiperEngine
+from lianiq.audio.playback import play_wav
+from lianiq.config import PROJECT_ROOT, AppConfig
+from lianiq.logging_setup import configure_logging
+from lianiq.pipeline import TranslationPipeline
+from lianiq.stt.faster_whisper_engine import FasterWhisperEngine
+from lianiq.translation.glossary import Glossary
+from lianiq.translation.marian_engine import MarianTranslator
+from lianiq.tts.piper_engine import PiperEngine
 
 
 def build_pipeline(config: AppConfig) -> tuple[TranslationPipeline, PiperEngine]:
@@ -52,7 +52,7 @@ def main() -> int:
         from PySide6.QtCore import QCoreApplication, Qt
         from PySide6.QtWidgets import QApplication
 
-        from offline_translator.ui.main_window import MainWindow
+        from lianiq.ui.main_window import MainWindow
     except ImportError as exc:
         logging.getLogger(__name__).exception("GUI dependency import failed")
         if sys.stderr is not None:
@@ -61,7 +61,7 @@ def main() -> int:
 
     QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_UseSoftwareOpenGL)
     application = QApplication(sys.argv)
-    application.setApplicationName("Offline German-Mandarin Interpreter")
+    application.setApplicationName("lianiq")
     pipeline, synthesizer = build_pipeline(config)
     window = MainWindow(config, pipeline)
     window.set_synthesizer_reference(synthesizer)

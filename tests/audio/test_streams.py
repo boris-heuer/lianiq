@@ -5,10 +5,10 @@ from pathlib import Path
 
 import numpy as np
 
-from offline_translator.audio.capture_stream import EndpointCaptureStream
-from offline_translator.audio.playback_stream import EndpointPlaybackStream
-from offline_translator.call_bridge.contracts import AudioEndpointRef, EndpointFlow
-from offline_translator.config import AudioConfig
+from lianiq.audio.capture_stream import EndpointCaptureStream
+from lianiq.audio.playback_stream import EndpointPlaybackStream
+from lianiq.call_bridge.contracts import AudioEndpointRef, EndpointFlow
+from lianiq.config import AudioConfig
 
 
 def endpoint(flow: EndpointFlow) -> AudioEndpointRef:
@@ -64,7 +64,7 @@ def test_capture_uses_explicit_endpoint_and_processes_audio_outside_callback() -
 def test_playback_never_uses_default_endpoint(monkeypatch) -> None:
     calls = []
     monkeypatch.setattr(
-        "offline_translator.audio.playback_stream.play_wav",
+        "lianiq.audio.playback_stream.play_wav",
         lambda path, output_device: calls.append((path, output_device)),
     )
     playback = EndpointPlaybackStream(endpoint(EndpointFlow.RENDER))

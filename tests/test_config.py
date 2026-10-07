@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import offline_translator.config as config_module
-from offline_translator.config import AppConfig
+import lianiq.config as config_module
+from lianiq.config import AppConfig
 
 
 def test_config_round_trip(tmp_path: Path) -> None:

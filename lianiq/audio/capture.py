@@ -6,9 +6,9 @@ from collections.abc import Callable
 
 import numpy as np
 
-from offline_translator.audio.segmenter import UtteranceSegmenter
-from offline_translator.config import AudioConfig
-from offline_translator.domain import AudioUtterance
+from lianiq.audio.segmenter import UtteranceSegmenter
+from lianiq.config import AudioConfig
+from lianiq.domain import AudioUtterance
 
 LOGGER = logging.getLogger(__name__)
 

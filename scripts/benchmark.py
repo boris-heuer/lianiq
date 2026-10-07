@@ -7,9 +7,9 @@ from pathlib import Path
 
 import numpy as np
 
-from offline_translator.app import build_pipeline
-from offline_translator.config import AppConfig
-from offline_translator.domain import AudioUtterance, ConversationMode
+from lianiq.app import build_pipeline
+from lianiq.config import AppConfig
+from lianiq.domain import AudioUtterance, ConversationMode
 
 
 def read_wav(path: Path) -> AudioUtterance:

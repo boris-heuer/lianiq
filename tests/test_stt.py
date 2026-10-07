@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from offline_translator.domain import Language
-from offline_translator.stt.faster_whisper_engine import (
+from lianiq.domain import Language
+from lianiq.stt.faster_whisper_engine import (
     _normalize_language,
     _resolve_detected_language,
 )

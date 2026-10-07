@@ -10,15 +10,15 @@ from typing import Protocol
 
 import numpy as np
 
-from offline_translator.conversation.routing import TurnRouter
-from offline_translator.domain import (
+from lianiq.conversation.routing import TurnRouter
+from lianiq.domain import (
     AudioUtterance,
     ConversationMode,
     Language,
     Transcript,
     TranslationResult,
 )
-from offline_translator.translation.context import ContextBuffer
+from lianiq.translation.context import ContextBuffer
 
 LOGGER = logging.getLogger(__name__)
 

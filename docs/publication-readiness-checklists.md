@@ -28,7 +28,7 @@ real-call gates remain separately documented in
 - [x] Branch protection, private vulnerability reporting, dependency alerts, secret scanning, and
       push protection are enabled on the public GitHub repository.
 - [x] Required GitHub CI and CodeQL checks passed on the exact merge candidate in
-      [PR #1](https://github.com/boris-heuer/offline-german-mandarin-interpreter/pull/1), with no
+      [PR #1](https://github.com/boris-heuer/lianiq/pull/1), with no
       open CodeQL alert.
 
 ## Phase 3 — stars and competency evidence
@@ -40,10 +40,10 @@ real-call gates remain separately documented in
 - [x] A purpose-built social-preview asset is versioned under `docs/assets/`.
 - [x] Repository description, topics, social preview, and public visibility are configured on GitHub.
 - [x] Initial contributor-friendly issues are published and labelled
-      ([#3](https://github.com/boris-heuer/offline-german-mandarin-interpreter/issues/3),
-      [#4](https://github.com/boris-heuer/offline-german-mandarin-interpreter/issues/4), and
-      [#5](https://github.com/boris-heuer/offline-german-mandarin-interpreter/issues/5)).
-- [x] The source-only [`v0.1.0`](https://github.com/boris-heuer/offline-german-mandarin-interpreter/releases/tag/v0.1.0)
+      ([#3](https://github.com/boris-heuer/lianiq/issues/3),
+      [#4](https://github.com/boris-heuer/lianiq/issues/4), and
+      [#5](https://github.com/boris-heuer/lianiq/issues/5)).
+- [x] The source-only [`v0.1.0`](https://github.com/boris-heuer/lianiq/releases/tag/v0.1.0)
       release is published with no unsigned binary or unreviewed model attached.
 
 ## External launch gate

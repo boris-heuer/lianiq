@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from typing import Protocol
 
-from offline_translator.audio.endpoints import EndpointInventory
-from offline_translator.call_bridge.contracts import (
+from lianiq.audio.endpoints import EndpointInventory
+from lianiq.call_bridge.contracts import (
     AudioEndpointRef,
     BridgeEvent,
     BridgeEventKind,

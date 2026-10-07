@@ -6,7 +6,7 @@ from collections.abc import Set as AbstractSet
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from offline_translator.call_bridge.contracts import (
+from lianiq.call_bridge.contracts import (
     AudioEndpointRef,
     BridgeState,
     EndpointRole,

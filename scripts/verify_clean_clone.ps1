@@ -35,7 +35,7 @@ the Thin packaging check.
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$workRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("translator-clean-clone-" + [guid]::NewGuid())
+$workRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("lianiq-clean-clone-" + [guid]::NewGuid())
 $clonePath = Join-Path $workRoot 'repository'
 $venvPath = Join-Path $clonePath '.venv'
 $cachePath = Join-Path $workRoot 'empty-cache'
@@ -104,20 +104,20 @@ try {
         $smokePython = Join-Path $smokeVenv 'Scripts\python.exe'
         & $smokePython -m pip install --no-deps $wheel.FullName
         if ($LASTEXITCODE -ne 0) { throw 'Built-wheel installation failed.' }
-        & $smokePython -c 'import offline_translator; print(f"Built package version: {offline_translator.__version__}")'
+        & $smokePython -c 'import lianiq; print(f"Built package version: {lianiq.__version__}")'
         if ($LASTEXITCODE -ne 0) { throw 'Built-package import smoke test failed.' }
 
         & (Join-Path $clonePath 'scripts\build.ps1')
         if ($LASTEXITCODE -ne 0) { throw 'Thin Windows application build failed.' }
-        $application = Join-Path $clonePath 'dist\OfflineInterpreter\OfflineInterpreter.exe'
+        $application = Join-Path $clonePath 'dist\lianiq\lianiq.exe'
         if (-not (Test-Path -LiteralPath $application -PathType Leaf)) {
-            throw 'Thin Windows application build did not produce OfflineInterpreter.exe.'
+            throw 'Thin Windows application build did not produce lianiq.exe.'
         }
-        if (Test-Path -LiteralPath (Join-Path $clonePath 'dist\OfflineInterpreter\models')) {
+        if (Test-Path -LiteralPath (Join-Path $clonePath 'dist\lianiq\models')) {
             throw 'Thin Windows application build unexpectedly contains model artifacts.'
         }
         if (Test-Path -LiteralPath `
-            (Join-Path $clonePath 'dist\OfflineInterpreter\config\settings.local.json')) {
+            (Join-Path $clonePath 'dist\lianiq\config\settings.local.json')) {
             throw 'Thin Windows application build unexpectedly contains private local settings.'
         }
         $applicationProcess = Start-Process -FilePath $application -PassThru -WindowStyle Hidden

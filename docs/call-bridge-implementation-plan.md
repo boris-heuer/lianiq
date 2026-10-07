@@ -83,9 +83,9 @@ this phase.
 Target files:
 
 ```text
-offline_translator/call_bridge/contracts.py
-offline_translator/call_bridge/translation_lane.py
-offline_translator/call_bridge/controller.py
+lianiq/call_bridge/contracts.py
+lianiq/call_bridge/translation_lane.py
+lianiq/call_bridge/controller.py
 tests/call_bridge/test_translation_lane.py
 tests/call_bridge/test_full_duplex_controller.py
 tests/call_bridge/test_call_bridge_scenarios.py
@@ -102,8 +102,8 @@ possible.
 Target files:
 
 ```text
-offline_translator/audio/ring_buffer.py
-offline_translator/audio/resampler.py
+lianiq/audio/ring_buffer.py
+lianiq/audio/resampler.py
 tests/audio/test_ring_buffer.py
 tests/audio/test_resampler.py
 ```
@@ -123,9 +123,9 @@ unavailable endpoints, and reconnect with a changed runtime index.
 Target files:
 
 ```text
-offline_translator/audio/endpoints.py
-offline_translator/audio/capture_stream.py
-offline_translator/audio/playback_stream.py
+lianiq/audio/endpoints.py
+lianiq/audio/capture_stream.py
+lianiq/audio/playback_stream.py
 tests/audio/test_endpoints.py
 tests/call_bridge/test_endpoint_recovery.py
 ```
@@ -145,8 +145,8 @@ local models with synthetic German and Mandarin WAV fixtures.
 Target files:
 
 ```text
-offline_translator/call_bridge/inference_scheduler.py
-offline_translator/call_bridge/health.py
+lianiq/call_bridge/inference_scheduler.py
+lianiq/call_bridge/health.py
 scripts/call_bridge_self_test.py
 ```
 
@@ -168,8 +168,8 @@ Prevent start when assignments are missing or conflicting. Preserve the current 
 Target files:
 
 ```text
-offline_translator/ui/call_bridge_panel.py
-offline_translator/config.py
+lianiq/ui/call_bridge_panel.py
+lianiq/config.py
 config/settings.json
 tests/test_config.py
 tests/ui/test_call_bridge_panel.py

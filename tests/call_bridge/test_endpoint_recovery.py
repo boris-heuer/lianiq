@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from offline_translator.audio.endpoints import EndpointInventory
-from offline_translator.call_bridge.contracts import (
+from lianiq.audio.endpoints import EndpointInventory
+from lianiq.call_bridge.contracts import (
     AudioEndpointRef,
     BridgeState,
     EndpointFlow,
     EndpointRole,
 )
-from offline_translator.call_bridge.controller import FullDuplexBridgeController
+from lianiq.call_bridge.controller import FullDuplexBridgeController
 
 
 def endpoint(role: EndpointRole, index: int) -> AudioEndpointRef:

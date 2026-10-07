@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from offline_translator.audio.playback import play_wav
-from offline_translator.call_bridge.contracts import AudioEndpointRef, EndpointFlow
+from lianiq.audio.playback import play_wav
+from lianiq.call_bridge.contracts import AudioEndpointRef, EndpointFlow
 
 
 class EndpointPlaybackStream:

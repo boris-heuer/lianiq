@@ -4,11 +4,11 @@ import hashlib
 import json
 from collections.abc import Iterable, Mapping, Sequence
 
-from offline_translator.audio.windows_endpoints import (
+from lianiq.audio.windows_endpoints import (
     NativeEndpointIdentity,
     list_windows_endpoint_identities,
 )
-from offline_translator.call_bridge.contracts import AudioEndpointRef, EndpointFlow
+from lianiq.call_bridge.contracts import AudioEndpointRef, EndpointFlow
 
 
 def enumerate_endpoint_refs(
