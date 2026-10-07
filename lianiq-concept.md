@@ -1,4 +1,4 @@
-# Historical Project Concept: Offline Real-Time German-Mandarin Interpreter for Windows
+# Historical Project Concept for lianiq
 
 > This is the original aspirational concept, retained as design history. It is not the current
 > product specification or evidence of delivered behavior. The [README](README.md),
@@ -110,7 +110,7 @@ automatically when no supported GPU is available.
 ## Suggested project structure
 
 ```text
-translator/
+lianiq/
 |-- main.py
 |-- ui/
 |   `-- main_window.py

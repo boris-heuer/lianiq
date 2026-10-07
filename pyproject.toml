@@ -3,9 +3,9 @@ requires = ["setuptools>=75", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "offline-german-mandarin-interpreter"
+name = "lianiq"
 version = "0.1.0"
-description = "Offline near-real-time German-Mandarin interpreter for Windows"
+description = "Private offline German-Mandarin speech translation for Windows"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 authors = [{ name = "Boris Heuer" }]
@@ -38,15 +38,15 @@ dev = ["pytest>=8,<9", "ruff>=0.9,<1"]
 build = ["pyinstaller>=6.11,<7", "wheel>=0.45,<1"]
 
 [project.scripts]
-offline-interpreter = "offline_translator.app:main"
+lianiq = "lianiq.app:main"
 
 [project.urls]
-Homepage = "https://github.com/boris-heuer/offline-german-mandarin-interpreter"
-Issues = "https://github.com/boris-heuer/offline-german-mandarin-interpreter/issues"
-Documentation = "https://github.com/boris-heuer/offline-german-mandarin-interpreter#readme"
+Homepage = "https://github.com/boris-heuer/lianiq"
+Issues = "https://github.com/boris-heuer/lianiq/issues"
+Documentation = "https://github.com/boris-heuer/lianiq#readme"
 
 [tool.setuptools.packages.find]
-include = ["offline_translator*"]
+include = ["lianiq*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

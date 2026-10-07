@@ -4,8 +4,8 @@ import tempfile
 import wave
 from pathlib import Path
 
-from offline_translator.domain import Language
-from offline_translator.hardware import resolve_onnx_device
+from lianiq.domain import Language
+from lianiq.hardware import resolve_onnx_device
 
 
 class PiperEngine:
@@ -67,7 +67,7 @@ class PiperEngine:
     def synthesize(self, text: str, language: Language) -> Path:
         voice = self._load(language)
         with tempfile.NamedTemporaryFile(
-            prefix="offline-interpreter-", suffix=".wav", delete=False
+            prefix="lianiq-", suffix=".wav", delete=False
         ) as handle:
             output = Path(handle.name)
         try:

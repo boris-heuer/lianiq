@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from offline_translator.audio.endpoints import EndpointInventory, enumerate_endpoint_refs
-from offline_translator.audio.windows_endpoints import NativeEndpointIdentity
-from offline_translator.call_bridge.contracts import EndpointFlow
+from lianiq.audio.endpoints import EndpointInventory, enumerate_endpoint_refs
+from lianiq.audio.windows_endpoints import NativeEndpointIdentity
+from lianiq.call_bridge.contracts import EndpointFlow
 
 HOST_APIS = [{"name": "Windows WASAPI"}]
 

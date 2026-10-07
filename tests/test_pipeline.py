@@ -4,13 +4,13 @@ import threading
 
 import numpy as np
 
-from offline_translator.domain import (
+from lianiq.domain import (
     AudioUtterance,
     ConversationMode,
     Language,
     Transcript,
 )
-from offline_translator.pipeline import PipelineRunner, TranslationPipeline
+from lianiq.pipeline import PipelineRunner, TranslationPipeline
 
 
 class FakeRecognizer:

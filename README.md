@@ -1,12 +1,14 @@
-# Offline German-Mandarin Interpreter
+# lianiq
 
-![Abstract audio and privacy illustration for the Offline German-Mandarin Interpreter](docs/assets/social-preview.png)
+![Abstract audio and privacy illustration for lianiq](docs/assets/social-preview.png)
 
-[![CI](https://github.com/boris-heuer/offline-german-mandarin-interpreter/actions/workflows/ci.yml/badge.svg)](https://github.com/boris-heuer/offline-german-mandarin-interpreter/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/boris-heuer/offline-german-mandarin-interpreter/actions/workflows/codeql.yml/badge.svg)](https://github.com/boris-heuer/offline-german-mandarin-interpreter/actions/workflows/codeql.yml)
+[![CI](https://github.com/boris-heuer/lianiq/actions/workflows/ci.yml/badge.svg)](https://github.com/boris-heuer/lianiq/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/boris-heuer/lianiq/actions/workflows/codeql.yml/badge.svg)](https://github.com/boris-heuer/lianiq/actions/workflows/codeql.yml)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
 
-A Windows desktop prototype for private, **near-real-time, utterance-based** conversations between
+**Private, offline German-Mandarin speech translation for Windows.**
+
+`lianiq` is a Windows desktop prototype for private, **near-real-time, utterance-based** conversations between
 German and Mandarin Chinese. Audio is segmented at pauses, then transcribed, translated, and spoken;
 it is not a simultaneous or word-by-word interpreter. Runtime audio processing and model inference
 are local after the one-time model download.
@@ -113,7 +115,7 @@ models:
 ## Run
 
 ```powershell
-.\.venv\Scripts\python.exe -m offline_translator
+.\.venv\Scripts\python.exe -m lianiq
 ```
 
 - `F8`: start capture
@@ -190,7 +192,7 @@ the [publication-readiness checklists](docs/publication-readiness-checklists.md)
 .\scripts\build.ps1
 ```
 
-The result is written to `dist\OfflineInterpreter`. By default this is a thin build containing the
+The result is written to `dist\lianiq`. By default this is a thin build containing the
 application and configuration but no model weights. After reviewing every local model license, an
 operator may explicitly create a local model-inclusive build with `scripts\build.ps1 -IncludeModels`.
 Do not redistribute that output unless the corresponding model notices and source obligations are
@@ -201,7 +203,7 @@ files more predictably than a single executable.
 
 - Runtime code makes no network requests; all model loaders use local paths only.
 - Transcript export happens only after the user chooses a local destination.
-- Rotating logs are stored in `logs\offline-interpreter.log` and never contain audio.
+- Rotating logs are stored in `logs\lianiq.log` and never contain audio.
 - Native faults are written to `logs\native-crash.log`; Qt uses software rendering for stability
   on the integrated Radeon GPU.
 - Missing dependencies and models produce actionable error messages.

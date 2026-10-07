@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import json
 
-from offline_translator.call_bridge.contracts import (
+from lianiq.call_bridge.contracts import (
     AudioEndpointRef,
     BridgeState,
     EndpointFlow,
     EndpointRole,
 )
-from offline_translator.call_bridge.health import write_sanitized_diagnostic
+from lianiq.call_bridge.health import write_sanitized_diagnostic
 
 
 def test_diagnostic_export_contains_capabilities_but_no_endpoint_identifier_or_name(

@@ -4,10 +4,10 @@ import threading
 
 import numpy as np
 
-from offline_translator.call_bridge.contracts import LaneId
-from offline_translator.call_bridge.inference_scheduler import InferenceScheduler
-from offline_translator.call_bridge.translation_lane import TranslationLane
-from offline_translator.domain import AudioUtterance, Language, Transcript
+from lianiq.call_bridge.contracts import LaneId
+from lianiq.call_bridge.inference_scheduler import InferenceScheduler
+from lianiq.call_bridge.translation_lane import TranslationLane
+from lianiq.domain import AudioUtterance, Language, Transcript
 
 
 def test_full_duplex_routes_outputs_to_only_their_declared_sinks() -> None:

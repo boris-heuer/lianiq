@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass
 
-from offline_translator.call_bridge.contracts import EndpointFlow
+from lianiq.call_bridge.contracts import EndpointFlow
 
 DEVICE_STATE_ACTIVE = 1
 DEVICE_DESCRIPTION_PROPERTY = "{a45c254e-df1c-4efd-8020-67d146a850e0},2"

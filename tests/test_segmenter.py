@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from offline_translator.audio.segmenter import UtteranceSegmenter
+from lianiq.audio.segmenter import UtteranceSegmenter
 
 
 def make_segmenter() -> UtteranceSegmenter:

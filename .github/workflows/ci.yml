@@ -57,4 +57,4 @@ jobs:
           python -m venv .package-smoke
           $wheel = Get-ChildItem dist\*.whl | Select-Object -First 1
           .\.package-smoke\Scripts\python -m pip install --no-deps $wheel.FullName
-          .\.package-smoke\Scripts\python -c "import offline_translator; print(offline_translator.__version__)"
+          .\.package-smoke\Scripts\python -c "import lianiq; print(lianiq.__version__)"

@@ -8,12 +8,12 @@ from typing import Protocol
 
 import numpy as np
 
-from offline_translator.audio.resampler import convert_capture_audio
-from offline_translator.audio.ring_buffer import AudioRingBuffer
-from offline_translator.audio.segmenter import UtteranceSegmenter
-from offline_translator.call_bridge.contracts import AudioEndpointRef, EndpointFlow
-from offline_translator.config import AudioConfig
-from offline_translator.domain import AudioUtterance
+from lianiq.audio.resampler import convert_capture_audio
+from lianiq.audio.ring_buffer import AudioRingBuffer
+from lianiq.audio.segmenter import UtteranceSegmenter
+from lianiq.call_bridge.contracts import AudioEndpointRef, EndpointFlow
+from lianiq.config import AudioConfig
+from lianiq.domain import AudioUtterance
 
 LOGGER = logging.getLogger(__name__)
 

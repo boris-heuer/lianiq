@@ -4,14 +4,14 @@ from dataclasses import replace
 
 import pytest
 
-from offline_translator.call_bridge.contracts import (
+from lianiq.call_bridge.contracts import (
     AudioEndpointRef,
     BridgeState,
     EndpointFlow,
     EndpointRole,
     validate_endpoint_assignments,
 )
-from offline_translator.call_bridge.controller import FullDuplexBridgeController
+from lianiq.call_bridge.controller import FullDuplexBridgeController
 
 
 def endpoint(role: EndpointRole, index: int) -> AudioEndpointRef:

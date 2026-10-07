@@ -21,4 +21,4 @@ if (-not $SkipModels) {
 }
 
 & $VenvPython (Join-Path $PSScriptRoot 'doctor.py')
-Write-Host "Launch: $VenvPython -m offline_translator"
+Write-Host "Launch: $VenvPython -m lianiq"

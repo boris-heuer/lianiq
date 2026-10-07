@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from offline_translator.audio.resampler import convert_capture_audio
+from lianiq.audio.resampler import convert_capture_audio
 
 
 def test_stereo_48khz_is_downmixed_and_resampled_to_mono_16khz() -> None:

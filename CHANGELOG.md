@@ -4,7 +4,10 @@ All notable user-visible changes are documented here.
 
 ## Unreleased
 
-- No unreleased changes.
+### Changed
+
+- Renamed the product, repository metadata, Python package, command, Windows executable, and
+  documentation to `lianiq`.
 
 ## 0.1.0 - 2026-10-06
 

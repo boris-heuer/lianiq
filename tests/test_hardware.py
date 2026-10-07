@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from offline_translator.hardware import resolve_compute_device, resolve_onnx_device
+from lianiq.hardware import resolve_compute_device, resolve_onnx_device
 
 
 @pytest.mark.parametrize("resolver", [resolve_compute_device, resolve_onnx_device])

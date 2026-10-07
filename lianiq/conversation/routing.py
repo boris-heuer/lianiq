@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from offline_translator.domain import ConversationMode, Language
+from lianiq.domain import ConversationMode, Language
 
 
 @dataclass(frozen=True, slots=True)

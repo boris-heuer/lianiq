@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, field
 
-from offline_translator.domain import Language
+from lianiq.domain import Language
 
 
 @dataclass(slots=True)

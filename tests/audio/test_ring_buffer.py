@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from offline_translator.audio.ring_buffer import AudioRingBuffer
+from lianiq.audio.ring_buffer import AudioRingBuffer
 
 
 def test_partial_reads_preserve_timestamp() -> None:

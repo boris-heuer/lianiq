@@ -15,14 +15,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from offline_translator.call_bridge.contracts import (
+from lianiq.call_bridge.contracts import (
     AudioEndpointRef,
     BridgeState,
     EndpointFlow,
     EndpointRole,
     validate_endpoint_assignments,
 )
-from offline_translator.config import CallBridgeConfig
+from lianiq.config import CallBridgeConfig
 
 ROLE_LABELS = {
     EndpointRole.LOCAL_MICROPHONE: "Local microphone · German source",

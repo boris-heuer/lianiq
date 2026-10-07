@@ -4,7 +4,7 @@
 
 Implemented as an experimental feature. Source-level and deterministic test gates are complete;
 packaged hardware routing and a real two-party call must still pass before production SystemOK.
-This document describes the implemented architecture for connecting the offline interpreter to a
+This document describes the implemented architecture for connecting `lianiq` to a
 desktop call application such as WeChat.
 
 ## Objective
@@ -42,7 +42,7 @@ flowchart LR
         Headphones[Physical headset headphones]
     end
 
-    subgraph Interpreter[Offline Interpreter]
+    subgraph Interpreter[lianiq]
         TX[Outbound lane<br/>VAD -> German STT -> DE-to-ZH -> Mandarin TTS]
         RX[Inbound lane<br/>VAD -> Mandarin STT -> ZH-to-DE -> German TTS]
         Control[FullDuplexBridgeController<br/>lifecycle, health, queues, failure policy]
@@ -101,7 +101,7 @@ Mandarin-to-German turns.
 ## Runtime components
 
 ```text
-offline_translator/
+lianiq/
   audio/
     endpoints.py              # Stable endpoint identity and enumeration
     capture_stream.py         # Non-blocking endpoint capture adapter

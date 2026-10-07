@@ -26,26 +26,26 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from offline_translator.audio.capture import MicrophoneCapture
-from offline_translator.audio.capture_stream import EndpointCaptureStream
-from offline_translator.audio.devices import AudioDevice, list_audio_devices
-from offline_translator.audio.endpoints import list_audio_endpoints
-from offline_translator.audio.playback_stream import EndpointPlaybackStream
-from offline_translator.audio.wav import read_pcm16_mono
-from offline_translator.call_bridge.contracts import (
+from lianiq.audio.capture import MicrophoneCapture
+from lianiq.audio.capture_stream import EndpointCaptureStream
+from lianiq.audio.devices import AudioDevice, list_audio_devices
+from lianiq.audio.endpoints import list_audio_endpoints
+from lianiq.audio.playback_stream import EndpointPlaybackStream
+from lianiq.audio.wav import read_pcm16_mono
+from lianiq.call_bridge.contracts import (
     BridgeEvent,
     BridgeEventKind,
     BridgeState,
     EndpointRole,
     LaneId,
 )
-from offline_translator.call_bridge.controller import FullDuplexBridgeController
-from offline_translator.call_bridge.inference_scheduler import InferenceScheduler
-from offline_translator.call_bridge.translation_lane import TranslationLane
-from offline_translator.config import AppConfig
-from offline_translator.domain import ConversationMode, Language, TranslationResult
-from offline_translator.pipeline import PipelineRunner, TranslationPipeline
-from offline_translator.ui.call_bridge_panel import CallBridgePanel
+from lianiq.call_bridge.controller import FullDuplexBridgeController
+from lianiq.call_bridge.inference_scheduler import InferenceScheduler
+from lianiq.call_bridge.translation_lane import TranslationLane
+from lianiq.config import AppConfig
+from lianiq.domain import ConversationMode, Language, TranslationResult
+from lianiq.pipeline import PipelineRunner, TranslationPipeline
+from lianiq.ui.call_bridge_panel import CallBridgePanel
 
 MODE_LABELS = {
     "Automatic": ConversationMode.AUTO,
@@ -93,7 +93,7 @@ class MainWindow(QMainWindow):
         self._endpoint_monitor.setInterval(2_000)
         self._endpoint_monitor.timeout.connect(self._reconcile_call_bridge_endpoints)
 
-        self.setWindowTitle("Offline Interpreter · German ↔ Mandarin")
+        self.setWindowTitle("lianiq · German ↔ Mandarin")
         self.resize(1120, 720)
         self.setMinimumSize(850, 560)
         self._build_ui()
@@ -129,7 +129,7 @@ class MainWindow(QMainWindow):
         layout.setSpacing(16)
 
         title_row = QHBoxLayout()
-        title = QLabel("Offline Interpreter")
+        title = QLabel("lianiq")
         title.setObjectName("title")
         subtitle = QLabel("Local · Private · Optimized for Ryzen AI 7 350")
         subtitle.setObjectName("subtitle")

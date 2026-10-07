@@ -62,7 +62,7 @@ The executable synthetic cases live in `tests/test_conversation_routing.py`.
 ## Components and ownership
 
 ```text
-offline_translator/
+lianiq/
   audio/
     capture.py          # PortAudio input adapter and playback gate
     segmenter.py        # Pure utterance endpointing

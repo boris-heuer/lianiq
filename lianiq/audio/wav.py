@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from offline_translator.domain import AudioUtterance
+from lianiq.domain import AudioUtterance
 
 
 def read_pcm16_mono(path: Path, target_rate: int = 16_000) -> AudioUtterance:
