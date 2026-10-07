@@ -187,6 +187,7 @@ code.
 ```powershell
 .\.venv\Scripts\python.exe -m pytest
 .\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe .\scripts\check_markdown_links.py
 ```
 
 Most automated tests use deterministic fakes and do not require a microphone, virtual cables, or

@@ -19,6 +19,7 @@ After it has created `.venv`, run:
 ```powershell
 .\.venv\Scripts\python.exe -m pytest
 .\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe .\scripts\check_markdown_links.py
 ```
 
 Add a failing deterministic test before changing behavior where practical. Hardware, virtual-cable,
