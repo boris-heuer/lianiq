@@ -30,7 +30,7 @@ dependencies = [
   "sentencepiece>=0.2,<1",
   "sounddevice>=0.5,<1",
   "torch>=2.5,<3",
-  "transformers>=4.47,<5",
+  "transformers>=4.47,<6",
 ]
 
 [project.optional-dependencies]
