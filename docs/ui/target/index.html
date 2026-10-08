@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lianiq · Target UI design preview</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="preview.js" defer></script>
+</head>
+<body>
+  <aside class="preview-bar" aria-label="Design preview controls">
+    <span><strong>DESIGN PREVIEW</strong> · Synthetic data. No audio, downloads or installed-language claims.</span>
+    <label>Scenario <select id="scenario">
+      <option value="conversation">Conversation · listening</option>
+      <option value="ready">Conversation · ready</option>
+      <option value="speaking">Conversation · speaking</option>
+      <option value="translating">Conversation · translating</option>
+      <option value="loading">Conversation · loading</option>
+      <option value="error">Conversation · device lost</option>
+      <option value="bridge">Call Bridge · setup</option>
+      <option value="bridge-live">Call Bridge · active</option>
+      <option value="bridge-error">Call Bridge · muted lane</option>
+      <option value="languages">Language packs · capability gaps</option>
+      <option value="setup">First-run setup</option>
+    </select></label>
+  </aside>
+  <div class="app">
+    <header class="app-header">
+      <a class="brand" href="#conversation" aria-label="Lianiq conversation"><span class="brand-mark">li</span>lianiq</a>
+      <nav aria-label="Main navigation">
+        <button data-view="conversation">Conversation</button>
+        <button data-view="bridge">Call Bridge <span class="tiny">Experimental</span></button>
+        <button data-view="languages">Language packs</button>
+        <button data-view="setup">Settings</button>
+      </nav>
+      <span class="privacy"><span class="dot"></span>Offline session</span>
+    </header>
+    <main id="content"></main>
+    <footer class="app-footer"><span>Audio stays on this device · No automatic transcript saving</span><span>Desktop UI concept · English interface</span></footer>
+  </div>
+  <div class="toast" id="toast" role="status" hidden></div>
+</body>
+</html>
