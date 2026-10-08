@@ -26,7 +26,9 @@ custom virtual audio driver, or automatic configuration of WeChat.
 | Bluetooth profile changes | Quality degradation or endpoint replacement | Endpoint capability is re-read on recovery and the operator guide recommends wired/USB fallback | Bluetooth behavior remains hardware/driver-specific |
 
 The SystemOK evidence and remaining environment gates are recorded in
-[`call-bridge-system-ok.md`](call-bridge-system-ok.md).
+[`call-bridge-system-ok.md`](call-bridge-system-ok.md). Public support terms and application-specific
+evidence requirements are recorded in
+[`call-bridge-compatibility.md`](call-bridge-compatibility.md).
 
 ## Acceptance criteria
 
@@ -178,7 +180,7 @@ tests/ui/test_call_bridge_panel.py
 Exit gate: configuration round-trips stable endpoint identifiers, invalid mappings cannot start,
 and UI tests do not modify the checked-in configuration.
 
-### Phase 6: Packaged-device and WeChat acceptance
+### Phase 6: Packaged-device and reference-application acceptance
 
 Extend packaging and diagnostics to verify the selected Windows audio backend and virtual endpoint
 availability. Do not bundle a third-party virtual audio driver until its redistribution terms have
@@ -187,9 +189,9 @@ been reviewed and approved.
 Run:
 
 1. packaged synthetic dual-lane self-test;
-2. virtual-cable loop test without WeChat;
-3. local WeChat echo/test call if available;
-4. real two-party German/Mandarin call; and
+2. virtual-cable loop test without a call application;
+3. local echo/test call in the target application if available;
+4. real two-party German/Mandarin call in the target application; and
 5. Bluetooth disconnect/reconnect and application restart tests.
 
 Exit gate: the packaged executable passes the operator checklist in
@@ -238,15 +240,16 @@ possible.
 - Ruff and dependency checks pass.
 - Real-model self-tests pass in both directions.
 - The packaged executable passes the two-cable loop test.
-- A real WeChat call passes the operator acceptance checklist.
+- A real call in the target application passes the operator acceptance checklist.
 - Endpoint removal fails closed with no audio leakage.
 - Documentation and configuration examples match the shipped UI.
 - Third-party driver licensing is documented; no unapproved driver is redistributed.
 - The implementation commit and CI status are available remotely.
 
 Current closure status: the source-level and synthetic gates are implemented. Real-model,
-packaged two-cable, and WeChat rows must all pass before the feature is called production
-`SystemOK`; absence of the required virtual endpoints is not treated as a pass.
+packaged two-cable, and target-application rows must all pass before that recorded profile is called
+production `SystemOK`; absence of the required virtual endpoints is not treated as a pass. WeChat
+Desktop is the current reference target.
 
 ## Deferred work
 

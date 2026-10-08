@@ -50,5 +50,6 @@ real-call gates remain separately documented in
 
 The source-publication gate is complete. The Call Bridge remains experimental after source
 publication. It becomes production `SystemOK` only after every packaged two-cable,
-disconnect/reconnect, latency, and real WeChat call row in the operator checklist has passed on the
-target Windows system.
+disconnect/reconnect, latency, and real-call row in the operator checklist has passed for the exact
+application, Windows, driver, cable, and headset profile being claimed. WeChat Desktop is the
+current reference target; its result cannot certify another application profile.
