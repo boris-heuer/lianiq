@@ -19,6 +19,8 @@ All issues were created at the operator's request on 2026-10-08. Priorities are 
 | [#31](https://github.com/boris-heuer/lianiq/issues/31) | P1: provide persistent actionable errors and privacy-safe diagnostics | #23, #24, #21 |
 | [#32](https://github.com/boris-heuer/lianiq/issues/32) | P2: establish task-based UX acceptance and native Windows regression evidence | #22, #26, #27, #25, #30, #31, #28, #29 |
 | [#33](https://github.com/boris-heuer/lianiq/issues/33) | P3: qualify additional offline language packs for English, Spanish and French | #21, #27, #32 |
+| [#35](https://github.com/boris-heuer/lianiq/issues/35) | P1: Local text translation with optional translated speech | #21, #22, #27, #28, #31 |
+| [#36](https://github.com/boris-heuer/lianiq/issues/36) | P1: One-way speech-to-translated-text | #21, #22, #23, #26, #27, #29, #31 |
 
 ## Scope boundaries
 

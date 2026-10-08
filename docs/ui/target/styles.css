@@ -48,6 +48,7 @@
 .app-header nav button:last-child {margin-top:auto}
 .nav-icon {width:24px;flex-shrink:0;text-align:center;font-size:22px}
 .nav-label {font-size:14px}
+.nav-hint {display:block;color:var(--muted);font-size:11px}
 .tiny {margin-top:4px}
 .privacy {margin:0;padding:0 10px}
 main {min-width:0;min-height:0;overflow:auto;padding:24px 28px 16px}
@@ -66,7 +67,7 @@ h1 {font-size:26px}
 .bridge-footer {margin-top:14px}
 .pack {padding:15px 0;grid-template-columns:minmax(130px,1fr) 1.2fr 1fr auto}
 .table-head {grid-template-columns:minmax(130px,1fr) 1.2fr 1fr auto}
-main[data-surface="conversation"] {display:flex;flex-direction:column}
+main[data-surface="conversation"],main[data-surface="text"],main[data-surface="speech-text"] {display:flex;flex-direction:column}
 .conversation {display:flex;flex-direction:column;flex:1;min-height:260px}
 .turns {min-height:0;flex:1;overflow:auto}
 .turn {grid-template-columns:110px minmax(0,1fr) auto;gap:16px}
@@ -75,6 +76,12 @@ main[data-surface="conversation"] {display:flex;flex-direction:column}
 .empty {min-height:240px}
 .device-strip {margin-top:10px}
 .setup {grid-template-columns:180px minmax(0,1fr);gap:24px}
+.translation-workspace {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;flex:1;min-height:280px}
+.editor-panel {display:flex;flex-direction:column;min-width:0;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.editor-panel textarea,.translated-draft {flex:1;min-height:180px;padding:24px;font:22px/1.65 "Segoe UI",system-ui,sans-serif;color:var(--text);background:var(--well);border:0;resize:none;overflow:auto;overflow-wrap:anywhere}
+.editor-panel textarea:focus-visible {outline:3px solid var(--focus);outline-offset:-4px}
+.editor-actions {display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px;background:var(--panel)}
+.text-status {margin-top:16px;border:1px solid var(--line);border-radius:var(--radius)}
 main[data-surface="bridge"] .panel {padding:14px}
 main[data-surface="bridge"] .route-head {margin-bottom:10px}
 main[data-surface="bridge"] .route-step {padding-bottom:8px}
@@ -100,6 +107,7 @@ main[data-surface="bridge"] .bridge-footer {position:sticky;bottom:0;background:
 @media(max-width:760px) {
   .app {height:calc(100vh - 114px)}
   .two-col,.setup {grid-template-columns:minmax(0,1fr)}
+  .translation-workspace {grid-template-columns:minmax(0,1fr);flex:none}
   .pack {grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
   .table-head {display:none}
   .heading,.session-controls,.device-strip,.bridge-footer {align-items:flex-start;flex-direction:column}

@@ -29,6 +29,17 @@ audio and full application tests are outside this artifact-only change.
 
 ## Limits
 
+### Additional input and output modes
+
+The preview now has fifteen scenarios and six navigation destinations. New Text
+translation and Listen & translate states were checked at 1440x900, 1280x720 and
+850x560 (twelve combinations), with no horizontal main-panel overflow.
+Translated text stayed visible in simulated playback; source edits disabled stale
+playback and copy. Opening Listen & translate left capture stopped; starting locked
+language selection and displayed no playback controls; stopping retained both segments.
+Three new screenshots were added and the original seven regenerated with the expanded
+sidebar. These are prototype UI checks, not real translation/audio acceptance.
+
 ### Left-navigation revision
 
 Following operator feedback, the proposal now uses a persistent left sidebar and a
