@@ -128,7 +128,7 @@ See [verification.md](verification.md) for checks actually performed and limitat
 
 ## Input and output modes
 
-The existing capability is **Conversation interpreting** (Gesprächsdolmetschen), with
+The existing capability is **Conversation interpreting**, with
 **Conversation** as its short navigation label. It is turn-based after speech pauses, not
 a promise of simultaneous word-by-word interpreting.
 
