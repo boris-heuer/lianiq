@@ -3,6 +3,18 @@
 Thanks for improving `lianiq`. Contributions are welcome through focused issues and pull
 requests.
 
+## Project language
+
+Use English for all GitHub-visible project content: issue and pull-request titles,
+descriptions and comments, documentation, code identifiers and comments, test names,
+UI labels, error messages, commit messages and release notes. This applies even when
+the working conversation takes place in another language.
+
+Multilingual translation inputs, expected outputs, speech samples and native language
+names are functional data and retain their original language. Describe their purpose
+and assertions in English; do not include non-English explanatory prose or parenthetical
+translations of capability names.
+
 ## Before changing code
 
 1. Search open issues and describe the user-visible problem or risk.
