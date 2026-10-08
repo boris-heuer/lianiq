@@ -25,16 +25,16 @@
     </select></label>
   </aside>
   <div class="app">
-    <header class="app-header">
+    <aside class="app-header" aria-label="Application sidebar">
       <a class="brand" href="#conversation" aria-label="Lianiq conversation"><span class="brand-mark">li</span>lianiq</a>
       <nav aria-label="Main navigation">
-        <button data-view="conversation">Conversation</button>
-        <button data-view="bridge">Call Bridge <span class="tiny">Experimental</span></button>
-        <button data-view="languages">Language packs</button>
-        <button data-view="setup">Settings</button>
+        <button data-view="conversation" title="Conversation" aria-label="Conversation"><span class="nav-icon" aria-hidden="true">↔</span><span class="nav-label">Conversation</span></button>
+        <button data-view="bridge" title="Call Bridge — experimental" aria-label="Call Bridge — experimental"><span class="nav-icon" aria-hidden="true">⇄</span><span class="nav-label">Call Bridge <span class="tiny">Experimental</span></span></button>
+        <button data-view="languages" title="Language packs" aria-label="Language packs"><span class="nav-icon" aria-hidden="true">文</span><span class="nav-label">Language packs</span></button>
+        <button data-view="setup" title="Settings" aria-label="Settings"><span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">Settings</span></button>
       </nav>
       <span class="privacy"><span class="dot"></span>Offline session</span>
-    </header>
+    </aside>
     <main id="content"></main>
     <footer class="app-footer"><span>Audio stays on this device · No automatic transcript saving</span><span>Desktop UI concept · English interface</span></footer>
   </div>

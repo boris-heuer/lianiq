@@ -32,6 +32,7 @@ executing it. The local browser preview is reviewable design intent, not native 
 
 ## Product and interaction contract
 
+- Desktop-first landscape layout: persistent left sidebar, Settings at the bottom, and a wide workspace. At smaller widths the sidebar becomes an accessible icon rail, never top tabs. Primary review sizes are 1440x900 and 1280x720; smaller windows are resilience checks.
 - Retain the dark, restrained visual identity. Use the transcript as the primary workspace.
 - Separate Conversation, experimental Call Bridge, Language packs and Settings. Stop must
   remain accessible across the real app while a session is active. The preview switches

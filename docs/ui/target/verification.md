@@ -29,6 +29,15 @@ audio and full application tests are outside this artifact-only change.
 
 ## Limits
 
+### Left-navigation revision
+
+Following operator feedback, the proposal now uses a persistent left sidebar and a
+landscape workspace. All four primary views were checked at 1440x900, 1280x720 and
+850x560: the sidebar remained on the left and neither the document nor main panel
+overflowed horizontally. All seven screenshots were regenerated at 1440x900.
+At smaller widths the left sidebar becomes an accessible icon rail. Long setup content
+can scroll vertically; the bridge action bar stays visible at the bottom of its workspace.
+
 Audio tests, clipboard availability, file dialogs, pack provisioning, native accessibility,
 translation quality and real call behavior are not validated by these previews. The sample
 1.8-second processing label is illustrative, not a benchmark. Project membership was not
