@@ -20,14 +20,16 @@ approvals and are not changed by this adoption work.
 
 | Concern | Owner and source of truth | Lianiq action |
 |---|---|---|
-| Factory policy, schemas, catalog tooling, and canonical capability artefacts | [`boris-heuer/app-shared`](https://github.com/boris-heuer/app-shared) at `main`; `repo-config/skills/implement-capability/references/repo-ownership-routing.md` and `.claude/rules/coordination.md` | Consume by pointer; do not copy, fork, or modify factory policy here. |
+| Factory policy, schemas, catalog tooling, and canonical capability artefacts | Current [`boris-heuer/app-shared`](https://github.com/boris-heuer/app-shared) `main`; `repo-config/skills/implement-capability/references/repo-ownership-routing.md` and `.claude/rules/coordination.md` | Consume by pointer; do not copy, fork, or modify factory policy here. |
 | Lianiq runtime, Qt UI, Windows packaging, local-only privacy behaviour, and audio routing | This repository | Keep product behaviour and product evidence here. |
 | Formal capability folder and catalog registration | `app-shared/docs/products/lianiq/capabilities/<slug>/` and the canonical materializer lane | Do not create a local substitute catalog or capability folder. |
 | Local adoption instructions and product-specific evidence | This repository under `docs/sdlc/` and local guidance/configuration once admitted | Keep records English, link to the canonical artefacts, and preserve the existing issue and PR references. |
 
-The canonical source was inspected at `app-shared` commit
-`dd9895bbec6b8ae1838347e8c79c5694f4987d8f` on 2026-10-08. The public
-configuration contract is
+Historical inspection evidence was captured from
+[`app-shared` commit `dd9895bbec6b8ae1838347e8c79c5694f4987d8f`](https://github.com/boris-heuer/app-shared/commit/dd9895bbec6b8ae1838347e8c79c5694f4987d8f)
+on 2026-10-08. It is not an operational pin. Before any registration, refetch
+current `app-shared/main`, record the resolved commit, and reassess the
+catalog-registration blocker. The public configuration contract is
 `repo-config/marketplace-public/factory.config.schema.json`. It is a closed
 schema: use only its documented `factory`, `github`, `repositories`, `paths`,
 and `capabilities` sections, with optional `workflows`, `agent_conventions`, and
@@ -83,9 +85,11 @@ pass for the exact claimed profile. The local product boundaries remain
 
 1. Read this plan with [#37](https://github.com/boris-heuer/lianiq/issues/37) and
    [#38](https://github.com/boris-heuer/lianiq/issues/38).
-2. Resolve factory policy from the pinned `app-shared` sources above, rather than
-   from an old consumer checkout or copied rules.
-3. Confirm SDLC-03 has reconciled v3 consumer admission before attempting any
+2. Refetch `app-shared/main`, record its resolved commit, and resolve factory
+   policy from that current source rather than from an old consumer checkout or
+   copied rules.
+3. Reassess the catalog-registration blocker and confirm SDLC-03 has reconciled
+   v3 consumer admission before attempting any
    capability registration.
 4. Complete SDLC-02 and SDLC-04 before treating local configuration or guidance
    as active.
