@@ -63,7 +63,14 @@ decision to `SystemOK`:
 2. The packaged executable resolves all four selected WASAPI/MMDevice pairs.
 3. A two-cable loop test proves TX and RX isolation, including a Windows notification.
 4. Physical cable and Bluetooth disconnect/reconnect recover or produce an actionable muted state.
-5. A real two-party German/Mandarin WeChat call passes every operator checklist row.
+5. A real two-party German/Mandarin call using the application named in the compatibility profile
+   passes every operator checklist row. WeChat Desktop is the current reference target, not a
+   prerequisite for certifying a different application profile.
+
+This gate can establish evidence only for the recorded call application, Windows, driver,
+virtual-cable, and headset profile. It does not certify another application, application version,
+or headset. Each claimed profile must pass the application-specific acceptance defined in
+[`call-bridge-compatibility.md`](call-bridge-compatibility.md).
 
 Windows documents endpoint IDs as unique and stable across restart and USB replug, while noting
 that driver reinstall can change them. Windows 11 24H2 also exposes the more durable

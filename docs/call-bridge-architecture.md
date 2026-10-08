@@ -33,6 +33,16 @@ Use two independent virtual audio cables supplied and installed separately:
 The application must depend only on normal Windows audio endpoint contracts. Product code must
 not hard-code a particular virtual-cable vendor or device display name.
 
+## Compatibility boundary
+
+The endpoint abstraction is vendor- and call-application-agnostic, but it does not imply universal
+compatibility. The headset must expose safe, unambiguous Windows capture and playback endpoints.
+The call application must independently route its microphone to the TX cable and its speaker to the
+RX cable. Application, Windows, driver, and headset profiles require separate real-call evidence;
+passing one profile does not certify another. See
+[`call-bridge-compatibility.md`](call-bridge-compatibility.md) for the public compatibility matrix
+and acceptance policy.
+
 ## Signal flow
 
 ```mermaid

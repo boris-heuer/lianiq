@@ -39,8 +39,10 @@ Evidence is deliberately tiered:
 | Consented real call | The checklist on one observed system | A guarantee for all systems or conversations |
 
 The current status is source-level and synthetic evidence only. The packaged-device, two-cable,
-disconnect/reconnect, and real two-party WeChat rows remain operator-owned gates. Details are in
-[the SystemOK evidence record](call-bridge-system-ok.md) and
+disconnect/reconnect, and application-specific real two-party call rows remain operator-owned
+gates. WeChat Desktop is the current reference target, but a pass would establish evidence only for
+its recorded profile. Details are in [the SystemOK evidence record](call-bridge-system-ok.md),
+[compatibility policy](call-bridge-compatibility.md), and
 [operator setup](call-bridge-operator-setup.md).
 
 ## Risks and controls
@@ -70,5 +72,5 @@ the checks, and decide whether evidence satisfies a gate. This division is docum
 ```
 
 The third command is meaningful only after local models are available. A successful command does
-not close the hardware or WeChat gates. Follow the operator checklist before using the feature in a
-call.
+not close the hardware or application-specific real-call gates. Follow the operator checklist
+before using the feature in a call.

@@ -74,6 +74,31 @@ fixed-direction translation lanes connect the
 physical headset to two virtual audio cables without exposing the physical microphone directly to
 the call application.
 
+### Compatibility and limitations
+
+The Call Bridge does **not** claim compatibility with every headset or communication application.
+It is designed for Windows 11 audio devices that expose separate, unambiguous capture and playback
+endpoints, and for desktop call applications that can route their microphone and speaker
+independently to the two virtual cables. A technically compatible device selector is not evidence
+that a real call, reconnect behavior, latency, or audio isolation has passed.
+
+| Call application | Design assessment | lianiq real-call evidence | Production SystemOK |
+|---|---|---|---|
+| WeChat Desktop | Compatible in principle; it is the reference acceptance target | Pending | No |
+| Microsoft Teams desktop | Compatible in principle where separate Speaker and Microphone selectors are available | Not run | No |
+| WhatsApp for Windows | Conditional; the required independent TX/RX endpoint mapping must be confirmed for the installed version | Not run | No |
+| Telegram Desktop | Conditional; the required endpoint controls and Windows microphone access must be confirmed for the installed version | Not run | No |
+| Other desktop call applications | Conditional on explicit, independent microphone and speaker routing | Not run | No |
+
+USB and wired headsets are generally the most predictable, but still require endpoint and real-call
+validation. Bluetooth headsets may switch to a lower-quality mono/telephony profile or expose
+different endpoints while their microphone is active. Compatibility depends on Windows, the
+Bluetooth adapter and driver, and the exact headset model.
+
+See the [Call Bridge compatibility policy](docs/call-bridge-compatibility.md) for support terms,
+application evidence, headset constraints, and the acceptance required before changing any row to
+`SystemOK`.
+
 - [`docs/call-bridge-architecture.md`](docs/call-bridge-architecture.md) defines the technical
   architecture and audio routing decisions.
 - [`docs/call-bridge-implementation-plan.md`](docs/call-bridge-implementation-plan.md) contains the
@@ -81,12 +106,12 @@ the call application.
 - [`docs/call-bridge-system-ok.md`](docs/call-bridge-system-ok.md) records automated evidence and
   the remaining packaged-device/real-call production gates.
 - [`docs/call-bridge-operator-setup.md`](docs/call-bridge-operator-setup.md) defines the Windows and
-  WeChat device mapping.
+  call-application device mapping and real-call acceptance procedure.
 
 The application persists native Windows MMDevice identities and resolves the current WASAPI index
 at runtime. Missing or ambiguous devices mute the affected lane; they never fall back to a Windows
 default endpoint. This command is a local model check, not proof of safe hardware routing or a
-working WeChat call:
+working real call:
 
 ```powershell
 .\.venv\Scripts\python.exe .\scripts\call_bridge_self_test.py

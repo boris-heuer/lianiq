@@ -8,6 +8,8 @@ All notable user-visible changes are documented here.
 
 - A sanitized application screenshot, repository-owned Markdown link validation, and a fail-closed
   Windows audio troubleshooting matrix.
+- A Call Bridge compatibility matrix that separates design compatibility, real-call evidence, and
+  production `SystemOK` for headsets and communication applications.
 
 ### Changed
 
