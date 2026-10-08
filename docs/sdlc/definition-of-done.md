@@ -6,8 +6,11 @@ product. It does not replace the product requirements in [Call Bridge SystemOK E
 
 ## Status vocabulary
 
-Use the narrowest truthful status. A later status requires the evidence of every
-earlier status.
+Use the narrowest truthful status. The progressive delivery ladder is `draft` →
+`implemented` → `code verified` → `product verified` → `SystemOK`; each later
+progressive status requires the evidence of the preceding progressive statuses.
+`iterating` and `blocked` are exception states, not ladder steps, and do not imply
+that an earlier progressive status passed.
 
 | Status | Meaning | It does not prove |
 | --- | --- | --- |
@@ -16,6 +19,7 @@ earlier status.
 | `code verified` | Applicable deterministic checks and exact-head review evidence pass. | Packaged Windows behavior, hardware, language quality, or a real call. |
 | `product verified` | The intended user journey passed on the delivered surface with the applicable native evidence profile. | SystemOK for another build, device, Windows version, language pair, or call application. |
 | `SystemOK` | All applicable runtime and operational closure evidence is recorded for the named profile. | A general compatibility or production claim outside that profile. |
+| `iterating` | Applicable product evidence is missing or failed, or a changed journey requires re-verification. | A prior `product verified` or `SystemOK` claim remains current. |
 | `blocked` | An applicable gate lacks evidence or cannot be run. | `N/A`; report the blocker instead. |
 
 Missing real-device, user, packaged-build, language, or call evidence is never a
@@ -59,9 +63,13 @@ delivery authority, and the evidence below.
 7. **Recovery.** Residual risks, rollback or recovery steps, and operational
    limits are documented before closure.
 
-An artifact-only work order additionally proves schema/tool compatibility,
-ownership, non-contradiction, link integrity, and a reproducible agent/operator
-walkthrough. It does not certify the running application.
+For an artifact-only work order, the applicable closure requirements are
+schema/tool compatibility, ownership, non-contradiction, link integrity, and a
+reproducible operator/document walkthrough. These replace product-verification and
+runtime-evidence rows only when those rows are genuinely scope-based `N/A`; the
+record must say why. An artifact-only work order does not certify the running
+application. Actual runtime changes retain every applicable product and SystemOK
+closure gate above.
 
 ## Mode applicability
 
