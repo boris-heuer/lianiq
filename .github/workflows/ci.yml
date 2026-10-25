@@ -34,6 +34,15 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-lock.txt
 
+      # The runner's base interpreter carries preinstalled tools (for example pipx)
+      # whose requirements change with the runner image. An isolated environment keeps
+      # `pip check` scoped to the locked project dependencies.
+      - name: Create isolated environment
+        shell: pwsh
+        run: |
+          python -m venv .ci-venv
+          "$PWD\.ci-venv\Scripts" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
       - name: Install project and development tools
         run: |
           python -m pip install --require-hashes -r requirements-lock.txt
