@@ -9,13 +9,41 @@ alternate or that the translation direction flips after every utterance.
 Every completed utterance is classified and routed independently:
 
 ```text
-captured utterance
-  -> speech recognition + detected language
-  -> turn router (automatic or manual override)
-  -> translation into the other configured language
-  -> speech synthesis
+captured utterance (bound to the session pair and mode at submit)
+  -> speech recognition + detected language and probability
+  -> turn router (automatic within the pair, or a fixed source language)
+       -> held turn when the language is unclear (see below)
+  -> translation along the directed edge source>target
+  -> speech synthesis (only when the session's output is spoken)
   -> ordered playback
 ```
+
+## Languages, pairs and usage modes
+
+Languages are identified by BCP 47 language IDs. The registry in
+`lianiq/languages/registry.py` is the only place that names languages: German (`de`) and Mandarin
+(Simplified) (`zh-Hans`) are qualified; English, Spanish and French are planned and cannot be
+selected. Each entry maps its ID to engine codes, such as the Whisper code `zh` for `zh-Hans`. Code
+outside the registry and the settings migration refers to languages only by ID;
+`tests/test_no_hardcoded_languages.py` enforces this in the default `pytest` run.
+
+Capabilities are directed and checked one by one (`lianiq/languages/capabilities.py`): speech
+recognition per language, translation per directed edge (`de>zh-Hans` and `zh-Hans>de` are two
+separate models; a reverse edge is never derived), and a voice per language. Each capability has a
+readiness status: `not_configured`, `missing`, `installed`, `validated` (files match
+`models/model-manifest.json`) or `invalid`. `scripts/doctor.py` prints this status per capability
+of the configured pair.
+
+A session binds a language pair and a usage mode (input, routing and output) at **Start**
+(`SessionPair`). The requirement table in `lianiq/languages/requirements.py` lists what each mode
+needs. For example, automatic microphone routing with text output needs recognition for both
+languages and both edges, while a fixed direction needs only its source recognition and one edge.
+**Start** is refused, naming each missing item, when a requirement is unmet, and only the required
+models are constructed and warmed. Voices are required only for spoken output.
+
+While a session runs, the pair, routing and output are locked (`SessionController`). **Stop**
+stops capture, finishes queued turns with the pair they were captured under, clears the
+translation context, and discards turns that are still held.
 
 For the current single-microphone product, "simultaneous" means low-latency turn-based
 interpretation while capture continues to segment later turns. It does not mean separating two
@@ -24,17 +52,19 @@ or a future source-separation and speaker-diarization model.
 
 ## Call bridge extension
 
-The planned call bridge extends the same modular monolith with two isolated audio lanes:
+The experimental call bridge extends the same modular monolith with two isolated audio lanes. Both
+lanes are directed edges of the selected pair, and `call_bridge.local_language` (default `de`)
+names the local language:
 
-- a fixed German-to-Mandarin lane from the local headset microphone to the call application's
-  virtual microphone; and
-- a fixed Mandarin-to-German lane from the call application's virtual speaker to the local
-  headset output.
+- an outbound lane `local>remote` (by default `de>zh-Hans`) from the local headset microphone to
+  the call application's virtual microphone; and
+- an inbound lane `remote>local` (by default `zh-Hans>de`) from the call application's virtual
+  speaker to the local headset output.
 
 Unlike single-microphone automatic mode, a call-bridge lane does not infer its translation
 direction from the previous turn or from speaker identity. Its physical or virtual input endpoint
-defines the source language. The two lanes may capture and process audio concurrently while
-preserving order independently within each lane.
+defines the source language, and the lane's edge is fixed for the whole session. The two lanes may
+capture and process audio concurrently while preserving order independently within each lane.
 
 See [`call-bridge-architecture.md`](call-bridge-architecture.md) for the design,
 [`call-bridge-implementation-plan.md`](call-bridge-implementation-plan.md) for the TDD delivery
@@ -45,19 +75,34 @@ device mapping.
 
 The executable synthetic cases live in `tests/test_conversation_routing.py`.
 
+Turns are written as `language ID` of the spoken turn; routes as directed edges.
+
 | Scenario | Synthetic turns | Required behavior |
 |---|---|---|
-| Two participants alternate | A: DE, B: ZH, A: DE | Route DE→ZH, ZH→DE, DE→ZH |
-| One person continues in German | A: DE, A: DE, C: DE | Route every turn DE→ZH |
-| Several Mandarin turns | B: ZH, B: ZH, D: ZH | Route every turn ZH→DE |
-| Three-participant conversation | A: DE, B: ZH, C: DE, B: ZH | Route solely from each turn's language |
+| Two participants alternate | A: `de`, B: `zh-Hans`, A: `de` | Route `de>zh-Hans`, `zh-Hans>de`, `de>zh-Hans` |
+| One person continues in German | A: `de`, A: `de`, C: `de` | Route every turn `de>zh-Hans` |
+| Several Mandarin turns | B: `zh-Hans`, B: `zh-Hans`, D: `zh-Hans` | Route every turn `zh-Hans>de` |
+| Three-participant conversation | A: `de`, B: `zh-Hans`, C: `de`, B: `zh-Hans` | Route solely from each turn's language |
 | Short acknowledgements | `Ja`, `Genau`, `嗯`, `对` | Preserve order and route independently |
-| Unsupported detector label | detector says EN, transcript is German or Han script | Infer DE or ZH without terminating the pipeline |
+| Language outside the pair | detector reports `en`, or a code the registry does not know | Hold the turn; never guess from the script |
+| Low detection probability | `de` detected below `languages.detection_min_probability` (0.7) | Hold the turn; at exactly 0.7 it is routed |
+| Fixed direction | routing fixed to `zh-Hans`, detector reports `en` | Recognize as `zh-Hans` and route `zh-Hans>de`; never hold |
 | Silence or noise | empty transcript | Ignore it and produce no output |
 | Backlog while processing | three completed utterances arrive quickly | Keep latency bounded and report dropped stale work |
 | Playback echo | synthesized output reaches the microphone | Reset and gate the segmenter during playback |
-| User stops during inference | Stop while translation or TTS is active | Finish the active native call before worker shutdown |
-| Overlapping speakers | DE and ZH overlap on one microphone | Mark as unsupported for V1; never claim speaker attribution |
+| User stops during inference | Stop while translation or TTS is active | Finish queued turns with their bound pair, then release the worker |
+| Overlapping speakers | `de` and `zh-Hans` overlap on one microphone | Mark as unsupported for V1; never claim speaker attribution |
+
+## Held turns
+
+In automatic routing, a turn is translated only when its detected language is a member of the
+session pair with a probability of at least `languages.detection_min_probability`. Any other turn
+becomes a `HeldTurn` with the reason `out_of_pair`, `unregistered` or `low_confidence`. Its audio is
+kept in memory only. The held-turn bar in the main window shows the transcript and the detected
+language and offers **Translate as** for each pair language and **Discard**. **Translate as**
+recognizes the retained audio again with that language forced and translates it as the same turn;
+**Discard** and **Stop** release the audio without a result. Later turns are not blocked by a held
+turn, and the transcript export keeps capture order (`# lianiq transcript v2`).
 
 ## Components and ownership
 
@@ -68,8 +113,14 @@ lianiq/
     segmenter.py        # Pure utterance endpointing
     playback.py         # Output adapter
     wav.py              # Deterministic WAV test input adapter
+  languages/
+    registry.py         # Language IDs, registry, pairs
+    capabilities.py     # Directed capabilities and readiness
+    modes.py            # Usage modes and the session pair
+    requirements.py     # Requirements per mode and the availability check
+    session.py          # Session lock, stop and transcript export v2
   conversation/
-    routing.py          # Stateless per-turn language routing
+    routing.py          # Stateless, pair-scoped per-turn routing and held turns
   stt/
     faster_whisper_engine.py
   translation/
@@ -80,9 +131,12 @@ lianiq/
   pipeline.py           # Ordered conversation coordinator through protocols
   ui/
     main_window.py
+    held_turn_bar.py
 tests/
+  languages/            # Registry, capabilities, requirements, session (synthetic qaa/qab)
   test_conversation_routing.py
   test_pipeline.py
+  test_no_hardcoded_languages.py
   test_segmenter.py
   test_wav.py
 scripts/
@@ -101,7 +155,7 @@ the offline desktop use case.
 LISTENING
   -> SEGMENT_READY(sequence)
   -> RECOGNIZING
-  -> ROUTED(source, target)
+  -> ROUTED(source, target) | HELD(reason) -> resolved (RECOGNIZING with forced language) or discarded
   -> TRANSLATING
   -> SYNTHESIZING
   -> PLAYING
@@ -114,13 +168,14 @@ allowing latency to grow without limit. During playback, microphone segmentation
 avoid interpreting the application's own voice.
 
 Speaker identity is metadata, not a routing input. Two German speakers in succession still
-produce two DE→ZH turns. A later diarization adapter may assign `speaker_id` values without
+produce two `de>zh-Hans` turns. A later diarization adapter may assign `speaker_id` values without
 changing language routing or translation.
 
 ## TDD build order
 
 1. **Conversation contracts:** Pure synthetic turns verify direction, ordering, repeated-language
-   turns, manual overrides, and unsupported-language fallback.
+   turns, fixed directions, and held turns. The synthetic languages `qaa` and `qab` prove that
+   nothing depends on German or Mandarin.
 2. **Audio primitives:** Generated NumPy frames and PCM16 WAV files verify segmentation,
    resampling, pause detection, maximum duration, and playback gating without hardware.
 3. **STT and TTS ports:** Fake recognizers and synthesizers verify orchestration. Real local models
@@ -138,7 +193,7 @@ semantics are proven with fast deterministic tests before slow native models are
 ## Context and multiple participants
 
 Conversation history is stored in capture order. Translation context is selected by source
-language, not by an assumed alternating speaker. This supports several statements in the same
+language ID, not by an assumed alternating speaker, and it is cleared when the session stops. This supports several statements in the same
 language without reversing direction. Speaker-specific context requires reliable diarization and
 is therefore intentionally deferred.
 
@@ -147,8 +202,10 @@ is therefore intentionally deferred.
 - Python exceptions are caught at the pipeline boundary and shown in the status bar.
 - Native faults are recorded in `logs/native-crash.log` with all Python thread stacks.
 - Each pipeline stage logs completion and elapsed time without logging audio or transcript text.
-- Automatic detection never terminates the pipeline merely because Whisper reports a language
-  outside DE/ZH; the transcript script provides a deterministic fallback.
+- Automatic detection never terminates the pipeline, and never guesses, when Whisper reports a
+  language outside the pair or with low probability; the turn is held for the user.
+- A missing model fails closed: **Start** is refused and names the missing capability, and a
+  translator never falls back to another edge.
 - Stop waits for an active native inference call before releasing the worker.
 - Qt uses software rendering on this Radeon-based target to avoid coupling inference stability to
   intermittent display-driver timeouts.
