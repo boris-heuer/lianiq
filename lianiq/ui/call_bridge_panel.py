@@ -25,11 +25,20 @@ from lianiq.call_bridge.contracts import (
 from lianiq.config import CallBridgeConfig
 
 ROLE_LABELS = {
-    EndpointRole.LOCAL_MICROPHONE: "Local microphone · German source",
-    EndpointRole.CALL_MICROPHONE_RENDER: "Call microphone output · Mandarin to call",
-    EndpointRole.CALL_SPEAKER_CAPTURE: "Call speaker input · Mandarin from call",
-    EndpointRole.LOCAL_HEADPHONES: "Local headphones · German playback",
+    EndpointRole.LOCAL_MICROPHONE: "Local microphone · {local} source",
+    EndpointRole.CALL_MICROPHONE_RENDER: "Call microphone output · {remote} to call",
+    EndpointRole.CALL_SPEAKER_CAPTURE: "Call speaker input · {remote} from call",
+    EndpointRole.LOCAL_HEADPHONES: "Local headphones · {local} playback",
 }
+OUTBOUND_TEST_LABEL = "Test {remote} → call mic"
+INBOUND_TEST_LABEL = "Test {local} → headphones"
+
+
+def role_labels(local: str, remote: str) -> dict[EndpointRole, str]:
+    """Role labels for the local and remote language display names of the session pair."""
+    return {
+        role: template.format(local=local, remote=remote) for role, template in ROLE_LABELS.items()
+    }
 
 
 class CallBridgePanel(QWidget):
@@ -37,9 +46,12 @@ class CallBridgePanel(QWidget):
     stop_requested = Signal()
     route_test_requested = Signal(object)
 
-    def __init__(self, config: CallBridgeConfig) -> None:
+    def __init__(self, config: CallBridgeConfig, *, local_name: str, remote_name: str) -> None:
         super().__init__()
         self.config = config
+        self._language_names = (local_name, remote_name)
+        self.role_labels = role_labels(local_name, remote_name)
+        self.role_label_widgets: dict[EndpointRole, QLabel] = {}
         self.endpoint_combos: dict[EndpointRole, QComboBox] = {}
         self.level_bars: dict[EndpointRole, QProgressBar] = {}
         self._endpoints: dict[str, AudioEndpointRef] = {}
@@ -58,8 +70,11 @@ class CallBridgePanel(QWidget):
         layout.addWidget(self.enabled_checkbox, 0, 0, 1, 4)
 
         for row, role in enumerate(EndpointRole, start=1):
-            layout.addWidget(QLabel(ROLE_LABELS[role]), row, 0)
+            label = QLabel(self.role_labels[role])
+            self.role_label_widgets[role] = label
+            layout.addWidget(label, row, 0)
             combo = QComboBox()
+            label.setBuddy(combo)
             combo.setMinimumContentsLength(28)
             self.endpoint_combos[role] = combo
             layout.addWidget(combo, row, 1, 1, 2)
@@ -70,12 +85,12 @@ class CallBridgePanel(QWidget):
                 self.level_bars[role] = level
                 layout.addWidget(level, row, 3)
 
-        self.outbound_test_button = QPushButton("Test Mandarin → call mic")
+        self.outbound_test_button = QPushButton()
         self.outbound_test_button.clicked.connect(
             lambda: self.route_test_requested.emit(EndpointRole.CALL_MICROPHONE_RENDER)
         )
         layout.addWidget(self.outbound_test_button, 5, 0)
-        self.inbound_test_button = QPushButton("Test German → headphones")
+        self.inbound_test_button = QPushButton()
         self.inbound_test_button.clicked.connect(
             lambda: self.route_test_requested.emit(EndpointRole.LOCAL_HEADPHONES)
         )
@@ -91,7 +106,29 @@ class CallBridgePanel(QWidget):
         self.state_label = QLabel("Disabled")
         layout.addWidget(self.state_label, 6, 0, 1, 4)
         outer.addWidget(group)
+        self._apply_language_labels(*self._language_names)
         self._refresh_enabled_state()
+
+    def _apply_language_labels(self, local_name: str, remote_name: str) -> None:
+        self._language_names = (local_name, remote_name)
+        self.role_labels = role_labels(local_name, remote_name)
+        for role, label in self.role_label_widgets.items():
+            label.setText(self.role_labels[role])
+            self.endpoint_combos[role].setAccessibleName(self.role_labels[role])
+        self.outbound_test_button.setText(OUTBOUND_TEST_LABEL.format(remote=remote_name))
+        self.inbound_test_button.setText(INBOUND_TEST_LABEL.format(local=local_name))
+
+    def set_languages(self, local_name: str, remote_name: str) -> None:
+        """Rebuild role labels and test buttons for another pair or local language."""
+        self._apply_language_labels(local_name, remote_name)
+
+    def assigned_roles(self) -> frozenset[EndpointRole]:
+        """Roles with a selected endpoint that is present in the current inventory."""
+        return frozenset(
+            role
+            for role, combo in self.endpoint_combos.items()
+            if combo.currentData() is not None and combo.currentData() in self._endpoints
+        )
 
     def set_endpoints(self, endpoints: Iterable[AudioEndpointRef]) -> None:
         self._endpoints = {endpoint.endpoint_id: endpoint for endpoint in endpoints}
@@ -126,10 +163,10 @@ class CallBridgePanel(QWidget):
         for role, combo in self.endpoint_combos.items():
             endpoint_id = combo.currentData()
             if endpoint_id is None:
-                raise ValueError(f"Select an endpoint for {ROLE_LABELS[role]}")
+                raise ValueError(f"Select an endpoint for {self.role_labels[role]}")
             endpoint = self._endpoints.get(endpoint_id)
             if endpoint is None:
-                raise ValueError(f"Configured endpoint is unavailable for {ROLE_LABELS[role]}")
+                raise ValueError(f"Configured endpoint is unavailable for {self.role_labels[role]}")
             assignments[role] = endpoint
         validate_endpoint_assignments(assignments)
         return assignments

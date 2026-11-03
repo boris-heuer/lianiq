@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from typing import Protocol
 
 from lianiq.audio.endpoints import EndpointInventory
@@ -9,13 +9,36 @@ from lianiq.call_bridge.contracts import (
     BridgeEvent,
     BridgeEventKind,
     BridgeState,
+    CallBridgeLanes,
     EndpointRole,
     LaneId,
     validate_endpoint_assignments,
 )
+from lianiq.languages.capabilities import CapabilityCatalog, DirectedEdge
+from lianiq.languages.errors import ModeUnavailableError, UnsupportedModeError
+from lianiq.languages.modes import SessionPair
+from lianiq.languages.requirements import DeviceReadiness, ModeAvailability, check
+
+
+def check_call_bridge(
+    session: SessionPair,
+    catalog: CapabilityCatalog,
+    assigned_roles: Iterable[EndpointRole],
+) -> ModeAvailability:
+    """Requirement row 7: both recognisers, both edges, both voices and four endpoints.
+
+    ``missing`` names every unmet requirement in display order (models, then endpoints).
+    """
+    if not session.mode.call_bridge:
+        raise UnsupportedModeError("Requirement row 7 applies to Call Bridge sessions only")
+    devices = DeviceReadiness(call_endpoints=frozenset(role.value for role in assigned_roles))
+    return check(session, catalog, devices)
 
 
 class LanePort(Protocol):
+    @property
+    def edge(self) -> DirectedEdge: ...
+
     def start(self) -> None: ...
 
     def stop(self, timeout: float = 10.0) -> bool: ...
@@ -43,7 +66,19 @@ class FullDuplexBridgeController:
         inbound_capture: CapturePort,
         on_event: Callable[[BridgeEvent], None] | None = None,
         endpoint_ports: Mapping[EndpointRole, RecoverablePort] | None = None,
+        *,
+        session: SessionPair,
+        catalog: CapabilityCatalog,
     ) -> None:
+        # The lanes are fixed for the session: local>remote outbound, remote>local inbound.
+        self.lanes = CallBridgeLanes.from_session(session)
+        if outbound_lane.edge != self.lanes.outbound or inbound_lane.edge != self.lanes.inbound:
+            raise ValueError(
+                "Call Bridge lanes must be "
+                f"{self.lanes.outbound.key} (outbound) and {self.lanes.inbound.key} (inbound)"
+            )
+        self.session = session
+        self.catalog = catalog
         self.assignments = dict(assignments)
         self.outbound_lane = outbound_lane
         self.inbound_lane = inbound_lane
@@ -62,7 +97,15 @@ class FullDuplexBridgeController:
         if self.state is BridgeState.RUNNING:
             return
         self._set_state(BridgeState.VALIDATING_ENDPOINTS)
-        validate_endpoint_assignments(self.assignments)
+        try:
+            # Fail closed before any lane or capture starts, naming every missing item.
+            availability = check_call_bridge(self.session, self.catalog, self.assignments)
+            if not availability.available:
+                raise ModeUnavailableError(availability.missing)
+            validate_endpoint_assignments(self.assignments)
+        except Exception:
+            self._set_state(BridgeState.STOPPED)
+            raise
         started: list[object] = []
         try:
             for component in (
