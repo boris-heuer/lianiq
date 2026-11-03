@@ -5,6 +5,11 @@ from dataclasses import dataclass
 from enum import Enum
 from types import MappingProxyType
 
+from lianiq.languages.capabilities import DirectedEdge
+from lianiq.languages.errors import UnsupportedModeError
+from lianiq.languages.modes import SessionPair
+from lianiq.languages.registry import LanguageId
+
 
 class EndpointFlow(str, Enum):
     CAPTURE = "capture"
@@ -55,6 +60,43 @@ class AudioEndpointRef:
             raise ValueError("runtime_index must not be negative")
         if self.channels <= 0 or self.sample_rate <= 0:
             raise ValueError("endpoint channels and sample rate must be positive")
+
+
+@dataclass(frozen=True, slots=True)
+class CallBridgeLanes:
+    """The two directed lane edges of one Call Bridge session, fixed while it runs.
+
+    The outbound lane translates the local speaker into the remote language for the call
+    (``local>remote``); the inbound lane translates the call into the local language for the
+    headphones (``remote>local``). Both come from the session pair and
+    ``call_bridge.local_language``; nothing else selects a lane language.
+    """
+
+    outbound: DirectedEdge
+    inbound: DirectedEdge
+
+    def __post_init__(self) -> None:
+        if self.inbound != self.outbound.reversed():
+            raise ValueError("Call Bridge lanes must be the two directions of one pair")
+
+    @classmethod
+    def from_session(cls, session: SessionPair) -> CallBridgeLanes:
+        if not session.mode.call_bridge or session.local_language is None:
+            raise UnsupportedModeError("Call Bridge lanes need a Call Bridge session")
+        local = session.local_language
+        outbound = DirectedEdge(local, session.pair.other(local))
+        return cls(outbound, outbound.reversed())
+
+    @property
+    def local(self) -> LanguageId:
+        return self.outbound.source
+
+    @property
+    def remote(self) -> LanguageId:
+        return self.outbound.target
+
+    def edge(self, lane_id: LaneId) -> DirectedEdge:
+        return self.outbound if lane_id is LaneId.OUTBOUND else self.inbound
 
 
 @dataclass(frozen=True, slots=True)

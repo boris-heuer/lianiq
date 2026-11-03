@@ -45,13 +45,12 @@ class _PendingUtterance:
 
 
 class TranslationLane:
-    """One fixed-direction, ordered, fail-closed translation lane."""
+    """One fixed-direction (``DirectedEdge``), ordered, fail-closed translation lane."""
 
     def __init__(
         self,
         lane_id: LaneId,
-        source_language: LanguageId,
-        target_language: LanguageId,
+        edge: DirectedEdge,
         recognizer: SpeechRecognizer,
         translator: Translator,
         synthesizer: Synthesizer,
@@ -63,13 +62,12 @@ class TranslationLane:
         on_result: Callable[[TranslationResult], None] | None = None,
         on_event: Callable[[BridgeEvent], None] | None = None,
     ) -> None:
-        if source_language == target_language:
-            raise ValueError("Translation lane source and target must differ")
+        if not isinstance(edge, DirectedEdge):
+            raise TypeError("A translation lane needs a DirectedEdge")
         if max_pending_age_ms <= 0 or queue_size <= 0:
             raise ValueError("queue_size and max_pending_age_ms must be positive")
         self.lane_id = lane_id
-        self.source_language = source_language
-        self.target_language = target_language
+        self._edge = edge  # fixed for the lane's lifetime, so for the whole session
         self.recognizer = recognizer
         self.translator = translator
         self.synthesizer = synthesizer
@@ -88,6 +86,19 @@ class TranslationLane:
         self._sequence_lock = threading.Lock()
         self._health_lock = threading.Lock()
         self._health = LaneHealthSnapshot()
+
+    @property
+    def edge(self) -> DirectedEdge:
+        """The lane's directed edge; it never changes while the lane exists."""
+        return self._edge
+
+    @property
+    def source_language(self) -> LanguageId:
+        return self._edge.source
+
+    @property
+    def target_language(self) -> LanguageId:
+        return self._edge.target
 
     @property
     def running(self) -> bool:
@@ -237,10 +248,7 @@ class TranslationLane:
             return
         translated_started = time.perf_counter()
         try:
-            translated = self.translator.translate(
-                transcript.text,
-                DirectedEdge(self.source_language, self.target_language),
-            )
+            translated = self.translator.translate(transcript.text, self._edge)
         except Exception:  # noqa: BLE001 - external translation adapter boundary.
             raise _StageFailure("translation_failure") from None
         translation_seconds = time.perf_counter() - translated_started
