@@ -6,10 +6,15 @@ from lianiq.audio.endpoints import EndpointInventory
 from lianiq.call_bridge.contracts import (
     AudioEndpointRef,
     BridgeState,
+    CallBridgeLanes,
     EndpointFlow,
     EndpointRole,
 )
 from lianiq.call_bridge.controller import FullDuplexBridgeController
+from tests.call_bridge.support import call_bridge_session, ready_catalog
+
+SESSION = call_bridge_session()
+LANES = CallBridgeLanes.from_session(SESSION)
 
 
 def endpoint(role: EndpointRole, index: int) -> AudioEndpointRef:
@@ -22,7 +27,8 @@ def endpoint(role: EndpointRole, index: int) -> AudioEndpointRef:
 
 
 class FakeLane:
-    def __init__(self):
+    def __init__(self, edge):
+        self.edge = edge
         self.available = True
 
     def start(self):
@@ -50,10 +56,10 @@ class RecoverablePort:
         self.endpoint = endpoint
 
 
-def test_same_stable_endpoint_rebinds_to_new_runtime_index() -> None:
+def test_same_stable_endpoint_rebinds_to_new_runtime_index(tmp_path) -> None:
     assignments = {role: endpoint(role, index) for index, role in enumerate(EndpointRole)}
-    outbound = FakeLane()
-    inbound = FakeLane()
+    outbound = FakeLane(LANES.outbound)
+    inbound = FakeLane(LANES.inbound)
     tx_capture = RecoverablePort()
     rx_capture = RecoverablePort()
     ports = {role: RecoverablePort() for role in EndpointRole}
@@ -66,6 +72,8 @@ def test_same_stable_endpoint_rebinds_to_new_runtime_index() -> None:
         tx_capture,
         rx_capture,
         endpoint_ports=ports,
+        session=SESSION,
+        catalog=ready_catalog(tmp_path, SESSION),
     )
     controller.start()
     controller.endpoint_lost(EndpointRole.CALL_SPEAKER_CAPTURE)
@@ -79,10 +87,10 @@ def test_same_stable_endpoint_rebinds_to_new_runtime_index() -> None:
     assert rx_capture.running is True
 
 
-def test_inventory_reconciliation_fails_closed_then_recovers() -> None:
+def test_inventory_reconciliation_fails_closed_then_recovers(tmp_path) -> None:
     assignments = {role: endpoint(role, index) for index, role in enumerate(EndpointRole)}
-    outbound = FakeLane()
-    inbound = FakeLane()
+    outbound = FakeLane(LANES.outbound)
+    inbound = FakeLane(LANES.inbound)
     tx_capture = RecoverablePort()
     rx_capture = RecoverablePort()
     ports = {role: RecoverablePort() for role in EndpointRole}
@@ -95,6 +103,8 @@ def test_inventory_reconciliation_fails_closed_then_recovers() -> None:
         tx_capture,
         rx_capture,
         endpoint_ports=ports,
+        session=SESSION,
+        catalog=ready_catalog(tmp_path, SESSION),
     )
     controller.start()
     without_rx = EndpointInventory(
