@@ -6,8 +6,10 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, replace
+from datetime import datetime
 from pathlib import Path
 from typing import Protocol
+from uuid import uuid4
 
 from lianiq.call_bridge.contracts import (
     BridgeEvent,
@@ -16,8 +18,9 @@ from lianiq.call_bridge.contracts import (
 )
 from lianiq.call_bridge.health import LaneHealthSnapshot
 from lianiq.call_bridge.inference_scheduler import InferenceScheduler
-from lianiq.domain import AudioUtterance, Language, TranslationResult
+from lianiq.domain import AudioUtterance, TranslationResult
 from lianiq.languages.capabilities import DirectedEdge
+from lianiq.languages.registry import LanguageId
 from lianiq.pipeline import SpeechRecognizer, Synthesizer, Translator
 
 LOGGER = logging.getLogger(__name__)
@@ -38,6 +41,7 @@ class _PendingUtterance:
     sequence: int
     enqueued_at: float
     utterance: AudioUtterance
+    captured_at: datetime
 
 
 class TranslationLane:
@@ -46,8 +50,8 @@ class TranslationLane:
     def __init__(
         self,
         lane_id: LaneId,
-        source_language: Language,
-        target_language: Language,
+        source_language: LanguageId,
+        target_language: LanguageId,
         recognizer: SpeechRecognizer,
         translator: Translator,
         synthesizer: Synthesizer,
@@ -59,7 +63,7 @@ class TranslationLane:
         on_result: Callable[[TranslationResult], None] | None = None,
         on_event: Callable[[BridgeEvent], None] | None = None,
     ) -> None:
-        if source_language is target_language:
+        if source_language == target_language:
             raise ValueError("Translation lane source and target must differ")
         if max_pending_age_ms <= 0 or queue_size <= 0:
             raise ValueError("queue_size and max_pending_age_ms must be positive")
@@ -113,7 +117,9 @@ class TranslationLane:
             return False
         with self._sequence_lock:
             self._sequence += 1
-            pending = _PendingUtterance(self._sequence, time.monotonic(), utterance)
+            pending = _PendingUtterance(
+                self._sequence, time.monotonic(), utterance, datetime.now().astimezone()
+            )
         try:
             self._queue.put_nowait(pending)
             return True
@@ -222,7 +228,7 @@ class TranslationLane:
             transcript = self.recognizer.transcribe(
                 utterance.samples,
                 utterance.sample_rate,
-                self.source_language.id,
+                self.source_language,
             )
         except Exception:  # noqa: BLE001 - external STT adapter boundary.
             raise _StageFailure("stt_failure") from None
@@ -233,14 +239,14 @@ class TranslationLane:
         try:
             translated = self.translator.translate(
                 transcript.text,
-                DirectedEdge(self.source_language.id, self.target_language.id),
+                DirectedEdge(self.source_language, self.target_language),
             )
         except Exception:  # noqa: BLE001 - external translation adapter boundary.
             raise _StageFailure("translation_failure") from None
         translation_seconds = time.perf_counter() - translated_started
         tts_started = time.perf_counter()
         try:
-            output = self.synthesizer.synthesize(translated, self.target_language.id)
+            output = self.synthesizer.synthesize(translated, self.target_language)
         except Exception:  # noqa: BLE001 - external TTS adapter boundary.
             raise _StageFailure("tts_failure") from None
         tts_seconds = time.perf_counter() - tts_started
@@ -263,6 +269,8 @@ class TranslationLane:
                 output.unlink(missing_ok=True)
         playback_seconds = time.perf_counter() - playback_started
         result = TranslationResult(
+            turn_id=uuid4(),
+            captured_at=item.captured_at,
             source_text=transcript.text,
             translated_text=translated,
             source_language=self.source_language,

@@ -9,11 +9,14 @@ from lianiq.call_bridge.contracts import LaneId
 from lianiq.call_bridge.inference_scheduler import InferenceScheduler
 from lianiq.call_bridge.translation_lane import TranslationLane
 from lianiq.config import AppConfig
-from lianiq.domain import Language
 from lianiq.languages.modes import CALL_BRIDGE_MODE, SessionPair
+from lianiq.languages.registry import LanguageId
 
 MAX_END_TO_END_SECONDS = 3.0
 WAIT_TIMEOUT_SECONDS = 30.0
+# The lanes stay German/Mandarin until CAP-0169 WI-05 derives them from the pair.
+GERMAN = LanguageId("de")
+MANDARIN = LanguageId("zh-Hans")
 
 
 def validate_wav(path) -> None:
@@ -54,8 +57,8 @@ def main() -> int:
     lanes = {
         LaneId.OUTBOUND: TranslationLane(
             LaneId.OUTBOUND,
-            Language.GERMAN,
-            Language.MANDARIN,
+            GERMAN,
+            MANDARIN,
             recognizer,
             translator,
             synthesizer,
@@ -66,8 +69,8 @@ def main() -> int:
         ),
         LaneId.INBOUND: TranslationLane(
             LaneId.INBOUND,
-            Language.MANDARIN,
-            Language.GERMAN,
+            MANDARIN,
+            GERMAN,
             recognizer,
             translator,
             synthesizer,
@@ -78,12 +81,12 @@ def main() -> int:
         ),
     }
     sources = {
-        LaneId.OUTBOUND: ("Guten Morgen.", Language.GERMAN),
-        LaneId.INBOUND: ("我们下午三点开会。", Language.MANDARIN),
+        LaneId.OUTBOUND: ("Guten Morgen.", GERMAN),
+        LaneId.INBOUND: ("我们下午三点开会。", MANDARIN),
     }
     utterances = {}
     for lane_id, (text, language) in sources.items():
-        path = synthesizer.synthesize(text, language.id)
+        path = synthesizer.synthesize(text, language)
         try:
             utterances[lane_id] = read_pcm16_mono(path)
         finally:

@@ -9,7 +9,12 @@ import numpy as np
 
 from lianiq.app import build_pipeline
 from lianiq.config import AppConfig
-from lianiq.domain import AudioUtterance, ConversationMode
+from lianiq.config_migration import languages_from_legacy_mode
+from lianiq.conversation.routing import HeldTurn
+from lianiq.domain import AudioUtterance
+from lianiq.languages.modes import InputKind, OutputKind, RoutingKind, SessionPair, UsageMode
+from lianiq.languages.registry import LanguageId
+from lianiq.pipeline import bind_utterance
 
 
 def read_wav(path: Path) -> AudioUtterance:
@@ -31,12 +36,25 @@ def main() -> int:
     if args.without_tts:
         config.voice_output = False
     pipeline = build_pipeline(config)
+    routing, fixed_source = languages_from_legacy_mode(args.mode)
+    session = SessionPair(
+        pipeline.registry.pair(*config.languages.pair),
+        UsageMode(
+            InputKind.MICROPHONE,
+            RoutingKind(routing),
+            OutputKind.SPOKEN if config.voice_output else OutputKind.TEXT,
+        ),
+        fixed_source=LanguageId(fixed_source) if fixed_source else None,
+    )
     utterance = read_wav(args.wav)
     started = time.perf_counter()
-    result = pipeline.process(utterance, ConversationMode(args.mode))
+    result = pipeline.process(bind_utterance(utterance, session))
     elapsed = time.perf_counter() - started
     if result is None:
         print("No speech was recognized.")
+        return 1
+    if isinstance(result, HeldTurn):
+        print(f"Language unclear ({result.reason}); the turn was held and not translated.")
         return 1
     print(f"Original:    {result.source_text}")
     print(f"Translation: {result.translated_text}")

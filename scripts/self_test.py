@@ -8,8 +8,10 @@ from pathlib import Path
 from lianiq.app import build_pipeline
 from lianiq.audio.wav import read_pcm16_mono
 from lianiq.config import AppConfig
-from lianiq.domain import ConversationMode, Language
+from lianiq.conversation.routing import HeldTurn
 from lianiq.languages.modes import InputKind, OutputKind, RoutingKind, SessionPair, UsageMode
+from lianiq.languages.registry import LanguageId
+from lianiq.pipeline import bind_utterance
 
 MAX_PROCESSING_SECONDS = 3.0
 
@@ -45,19 +47,22 @@ def main() -> int:
     )
 
     cases = [
-        ("Guten Tag, wie geht es Ihnen?", Language.GERMAN, ConversationMode.DE_TO_ZH),
-        ("您好，您好吗？", Language.MANDARIN, ConversationMode.ZH_TO_DE),
+        ("Guten Tag, wie geht es Ihnen?", LanguageId("de")),
+        ("您好，您好吗？", LanguageId("zh-Hans")),
     ]
+    spoken_fixed = UsageMode(InputKind.MICROPHONE, RoutingKind.FIXED, OutputKind.SPOKEN)
     passed = True
-    for source_text, source_language, mode in cases:
-        source_wav = synthesizer.synthesize(source_text, source_language.id)
+    for source_text, source_language in cases:
+        fixed = SessionPair(session.pair, spoken_fixed, fixed_source=source_language)
+        label = f"{source_language}>{fixed.fixed_target}"
+        source_wav = synthesizer.synthesize(source_text, source_language)
         try:
             utterance = read_pcm16_mono(source_wav)
         finally:
             source_wav.unlink(missing_ok=True)
-        result = pipeline.process(utterance, mode)
-        if result is None:
-            print(f"FAIL {mode.value}: no speech recognized")
+        result = pipeline.process(bind_utterance(utterance, fixed))
+        if result is None or isinstance(result, HeldTurn):
+            print(f"FAIL {label}: no speech recognized")
             passed = False
             continue
         case_passed = bool(result.source_text and result.translated_text)
@@ -65,7 +70,7 @@ def main() -> int:
         passed = passed and case_passed
         marker = "PASS" if case_passed else "FAIL"
         print(
-            f"{marker} {mode.value}: {result.total_seconds:.3f} s "
+            f"{marker} {label}: {result.total_seconds:.3f} s "
             f"(STT {result.stt_seconds:.3f}, translation {result.translation_seconds:.3f}, "
             f"TTS {result.tts_seconds:.3f})"
         )

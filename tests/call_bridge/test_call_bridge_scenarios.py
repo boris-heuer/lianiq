@@ -7,7 +7,11 @@ import numpy as np
 from lianiq.call_bridge.contracts import LaneId
 from lianiq.call_bridge.inference_scheduler import InferenceScheduler
 from lianiq.call_bridge.translation_lane import TranslationLane
-from lianiq.domain import AudioUtterance, Language, Transcript
+from lianiq.domain import AudioUtterance, Transcript
+from lianiq.languages.registry import LanguageId
+
+GERMAN = LanguageId("de")
+MANDARIN = LanguageId("zh-Hans")
 
 
 def test_full_duplex_routes_outputs_to_only_their_declared_sinks() -> None:
@@ -31,8 +35,8 @@ def test_full_duplex_routes_outputs_to_only_their_declared_sinks() -> None:
     scheduler = InferenceScheduler(max_concurrent=2)
     outbound = TranslationLane(
         LaneId.OUTBOUND,
-        Language.GERMAN,
-        Language.MANDARIN,
+        GERMAN,
+        MANDARIN,
         Recognizer(),
         Translator(),
         Synthesizer(),
@@ -41,8 +45,8 @@ def test_full_duplex_routes_outputs_to_only_their_declared_sinks() -> None:
     )
     inbound = TranslationLane(
         LaneId.INBOUND,
-        Language.MANDARIN,
-        Language.GERMAN,
+        MANDARIN,
+        GERMAN,
         Recognizer(),
         Translator(),
         Synthesizer(),

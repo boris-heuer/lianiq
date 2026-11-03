@@ -43,8 +43,10 @@ from lianiq.call_bridge.controller import FullDuplexBridgeController
 from lianiq.call_bridge.inference_scheduler import InferenceScheduler
 from lianiq.call_bridge.translation_lane import TranslationLane
 from lianiq.config import AppConfig
-from lianiq.domain import ConversationMode, Language, TranslationResult
+from lianiq.conversation.routing import HeldTurn
+from lianiq.domain import TranslationResult
 from lianiq.hardware import ctranslate2_cuda_available, resolve_compute_device
+from lianiq.languages.errors import ModeUnavailableError
 from lianiq.languages.modes import (
     CALL_BRIDGE_MODE,
     InputKind,
@@ -53,18 +55,34 @@ from lianiq.languages.modes import (
     SessionPair,
     UsageMode,
 )
+from lianiq.languages.registry import LanguageId
+from lianiq.languages.requirements import DeviceReadiness, describe
+from lianiq.languages.session import SessionController, format_transcript_v2
 from lianiq.pipeline import PipelineRunner, TranslationPipeline
 from lianiq.ui.call_bridge_panel import CallBridgePanel
 
-MODE_LABELS = {
-    "Automatic": ConversationMode.AUTO,
-    "German → Mandarin": ConversationMode.DE_TO_ZH,
-    "Mandarin → German": ConversationMode.ZH_TO_DE,
+# Routing choices and their fixed source (None = Automatic). The labels stay as they are
+# until CAP-0169 WI-06 builds them from the selected pair and the registry.
+MODE_LABELS: dict[str, LanguageId | None] = {
+    "Automatic": None,
+    "German → Mandarin": LanguageId("de"),
+    "Mandarin → German": LanguageId("zh-Hans"),
 }
+# Call Bridge lanes stay German (local) / Mandarin (remote) until CAP-0169 WI-05 derives
+# them from the pair and ``call_bridge.local_language``.
+CALL_BRIDGE_LOCAL = LanguageId("de")
+CALL_BRIDGE_REMOTE = LanguageId("zh-Hans")
+ROUTE_TEST_TEXT = {CALL_BRIDGE_LOCAL: "Kopfhörer-Test.", CALL_BRIDGE_REMOTE: "通话麦克风测试。"}
+
+
+def short_label(language: LanguageId) -> str:
+    """Today's short result label (``DE``, ``ZH``) until WI-06 shows registry names."""
+    return language.split("-", 1)[0].upper()
 
 
 class UiBridge(QObject):
     result = Signal(object)
+    held = Signal(object)
     error = Signal(str)
     busy = Signal(bool)
     level = Signal(float)
@@ -88,6 +106,7 @@ class MainWindow(QMainWindow):
         self.persist_settings = persist_settings
         self.bridge = UiBridge()
         self.bridge.result.connect(self._show_result)
+        self.bridge.held.connect(self._show_held)
         self.bridge.error.connect(self._show_error)
         self.bridge.busy.connect(self._show_busy)
         self.bridge.level.connect(self._show_level)
@@ -96,7 +115,8 @@ class MainWindow(QMainWindow):
         self.bridge.call_bridge_event.connect(self._show_call_bridge_event)
         self.bridge.call_bridge_level.connect(self._show_call_bridge_level)
         self.bridge.call_bridge_capture_fault.connect(self._handle_call_bridge_capture_fault)
-        self.history: list[tuple[str, str, str, str]] = []
+        # Completed turns, in memory only; exported as transcript v2 by capture time.
+        self.history: list[TranslationResult] = []
         self.devices: list[AudioDevice] = []
         self.call_bridge_controller: FullDuplexBridgeController | None = None
         # Models are constructed and warmed on Start, for the started mode only.
@@ -105,6 +125,7 @@ class MainWindow(QMainWindow):
         # Each Start gets a generation; a ready signal of a cancelled Start is ignored.
         self._start_generation = 0
         self._pending_assignments = None
+        self._pending_session: SessionPair | None = None
         self._diagnostic_wav: Path | None = None
         self._endpoint_monitor = QTimer(self)
         self._endpoint_monitor.setInterval(2_000)
@@ -126,10 +147,18 @@ class MainWindow(QMainWindow):
         self.pipeline.on_playback_state = self.capture.set_muted
         self.runner = PipelineRunner(
             pipeline,
-            mode_provider=self.current_mode,
             on_result=self.bridge.result.emit,
             on_error=self.bridge.error.emit,
             on_busy=self.bridge.busy.emit,
+            on_held=self.bridge.held.emit,
+        )
+        # Device presence is still checked when capture and playback open (as before);
+        # the session gate checks the mode's model requirements.
+        self.session_controller = SessionController(
+            pipeline,
+            self.runner,
+            devices=lambda: DeviceReadiness(microphone=True, playback=True),
+            capture=self.capture,
         )
         self.call_bridge_panel.set_models_ready(True)
         self.statusBar().showMessage("Models load on Start, only for the selected mode.")
@@ -169,8 +198,10 @@ class MainWindow(QMainWindow):
         controls.addWidget(QLabel("Conversation direction"), 0, 0)
         self.mode_combo = QComboBox()
         self.mode_combo.addItems(MODE_LABELS)
-        initial_mode = ConversationMode(self.config.legacy_mode)
-        self.mode_combo.setCurrentText(next(k for k, v in MODE_LABELS.items() if v is initial_mode))
+        languages = self.config.languages
+        self._select_fixed_source(
+            LanguageId(languages.fixed_source) if languages.routing == "fixed" else None
+        )
         controls.addWidget(self.mode_combo, 1, 0)
 
         controls.addWidget(QLabel("Microphone"), 0, 1)
@@ -208,13 +239,13 @@ class MainWindow(QMainWindow):
         self.stop_button = QPushButton("■  Stop  (F9)")
         self.stop_button.clicked.connect(self.stop_listening)
         self.stop_button.setEnabled(False)
-        swap_button = QPushButton("⇄  Switch direction")
-        swap_button.clicked.connect(self._swap_direction)
+        self.swap_button = QPushButton("⇄  Switch direction")
+        self.swap_button.clicked.connect(self._swap_direction)
         export_button = QPushButton("Export transcript")
         export_button.clicked.connect(self._export_history)
         action_row.addWidget(self.start_button)
         action_row.addWidget(self.stop_button)
-        action_row.addWidget(swap_button)
+        action_row.addWidget(self.swap_button)
         action_row.addStretch()
         action_row.addWidget(export_button)
         layout.addLayout(action_row)
@@ -318,8 +349,17 @@ class MainWindow(QMainWindow):
             """
         )
 
-    def current_mode(self) -> ConversationMode:
+    def current_fixed_source(self) -> LanguageId | None:
+        """The fixed source the routing control selects, or ``None`` for Automatic."""
         return MODE_LABELS[self.mode_combo.currentText()]
+
+    def _select_fixed_source(self, source: LanguageId | None) -> None:
+        self.mode_combo.setCurrentText(next(k for k, v in MODE_LABELS.items() if v == source))
+
+    def _set_session_controls_enabled(self, enabled: bool) -> None:
+        # The session pair is bound at Start (PO decision Q2): routing changes need Stop.
+        self.mode_combo.setEnabled(enabled)
+        self.swap_button.setEnabled(enabled)
 
     def _recognition_device(self) -> str:
         device = getattr(self.pipeline.recognizer, "device", None)
@@ -332,16 +372,16 @@ class MainWindow(QMainWindow):
 
     def session_pair(self) -> SessionPair:
         """The conversation session the current controls select (microphone input)."""
-        forced_source = self.current_mode().forced_source
+        fixed_source = self.current_fixed_source()
         mode = UsageMode(
             InputKind.MICROPHONE,
-            RoutingKind.BIDIRECTIONAL if forced_source is None else RoutingKind.FIXED,
+            RoutingKind.BIDIRECTIONAL if fixed_source is None else RoutingKind.FIXED,
             OutputKind.SPOKEN if self.tts_checkbox.isChecked() else OutputKind.TEXT,
         )
         return SessionPair(
             self.pipeline.registry.pair(*self.config.languages.pair),
             mode,
-            fixed_source=forced_source.id if forced_source else None,
+            fixed_source=fixed_source,
         )
 
     def call_bridge_session(self) -> SessionPair:
@@ -371,15 +411,17 @@ class MainWindow(QMainWindow):
         if not self._starting or generation != self._start_generation:
             return  # This Start was stopped or superseded while its models were loading.
         self._starting = False
+        session, self._pending_session = self._pending_session, None
         # Voice output may have been toggled while the models were loading.
         self.pipeline.set_voice_output(self.tts_checkbox.isChecked())
-        if not ready:
+        if not ready or session is None:
             self._diagnostic_wav = None
             self.start_button.setEnabled(True)
+            self._set_session_controls_enabled(True)
             self.state_label.setText("Model error")
             self.statusBar().showMessage(message)
             return
-        self._begin_listening()
+        self._begin_listening(session)
         path, self._diagnostic_wav = self._diagnostic_wav, None
         if path is not None and self.capture.running:
             threading.Thread(
@@ -405,24 +447,40 @@ class MainWindow(QMainWindow):
             return
         try:
             session = self.session_pair()
+            availability = self.session_controller.availability(session)
         except Exception as exc:  # noqa: BLE001 - GUI boundary reports invalid selections.
             self._show_error(str(exc))
             return
+        if not availability.available:
+            self._diagnostic_wav = None
+            self._show_unavailable(availability.missing)
+            return
         self._starting = True
+        self._pending_session = session
+        self._set_session_controls_enabled(False)
         self.start_button.setEnabled(False)
         self.state_label.setText("Loading models …")
         self.statusBar().showMessage("Loading the models the selected mode requires …")
         self._prepare_in_background(session, self.bridge.session_ready)
 
-    def _begin_listening(self) -> None:
+    def _show_unavailable(self, missing) -> None:
+        names = ", ".join(describe(item, self.pipeline.registry) for item in missing)
+        self._show_error(f"Not available: missing {names}")
+
+    def _begin_listening(self, session: SessionPair) -> None:
         try:
             self.config.audio.input_device = self.input_combo.currentData()
             self.config.audio.output_device = self.output_combo.currentData()
             self.pipeline.output_device = self.config.audio.output_device
-            self.runner.start()
-            self.capture.start()
+            self.session_controller.start(session)
+        except ModeUnavailableError as exc:
+            self.start_button.setEnabled(True)
+            self._set_session_controls_enabled(True)
+            self._show_unavailable(exc.missing)
+            return
         except Exception as exc:  # noqa: BLE001 - GUI boundary reports dependency/device failures.
             self.start_button.setEnabled(True)
+            self._set_session_controls_enabled(True)
             self._show_error(str(exc))
             return
         self.start_button.setEnabled(False)
@@ -435,16 +493,21 @@ class MainWindow(QMainWindow):
     @Slot()
     def stop_listening(self) -> None:
         self._starting = False
+        self._pending_session = None
         self._diagnostic_wav = None
-        self.capture.stop()
-        self.runner.stop()
+        # Queued turns finish with their bound pair; unresolved held turns are discarded.
+        report = self.session_controller.stop()
         self.start_button.setEnabled(not self._call_bridge_starting)
         self.stop_button.setEnabled(False)
         self.input_combo.setEnabled(True)
         self.output_combo.setEnabled(True)
+        self._set_session_controls_enabled(self.call_bridge_controller is None)
         self.level_bar.setValue(0)
         self.state_label.setText("Ready")
-        self.statusBar().showMessage("Capture stopped")
+        message = "Capture stopped"
+        if report.discarded:
+            message += f"; {len(report.discarded)} turn(s) with an unclear language were discarded"
+        self.statusBar().showMessage(message)
 
     @Slot()
     def start_call_bridge(self) -> None:
@@ -485,7 +548,7 @@ class MainWindow(QMainWindow):
             synthesizer = self.pipeline.voice_synthesizer()
             validate_voice_files = getattr(synthesizer, "validate_voice_files", None)
             if validate_voice_files is not None:
-                validate_voice_files([Language.GERMAN.id, Language.MANDARIN.id])
+                validate_voice_files([CALL_BRIDGE_LOCAL, CALL_BRIDGE_REMOTE])
             scheduler = InferenceScheduler(max_concurrent=2)
             outbound_playback = EndpointPlaybackStream(
                 assignments[EndpointRole.CALL_MICROPHONE_RENDER]
@@ -493,8 +556,8 @@ class MainWindow(QMainWindow):
             inbound_playback = EndpointPlaybackStream(assignments[EndpointRole.LOCAL_HEADPHONES])
             outbound_lane = TranslationLane(
                 LaneId.OUTBOUND,
-                Language.GERMAN,
-                Language.MANDARIN,
+                CALL_BRIDGE_LOCAL,
+                CALL_BRIDGE_REMOTE,
                 recognizer,
                 translator,
                 synthesizer,
@@ -506,8 +569,8 @@ class MainWindow(QMainWindow):
             )
             inbound_lane = TranslationLane(
                 LaneId.INBOUND,
-                Language.MANDARIN,
-                Language.GERMAN,
+                CALL_BRIDGE_REMOTE,
+                CALL_BRIDGE_LOCAL,
                 recognizer,
                 translator,
                 synthesizer,
@@ -564,7 +627,7 @@ class MainWindow(QMainWindow):
         self.call_bridge_panel.set_running(True)
         self._endpoint_monitor.start()
         self.start_button.setEnabled(False)
-        self.mode_combo.setEnabled(False)
+        self._set_session_controls_enabled(False)
         self.input_combo.setEnabled(False)
         self.output_combo.setEnabled(False)
         self.statusBar().showMessage("Fail-closed full-duplex call bridge is active")
@@ -580,7 +643,7 @@ class MainWindow(QMainWindow):
         self.call_bridge_panel.set_running(False)
         self.call_bridge_panel.set_models_ready(True)
         self.start_button.setEnabled(not self._starting and not self.capture.running)
-        self.mode_combo.setEnabled(True)
+        self._set_session_controls_enabled(not self._starting and not self.capture.running)
         self.input_combo.setEnabled(True)
         self.output_combo.setEnabled(True)
         for role in (EndpointRole.LOCAL_MICROPHONE, EndpointRole.CALL_SPEAKER_CAPTURE):
@@ -649,16 +712,16 @@ class MainWindow(QMainWindow):
 
         def run_test() -> None:
             language = (
-                Language.MANDARIN
+                CALL_BRIDGE_REMOTE
                 if role is EndpointRole.CALL_MICROPHONE_RENDER
-                else Language.GERMAN
+                else CALL_BRIDGE_LOCAL
             )
-            text = "通话麦克风测试。" if language is Language.MANDARIN else "Kopfhörer-Test."
+            text = ROUTE_TEST_TEXT[language]
             path = None
             try:
                 # Constructed on demand; the voice loads on its first synthesis.
                 synthesizer = self.pipeline.voice_synthesizer()
-                path = synthesizer.synthesize(text, language.id)
+                path = synthesizer.synthesize(text, language)
                 EndpointPlaybackStream(endpoint).play(path)
                 self.bridge.call_bridge_event.emit(
                     BridgeEvent(None, BridgeEventKind.ENDPOINT, "route_test_passed", role.value)
@@ -680,14 +743,23 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def _show_result(self, result: TranslationResult) -> None:
-        source_name = "DE" if result.source_language is Language.GERMAN else "ZH"
-        target_name = "DE" if result.target_language is Language.GERMAN else "ZH"
-        self.source_text.appendPlainText(f"{source_name}: {result.source_text}\n")
-        self.target_text.appendPlainText(f"{target_name}: {result.translated_text}\n")
+        self.source_text.appendPlainText(
+            f"{short_label(result.source_language)}: {result.source_text}\n"
+        )
+        self.target_text.appendPlainText(
+            f"{short_label(result.target_language)}: {result.translated_text}\n"
+        )
         self.latency_label.setText(f"Processing: {result.total_seconds:.2f} s")
-        timestamp = dt.datetime.now().astimezone().isoformat(timespec="seconds")
-        self.history.append(
-            (timestamp, result.source_text, result.translated_text, result.source_language.value)
+        self.history.append(result)
+
+    @Slot(object)
+    def _show_held(self, held: HeldTurn) -> None:
+        # The held-turn bar (CAP-0169 WI-06) lets the user resolve it; until then it is
+        # reported, never translated, and discarded on Stop.
+        detected = held.transcript.engine_language_code or held.transcript.language or "?"
+        self.statusBar().showMessage(
+            f"Language unclear (detected {detected}); the turn was held and not translated.",
+            15_000,
         )
 
     @Slot(str)
@@ -712,13 +784,14 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _swap_direction(self) -> None:
-        mode = self.current_mode()
-        replacement = {
-            ConversationMode.AUTO: ConversationMode.DE_TO_ZH,
-            ConversationMode.DE_TO_ZH: ConversationMode.ZH_TO_DE,
-            ConversationMode.ZH_TO_DE: ConversationMode.DE_TO_ZH,
-        }[mode]
-        self.mode_combo.setCurrentText(next(k for k, v in MODE_LABELS.items() if v is replacement))
+        pair = self.pipeline.registry.pair(*self.config.languages.pair)
+        current = self.current_fixed_source()
+        self._select_fixed_source(pair.first if current is None else pair.other(current))
+
+    def write_transcript(self, path: Path) -> None:
+        """Write the in-memory history as transcript v2 (UTF-8), ordered by capture time."""
+        pair = self.pipeline.registry.pair(*self.config.languages.pair)
+        Path(path).write_text(format_transcript_v2(pair, self.history), encoding="utf-8")
 
     @Slot()
     def _export_history(self) -> None:
@@ -731,17 +804,7 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getSaveFileName(self, "Save transcript", default, "Text (*.txt)")
         if not path:
             return
-        lines = []
-        for timestamp, source, translated, language in self.history:
-            target = "zh" if language == "de" else "de"
-            lines.extend(
-                [
-                    f"[{timestamp}] {language.upper()}: {source}",
-                    f"{target.upper()}: {translated}",
-                    "",
-                ]
-            )
-        Path(path).write_text("\n".join(lines), encoding="utf-8")
+        self.write_transcript(Path(path))
         self.statusBar().showMessage(f"Transcript saved: {path}", 10_000)
 
     def closeEvent(self, event: QCloseEvent) -> None:
@@ -749,7 +812,9 @@ class MainWindow(QMainWindow):
         self.stop_listening()
         if self.persist_settings:
             self.call_bridge_panel.apply_to_config()
-            self.config.legacy_mode = self.current_mode().value
+            fixed_source = self.current_fixed_source()
+            self.config.languages.routing = "bidirectional" if fixed_source is None else "fixed"
+            self.config.languages.fixed_source = fixed_source
             self.config.voice_output = self.tts_checkbox.isChecked()
             self.config.save()
         event.accept()

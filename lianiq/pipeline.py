@@ -6,22 +6,18 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Protocol
+from uuid import UUID, uuid4
 
 import numpy as np
 
-from lianiq.conversation.routing import TurnRouter
-from lianiq.domain import (
-    AudioUtterance,
-    ConversationMode,
-    Language,
-    Transcript,
-    TranslationResult,
-)
+from lianiq.conversation.routing import HeldTurn, TurnRoute, TurnRouter
+from lianiq.domain import AudioUtterance, Transcript, TranslationResult
 from lianiq.languages.capabilities import CapabilityCatalog, DirectedEdge
 from lianiq.languages.errors import UnsupportedModeError
-from lianiq.languages.modes import InputKind, OutputKind, SessionPair
+from lianiq.languages.modes import InputKind, OutputKind, RoutingKind, SessionPair
 from lianiq.languages.registry import BUILTIN_REGISTRY, LanguageId, LanguageRegistry
 from lianiq.languages.requirements import RequirementKind, ordered_requirements
 from lianiq.translation.context import ContextBuffer
@@ -54,15 +50,31 @@ class AdapterFactories:
     synthesizer: Callable[[], Synthesizer] | None = None
 
 
-class UnroutedTurnError(RuntimeError):
-    """A recognised turn's language is not part of the language pair; nothing is translated."""
+@dataclass(frozen=True, slots=True)
+class BoundUtterance:
+    """A captured utterance bound to the session pair it was captured under.
 
-    def __init__(self, detected: str) -> None:
-        super().__init__(
-            f"Detected language {detected!r} is not part of the language pair; "
-            "the turn was not translated."
-        )
-        self.detected = detected
+    The worker routes and translates it with this binding, never with a live selection,
+    so a queued turn keeps its languages when the session stops or the pair changes.
+    """
+
+    utterance: AudioUtterance
+    session: SessionPair
+    turn_id: UUID
+    captured_at: datetime
+
+
+def bind_utterance(utterance: AudioUtterance, session: SessionPair) -> BoundUtterance:
+    return BoundUtterance(utterance, session, uuid4(), datetime.now().astimezone())
+
+
+@dataclass(frozen=True, slots=True)
+class _RetainedTurn:
+    held: HeldTurn
+    item: BoundUtterance  # the retained audio and its bound session pair
+
+
+DEFAULT_DETECTION_MIN_PROBABILITY = 0.7  # settings v2 ``languages.detection_min_probability``
 
 
 def _warm_up(component: object, subjects: tuple[object, ...]) -> None:
@@ -94,7 +106,7 @@ class TranslationPipeline:
         self.context = ContextBuffer(context_sentences)
         self.output_device = output_device
         self.on_playback_state = on_playback_state
-        self.turn_router = turn_router or TurnRouter()
+        self.turn_router = turn_router or TurnRouter(DEFAULT_DETECTION_MIN_PROBABILITY)
         self.factories = factories or AdapterFactories()
         self.registry = registry
         self.catalog = catalog
@@ -102,6 +114,17 @@ class TranslationPipeline:
         self._adapter_lock = threading.RLock()
         # Spoken output follows the started mode (``prepare``) or ``set_voice_output``.
         self.voice_output = synthesizer is not None
+        # Serializes turn processing, held-turn resolution and context changes.
+        self._turn_lock = threading.RLock()
+        # Held turns with their retained audio, in memory only, until resolved or discarded.
+        # Guarded by its own lock so the UI never waits for model inference to read or
+        # discard them.
+        self._held: dict[UUID, _RetainedTurn] = {}
+        self._held_lock = threading.Lock()
+        # The context has its own lock; a reset bumps the epoch so a turn that was already
+        # running when the session stopped never feeds the next session's context.
+        self._context_lock = threading.Lock()
+        self._context_epoch = 0
 
     # Adapters are constructed on first need, never before a mode requires them.
     def speech_recognizer(self) -> SpeechRecognizer:
@@ -168,64 +191,162 @@ class TranslationPipeline:
         """Switch spoken output; the voice adapter is constructed on its first use."""
         self.voice_output = enabled
 
-    def process(
-        self, utterance: AudioUtterance, mode: ConversationMode
-    ) -> TranslationResult | None:
-        forced_source = mode.forced_source
-        started = time.perf_counter()
-        LOGGER.info(
-            "Processing %.3f seconds of audio in mode %s",
-            utterance.samples.size / utterance.sample_rate,
-            mode.value,
-        )
-        transcript = self.speech_recognizer().transcribe(
-            utterance.samples,
-            utterance.sample_rate,
-            forced_source.id if forced_source else None,
-        )
-        stt_seconds = time.perf_counter() - started
-        if not transcript.text.strip():
-            LOGGER.info("Speech recognition returned no text")
-            return None
-        detected = Language.from_id(transcript.language)
-        if forced_source is None and detected is None:
-            # No script-based or other guess: an unknown language is never translated.
-            raise UnroutedTurnError(transcript.engine_language_code or str(transcript.language))
-        route = self.turn_router.route(mode, forced_source or detected)
-        LOGGER.info(
-            "Speech recognition completed in %.3f seconds; source=%s probability=%.3f",
-            stt_seconds,
-            route.source.id,
-            transcript.probability,
-        )
-        return self._translate(transcript.text, route.source, route.target, stt_seconds)
+    def process(self, item: BoundUtterance) -> TranslationResult | HeldTurn | None:
+        """Recognise, route and translate one bound turn, or hold it if its language is unclear.
+
+        Fixed routing forces the recogniser to the fixed source. Bidirectional routing
+        detects the language; a held turn makes no translation call and keeps its audio
+        until ``resolve``, ``discard`` or ``discard_held``.
+        """
+        session = item.session
+        utterance = item.utterance
+        forced = session.fixed_source if session.mode.routing is RoutingKind.FIXED else None
+        with self._turn_lock:
+            epoch = self._epoch()
+            started = time.perf_counter()
+            LOGGER.info(
+                "Processing %.3f seconds of audio; routing=%s",
+                utterance.samples.size / utterance.sample_rate,
+                session.mode.routing.value,
+            )
+            transcript = self.speech_recognizer().transcribe(
+                utterance.samples, utterance.sample_rate, forced
+            )
+            stt_seconds = time.perf_counter() - started
+            if not transcript.text.strip():
+                LOGGER.info("Speech recognition returned no text")
+                return None
+            route = self.turn_router.route(
+                session, transcript, turn_id=item.turn_id, captured_at=item.captured_at
+            )
+            if isinstance(route, HeldTurn):
+                with self._held_lock:
+                    self._held[route.turn_id] = _RetainedTurn(route, item)
+                LOGGER.info(
+                    "Turn held (%s): detected=%s probability=%.3f",
+                    route.reason,
+                    transcript.engine_language_code or transcript.language or "-",
+                    transcript.probability,
+                )
+                return route
+            LOGGER.info(
+                "Speech recognition completed in %.3f seconds; source=%s probability=%.3f",
+                stt_seconds,
+                route.source,
+                transcript.probability,
+            )
+            return self._translate(transcript.text, route, stt_seconds, item, epoch)
+
+    def resolve(self, held: HeldTurn, source: LanguageId) -> TranslationResult | None:
+        """Translate a held turn as ``source`` by forced re-recognition of its retained audio.
+
+        Detection never runs again. The result keeps the held turn's ID and capture time.
+        The turn is claimed before any model runs, so it can no longer be discarded while
+        it is resolved; its audio is released when it is translated. On failure the turn
+        is held again.
+        """
+        with self._held_lock:
+            retained = self._held.get(held.turn_id)
+            if retained is None:
+                raise LookupError("The held turn is no longer pending")
+            pair = retained.item.session.pair
+            if source not in pair:
+                raise UnsupportedModeError(f"{source!r} is not a member of the session pair")
+            del self._held[held.turn_id]  # claimed: no longer held, not discardable
+        item = retained.item
+        try:
+            with self._turn_lock:
+                epoch = self._epoch()
+                started = time.perf_counter()
+                transcript = self.speech_recognizer().transcribe(
+                    item.utterance.samples, item.utterance.sample_rate, source
+                )
+                stt_seconds = time.perf_counter() - started
+                if not transcript.text.strip():
+                    LOGGER.info("Forced re-recognition returned no text; the turn was dropped")
+                    return None
+                return self._translate(
+                    transcript.text,
+                    TurnRoute(source, pair.other(source)),
+                    stt_seconds,
+                    item,
+                    epoch,
+                )
+        except BaseException:
+            with self._held_lock:
+                self._held[held.turn_id] = retained
+            raise
+
+    def discard(self, held: HeldTurn) -> bool:
+        """Drop a held turn and release its audio; it leaves no result and no export line.
+
+        Returns ``False`` if the turn is no longer held (resolved, being resolved or
+        already discarded).
+        """
+        with self._held_lock:
+            return self._held.pop(held.turn_id, None) is not None
+
+    def discard_held(self) -> tuple[HeldTurn, ...]:
+        """Discard every unresolved held turn (session stop); returns them by capture time."""
+        with self._held_lock:
+            discarded = self._sorted_held()
+            self._held.clear()
+        return discarded
+
+    def held_turns(self) -> tuple[HeldTurn, ...]:
+        """The unresolved held turns ordered by capture time."""
+        with self._held_lock:
+            return self._sorted_held()
+
+    def _sorted_held(self) -> tuple[HeldTurn, ...]:
+        return tuple(sorted((entry.held for entry in self._held.values()), key=_captured_at))
+
+    def reset_context(self) -> None:
+        """Clear the translation context (every session stop and pair or mode change).
+
+        Never waits for a running turn.
+        """
+        with self._context_lock:
+            self.context.clear()
+            self._context_epoch += 1
 
     def translate_text(self, text: str, session: SessionPair) -> TranslationResult | None:
         """Typed input with fixed routing (requirement rows 1 and 2); no recogniser is used."""
         if session.mode.input is not InputKind.TYPED:
             raise UnsupportedModeError("Text input requires a typed usage mode")
-        source = Language.from_id(session.fixed_source)
-        target = Language.from_id(session.fixed_target)
-        if source is None or target is None:
-            raise UnsupportedModeError(
-                f"Unsupported fixed direction {session.fixed_source}>{session.fixed_target}"
-            )
         if not text.strip():
             return None
-        return self._translate(text, source, target, 0.0)
+        source = session.fixed_source
+        assert source is not None  # SessionPair rejects typed input without fixed routing
+        item = bind_utterance(AudioUtterance(np.zeros(0, dtype=np.float32), 16_000), session)
+        with self._turn_lock:
+            route = TurnRoute(source, session.pair.other(source))
+            return self._translate(text, route, 0.0, item, self._epoch())
+
+    def _epoch(self) -> int:
+        with self._context_lock:
+            return self._context_epoch
 
     def _translate(
-        self, text: str, source: Language, target: Language, stt_seconds: float
+        self,
+        text: str,
+        route: TurnRoute,
+        stt_seconds: float,
+        item: BoundUtterance,
+        epoch: int,
     ) -> TranslationResult:
+        """Translate one routed turn; ``epoch`` is the context epoch when the turn started."""
+        source, target = route.source, route.target
+        with self._context_lock:
+            stale = epoch != self._context_epoch
+            context = () if stale else self.context.source_context(source)
         translated_started = time.perf_counter()
-        translated = self.text_translator().translate(
-            text,
-            DirectedEdge(source.id, target.id),
-            self.context.source_context(source.id),
-        )
+        translated = self.text_translator().translate(text, DirectedEdge(source, target), context)
         translation_seconds = time.perf_counter() - translated_started
         LOGGER.info("Translation completed in %.3f seconds", translation_seconds)
-        self.context.add(source.id, text, translated)
+        with self._context_lock:
+            if epoch == self._context_epoch:
+                self.context.add(source, text, translated)
 
         tts_seconds = 0.0
         if self.voice_output and self.playback is not None:
@@ -235,7 +356,7 @@ class TranslationPipeline:
             if self.on_playback_state:
                 self.on_playback_state(True)
             try:
-                wav_path = synthesizer.synthesize(translated, target.id)
+                wav_path = synthesizer.synthesize(translated, target)
                 tts_seconds = time.perf_counter() - tts_started
                 LOGGER.info("Speech synthesis completed in %.3f seconds", tts_seconds)
                 self.playback(wav_path, self.output_device)
@@ -246,6 +367,8 @@ class TranslationPipeline:
                 if self.on_playback_state:
                     self.on_playback_state(False)
         result = TranslationResult(
+            turn_id=item.turn_id,
+            captured_at=item.captured_at,
             source_text=text,
             translated_text=translated,
             source_language=source,
@@ -258,86 +381,174 @@ class TranslationPipeline:
         return result
 
 
+def _captured_at(held: HeldTurn) -> datetime:
+    return held.captured_at
+
+
 class PipelineRunner:
-    """Single-consumer worker with bounded backlog to preserve conversational latency."""
+    """Single-consumer worker with bounded backlog to preserve conversational latency.
+
+    ``start(session)`` binds the session pair; every submitted utterance carries that
+    binding (``BoundUtterance``), so the worker never reads a live selection. ``stop``
+    finishes the already-queued items with their bound pair within the timeout and
+    reports every item it could not finish as dropped.
+    """
 
     def __init__(
         self,
         pipeline: TranslationPipeline,
-        mode_provider: Callable[[], ConversationMode],
         on_result: Callable[[TranslationResult], None],
         on_error: Callable[[str], None],
         on_busy: Callable[[bool], None] | None = None,
+        on_held: Callable[[HeldTurn], None] | None = None,
+        max_pending: int = 2,
     ) -> None:
         self.pipeline = pipeline
-        self.mode_provider = mode_provider
         self.on_result = on_result
         self.on_error = on_error
         self.on_busy = on_busy
-        self._queue: queue.Queue[AudioUtterance | None] = queue.Queue(maxsize=2)
+        self.on_held = on_held
+        self.max_pending = max_pending
+        self._queue: queue.Queue[BoundUtterance | None] = queue.Queue(maxsize=max_pending)
         self._thread: threading.Thread | None = None
-        self._stop = threading.Event()
+        self._session: SessionPair | None = None
+        self._accepting = False
+        self._abort = threading.Event()
+        # Taking an item and aborting are atomic, so every item is either started or dropped.
+        self._take_lock = threading.Lock()
 
-    def start(self) -> None:
+    @property
+    def session(self) -> SessionPair | None:
+        """The session pair new utterances are bound to, or ``None`` when stopped."""
+        return self._session
+
+    def start(self, session: SessionPair) -> None:
         if self._thread and self._thread.is_alive():
-            return
-        self._queue = queue.Queue(maxsize=2)
-        self._stop.clear()
+            raise RuntimeError("The pipeline worker is still running; stop it first")
+        self._queue = queue.Queue(maxsize=self.max_pending)
+        self._abort.clear()
+        self._session = session
+        self._accepting = True
         self._thread = threading.Thread(target=self._run, name="translation-pipeline", daemon=True)
         self._thread.start()
 
     def submit(self, utterance: AudioUtterance) -> None:
-        if self._stop.is_set():
+        session = self._session
+        if not self._accepting or session is None:
             return
+        item = bind_utterance(utterance, session)
         try:
-            self._queue.put_nowait(utterance)
+            self._queue.put_nowait(item)
         except queue.Full:
             # Drop the oldest waiting utterance: stale speech is worse than a visible warning.
             try:
                 self._queue.get_nowait()
                 self._queue.task_done()
-                self._queue.put_nowait(utterance)
+                self._queue.put_nowait(item)
             except queue.Empty:
                 pass
             self.on_error("The audio queue was full; the oldest pending segment was dropped.")
 
-    def stop(self, timeout: float = 10.0) -> None:
-        self._stop.set()
-        while True:
+    def resolve(self, held: HeldTurn, source: LanguageId) -> threading.Thread:
+        """Resolve a held turn in the background; the result arrives through ``on_result``."""
+
+        def run() -> None:
+            if self.on_busy:
+                self.on_busy(True)
             try:
-                self._queue.get_nowait()
-                self._queue.task_done()
-            except queue.Empty:
-                break
+                result = self.pipeline.resolve(held, source)
+                if result is not None:
+                    self.on_result(result)
+            except Exception as exc:
+                LOGGER.exception("Held turn resolution failed")
+                self.on_error(str(exc))
+            finally:
+                if self.on_busy:
+                    self.on_busy(False)
+
+        thread = threading.Thread(target=run, name="held-turn-resolution", daemon=True)
+        thread.start()
+        return thread
+
+    def stop(self, timeout: float = 10.0) -> int:
+        """Stop accepting audio, finish queued items, and return how many were dropped.
+
+        Queued items are processed with their bound pair until ``timeout``. Items not yet
+        started by then are dropped and reported through ``on_error``; a turn already being
+        processed completes and its result is still delivered.
+        """
+        self._accepting = False
+        self._session = None
+        thread = self._thread
+        if thread is None:
+            return self._drain()
+        deadline = time.monotonic() + timeout
         try:
-            self._queue.put_nowait(None)
+            self._queue.put(None, timeout=max(0.0, deadline - time.monotonic()))
         except queue.Full:
             pass
-        if self._thread:
-            self._thread.join(timeout=timeout)
-            if self._thread.is_alive():
-                LOGGER.warning("Pipeline worker did not stop within %.1f seconds", timeout)
-                return
+        thread.join(timeout=max(0.0, deadline - time.monotonic()))
+        if thread.is_alive():
+            with self._take_lock:
+                self._abort.set()
+                dropped = self._drain()
+            LOGGER.warning(
+                "Pipeline worker did not finish within %.1f seconds; %d queued item(s) dropped",
+                timeout,
+                dropped,
+            )
+            if dropped:
+                self._report_dropped(dropped)
+            return dropped
         self._thread = None
+        return 0
+
+    def _report_dropped(self, dropped: int) -> None:
+        self.on_error(
+            f"{dropped} queued speech segment(s) were not translated before the "
+            "session stopped and were dropped."
+        )
+
+    def _drain(self) -> int:
+        dropped = 0
+        while True:
+            try:
+                item = self._queue.get_nowait()
+            except queue.Empty:
+                return dropped
+            self._queue.task_done()
+            if item is not None:
+                dropped += 1
 
     def _run(self) -> None:
-        while not self._stop.is_set():
+        while not self._abort.is_set():
             try:
                 item = self._queue.get(timeout=0.2)
             except queue.Empty:
                 continue
+            with self._take_lock:
+                aborted = self._abort.is_set()
+            if aborted:
+                # Taken just before ``stop`` drained the queue: dropped, never started.
+                self._queue.task_done()
+                if item is not None:
+                    self._report_dropped(1)
+                return
             try:
                 if item is None:
                     return
                 if self.on_busy:
                     self.on_busy(True)
-                result = self.pipeline.process(item, self.mode_provider())
-                if result:
-                    self.on_result(result)
+                outcome = self.pipeline.process(item)
+                if isinstance(outcome, HeldTurn):
+                    if self.on_held:
+                        self.on_held(outcome)
+                elif outcome is not None:
+                    self.on_result(outcome)
             except Exception as exc:
                 LOGGER.exception("Translation pipeline failed")
                 self.on_error(str(exc))
             finally:
-                if self.on_busy:
+                if self.on_busy and item is not None:
                     self.on_busy(False)
                 self._queue.task_done()
