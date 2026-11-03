@@ -3,6 +3,7 @@ from __future__ import annotations
 import threading
 
 import numpy as np
+import pytest
 
 from lianiq.domain import (
     AudioUtterance,
@@ -10,27 +11,30 @@ from lianiq.domain import (
     Language,
     Transcript,
 )
-from lianiq.pipeline import PipelineRunner, TranslationPipeline
+from lianiq.languages import LanguageId
+from lianiq.pipeline import PipelineRunner, TranslationPipeline, UnroutedTurnError
 
 
 class FakeRecognizer:
-    def __init__(self, detected: Language = Language.GERMAN, text: str = "Guten Tag") -> None:
-        self.detected = detected
+    def __init__(self, detected: str | None = "de", text: str = "Guten Tag", code="") -> None:
+        self.detected = None if detected is None else LanguageId(detected)
         self.text = text
+        self.code = code
         self.received_language = None
 
     def transcribe(self, samples, sample_rate, language=None):
         self.received_language = language
-        return Transcript(self.text, self.detected, 0.99, len(samples) / sample_rate)
+        detected = language or self.detected
+        return Transcript(self.text, detected, 0.99, len(samples) / sample_rate, self.code)
 
 
 class FakeTranslator:
     def __init__(self) -> None:
         self.calls = []
 
-    def translate(self, text, source, target, context=()):
-        self.calls.append((text, source, target, context))
-        return "您好" if target is Language.MANDARIN else "Guten Tag"
+    def translate(self, text, edge, context=()):
+        self.calls.append((text, edge.key, context))
+        return "您好" if edge.target == "zh-Hans" else "Guten Tag"
 
 
 def utterance() -> AudioUtterance:
@@ -46,16 +50,31 @@ def test_auto_mode_uses_detected_direction() -> None:
     assert result.source_language is Language.GERMAN
     assert result.target_language is Language.MANDARIN
     assert recognizer.received_language is None
+    assert translator.calls == [("Guten Tag", "de>zh-Hans", ())]
 
 
 def test_manual_mode_forces_whisper_language() -> None:
-    recognizer = FakeRecognizer(detected=Language.GERMAN, text="你好")
+    recognizer = FakeRecognizer(detected="de", text="你好")
     translator = FakeTranslator()
     pipeline = TranslationPipeline(recognizer, translator, None, None)
     result = pipeline.process(utterance(), ConversationMode.ZH_TO_DE)
     assert result is not None
-    assert recognizer.received_language is Language.MANDARIN
+    assert recognizer.received_language == "zh-Hans"
     assert result.target_language is Language.GERMAN
+    assert translator.calls[0][1] == "zh-Hans>de"
+
+
+@pytest.mark.parametrize(("detected", "code"), [("en", "en"), (None, "ja")])
+def test_auto_mode_never_guesses_an_unsupported_detected_language(detected, code) -> None:
+    translator = FakeTranslator()
+    pipeline = TranslationPipeline(
+        FakeRecognizer(detected=detected, text="您好", code=code), translator, None, None
+    )
+
+    with pytest.raises(UnroutedTurnError, match=code):
+        pipeline.process(utterance(), ConversationMode.AUTO)
+
+    assert translator.calls == []
 
 
 def test_empty_transcript_is_ignored() -> None:

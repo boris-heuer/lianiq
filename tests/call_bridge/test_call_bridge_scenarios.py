@@ -18,11 +18,11 @@ def test_full_duplex_routes_outputs_to_only_their_declared_sinks() -> None:
     class Recognizer:
         def transcribe(self, samples, sample_rate, language=None):
             barrier.wait(timeout=1.0)
-            return Transcript(language.value, language, 1.0, len(samples) / sample_rate)
+            return Transcript(language, language, 1.0, len(samples) / sample_rate)
 
     class Translator:
-        def translate(self, text, source, target, context=()):
-            return target.value
+        def translate(self, text, edge, context=()):
+            return edge.key
 
     class Synthesizer:
         def synthesize(self, text, language):
@@ -60,5 +60,5 @@ def test_full_duplex_routes_outputs_to_only_their_declared_sinks() -> None:
     outbound.stop(1.0)
     inbound.stop(1.0)
 
-    assert tx_output == ["zh"]
-    assert rx_output == ["de"]
+    assert tx_output == ["de>zh-Hans"]
+    assert rx_output == ["zh-Hans>de"]

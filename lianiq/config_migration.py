@@ -20,6 +20,7 @@ from typing import Any
 from lianiq.languages.errors import SettingsMigrationError
 
 __all__ = [
+    "LEGACY_GLOSSARY_EDGES",
     "SCHEMA_VERSION",
     "SettingsMigrationError",
     "backup_legacy_settings",
@@ -32,6 +33,13 @@ __all__ = [
 ]
 
 SCHEMA_VERSION = 2
+
+# Legacy glossary direction keys (lianiq before CAP-0169 WI-03) and the directed edge
+# each one maps to on load (contract.md §3.1.7).
+LEGACY_GLOSSARY_EDGES: Mapping[str, str] = {
+    "de-zh": "de>zh-Hans",
+    "zh-de": "zh-Hans>de",
+}
 
 # Frozen snapshot of the schema v1 keys (lianiq before CAP-0169 WI-02). Any other key
 # in a v1 file is not mappable and raises instead of being dropped silently.

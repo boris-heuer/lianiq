@@ -125,9 +125,11 @@ class SpyRecognizer:
     results: list[SyntheticTranscript] = field(default_factory=list)
     calls: list[str | None] = field(default_factory=list)
     warmed_up: bool = False
+    warmed_languages: list[str] = field(default_factory=list)
 
-    def warm_up(self) -> None:
+    def warm_up(self, languages: Iterable[str] = ()) -> None:
         self.warmed_up = True
+        self.warmed_languages.extend(languages)
 
     def transcribe(self, samples, sample_rate: int, language: str | None = None):
         self.calls.append(language)

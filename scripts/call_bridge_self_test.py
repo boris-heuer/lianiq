@@ -10,6 +10,7 @@ from lianiq.call_bridge.inference_scheduler import InferenceScheduler
 from lianiq.call_bridge.translation_lane import TranslationLane
 from lianiq.config import AppConfig
 from lianiq.domain import Language
+from lianiq.languages.modes import CALL_BRIDGE_MODE, SessionPair
 
 MAX_END_TO_END_SECONDS = 3.0
 WAIT_TIMEOUT_SECONDS = 30.0
@@ -26,8 +27,18 @@ def main() -> int:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     config = AppConfig.load()
     config.voice_output = True
-    pipeline, synthesizer = build_pipeline(config)
-    pipeline.warm_up()
+    pipeline = build_pipeline(config)
+    registry = pipeline.registry
+    pipeline.prepare(
+        SessionPair(
+            registry.pair(*config.languages.pair),
+            CALL_BRIDGE_MODE,
+            local_language=registry.get(config.call_bridge.local_language).id,
+        )
+    )
+    recognizer = pipeline.speech_recognizer()
+    translator = pipeline.text_translator()
+    synthesizer = pipeline.voice_synthesizer()
 
     scheduler = InferenceScheduler(max_concurrent=2)
     results = {}
@@ -45,8 +56,8 @@ def main() -> int:
             LaneId.OUTBOUND,
             Language.GERMAN,
             Language.MANDARIN,
-            pipeline.recognizer,
-            pipeline.translator,
+            recognizer,
+            translator,
             synthesizer,
             lambda path: playback(LaneId.OUTBOUND, path),
             scheduler,
@@ -57,8 +68,8 @@ def main() -> int:
             LaneId.INBOUND,
             Language.MANDARIN,
             Language.GERMAN,
-            pipeline.recognizer,
-            pipeline.translator,
+            recognizer,
+            translator,
             synthesizer,
             lambda path: playback(LaneId.INBOUND, path),
             scheduler,
@@ -72,7 +83,7 @@ def main() -> int:
     }
     utterances = {}
     for lane_id, (text, language) in sources.items():
-        path = synthesizer.synthesize(text, language)
+        path = synthesizer.synthesize(text, language.id)
         try:
             utterances[lane_id] = read_pcm16_mono(path)
         finally:

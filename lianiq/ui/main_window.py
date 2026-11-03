@@ -44,6 +44,15 @@ from lianiq.call_bridge.inference_scheduler import InferenceScheduler
 from lianiq.call_bridge.translation_lane import TranslationLane
 from lianiq.config import AppConfig
 from lianiq.domain import ConversationMode, Language, TranslationResult
+from lianiq.hardware import ctranslate2_cuda_available, resolve_compute_device
+from lianiq.languages.modes import (
+    CALL_BRIDGE_MODE,
+    InputKind,
+    OutputKind,
+    RoutingKind,
+    SessionPair,
+    UsageMode,
+)
 from lianiq.pipeline import PipelineRunner, TranslationPipeline
 from lianiq.ui.call_bridge_panel import CallBridgePanel
 
@@ -59,7 +68,8 @@ class UiBridge(QObject):
     error = Signal(str)
     busy = Signal(bool)
     level = Signal(float)
-    models_ready = Signal(bool, str)
+    session_ready = Signal(int, bool, str)  # start generation, ready, error message
+    call_bridge_ready = Signal(int, bool, str)
     call_bridge_event = Signal(object)
     call_bridge_level = Signal(object, float)
     call_bridge_capture_fault = Signal(object, str)
@@ -81,14 +91,21 @@ class MainWindow(QMainWindow):
         self.bridge.error.connect(self._show_error)
         self.bridge.busy.connect(self._show_busy)
         self.bridge.level.connect(self._show_level)
-        self.bridge.models_ready.connect(self._models_ready)
+        self.bridge.session_ready.connect(self._session_ready)
+        self.bridge.call_bridge_ready.connect(self._call_bridge_ready)
         self.bridge.call_bridge_event.connect(self._show_call_bridge_event)
         self.bridge.call_bridge_level.connect(self._show_call_bridge_level)
         self.bridge.call_bridge_capture_fault.connect(self._handle_call_bridge_capture_fault)
         self.history: list[tuple[str, str, str, str]] = []
         self.devices: list[AudioDevice] = []
         self.call_bridge_controller: FullDuplexBridgeController | None = None
-        self._models_are_ready = False
+        # Models are constructed and warmed on Start, for the started mode only.
+        self._starting = False
+        self._call_bridge_starting = False
+        # Each Start gets a generation; a ready signal of a cancelled Start is ignored.
+        self._start_generation = 0
+        self._pending_assignments = None
+        self._diagnostic_wav: Path | None = None
         self._endpoint_monitor = QTimer(self)
         self._endpoint_monitor.setInterval(2_000)
         self._endpoint_monitor.timeout.connect(self._reconcile_call_bridge_endpoints)
@@ -114,10 +131,19 @@ class MainWindow(QMainWindow):
             on_error=self.bridge.error.emit,
             on_busy=self.bridge.busy.emit,
         )
-        self.start_button.setEnabled(False)
-        self.state_label.setText("Loading models …")
-        self.statusBar().showMessage("Loading all offline models into memory …")
-        threading.Thread(target=self._warm_models, name="model-warmup", daemon=True).start()
+        self.call_bridge_panel.set_models_ready(True)
+        self.statusBar().showMessage("Models load on Start, only for the selected mode.")
+        if "--diagnostic-wav" in sys.argv:
+            argument_index = sys.argv.index("--diagnostic-wav") + 1
+            if argument_index >= len(sys.argv):
+                QTimer.singleShot(
+                    0, lambda: self._show_error("--diagnostic-wav requires a WAV file path")
+                )
+            else:
+                self._diagnostic_wav = Path(sys.argv[argument_index])
+                QTimer.singleShot(0, self.start_listening)
+        elif "--diagnostic-auto-start" in sys.argv:
+            QTimer.singleShot(0, self.start_listening)
 
         QShortcut(QKeySequence("F8"), self, activated=self.start_listening)
         QShortcut(QKeySequence("F9"), self, activated=self.stop_listening)
@@ -165,9 +191,10 @@ class MainWindow(QMainWindow):
         self.tts_checkbox.toggled.connect(self._toggle_tts)
         controls.addWidget(self.tts_checkbox, 1, 4)
         self.gpu_checkbox = QCheckBox("CUDA GPU")
-        self.gpu_checkbox.setChecked(getattr(self.pipeline.recognizer, "device", "cpu") == "cuda")
+        recognition_device = self._recognition_device()
+        self.gpu_checkbox.setChecked(recognition_device == "cuda")
         self.gpu_checkbox.setEnabled(False)
-        runtime_device = getattr(self.pipeline.recognizer, "device", "cpu").upper()
+        runtime_device = recognition_device.upper()
         self.gpu_checkbox.setToolTip(f"Active inference device: {runtime_device}")
         controls.addWidget(self.gpu_checkbox, 1, 5)
         controls.setColumnStretch(1, 2)
@@ -294,39 +321,73 @@ class MainWindow(QMainWindow):
     def current_mode(self) -> ConversationMode:
         return MODE_LABELS[self.mode_combo.currentText()]
 
-    def _warm_models(self) -> None:
-        try:
-            self.pipeline.warm_up()
-        except Exception as exc:  # noqa: BLE001 - background boundary reports model failures.
-            self.bridge.models_ready.emit(False, str(exc))
-        else:
-            self.bridge.models_ready.emit(True, "")
+    def _recognition_device(self) -> str:
+        device = getattr(self.pipeline.recognizer, "device", None)
+        if device is None:
+            # The recogniser is built on Start; report the device it will use.
+            device = resolve_compute_device(
+                self.config.speech_to_text.device, ctranslate2_cuda_available()
+            )
+        return device
 
-    @Slot(bool, str)
-    def _models_ready(self, ready: bool, message: str) -> None:
-        self._models_are_ready = ready
-        self.start_button.setEnabled(ready)
-        self.call_bridge_panel.set_models_ready(ready)
-        self.state_label.setText("Ready" if ready else "Model error")
-        self.statusBar().showMessage(
-            "All models are loaded; offline capture is ready." if ready else message
+    def session_pair(self) -> SessionPair:
+        """The conversation session the current controls select (microphone input)."""
+        forced_source = self.current_mode().forced_source
+        mode = UsageMode(
+            InputKind.MICROPHONE,
+            RoutingKind.BIDIRECTIONAL if forced_source is None else RoutingKind.FIXED,
+            OutputKind.SPOKEN if self.tts_checkbox.isChecked() else OutputKind.TEXT,
         )
+        return SessionPair(
+            self.pipeline.registry.pair(*self.config.languages.pair),
+            mode,
+            fixed_source=forced_source.id if forced_source else None,
+        )
+
+    def call_bridge_session(self) -> SessionPair:
+        registry = self.pipeline.registry
+        return SessionPair(
+            registry.pair(*self.config.languages.pair),
+            CALL_BRIDGE_MODE,
+            local_language=registry.get(self.config.call_bridge.local_language).id,
+        )
+
+    def _prepare_in_background(self, session: SessionPair, ready: Signal) -> None:
+        self._start_generation += 1
+        generation = self._start_generation
+
+        def prepare() -> None:
+            try:
+                self.pipeline.prepare(session)
+            except Exception as exc:  # noqa: BLE001 - background boundary reports model failures.
+                ready.emit(generation, False, str(exc))
+            else:
+                ready.emit(generation, True, "")
+
+        threading.Thread(target=prepare, name="model-warmup", daemon=True).start()
+
+    @Slot(int, bool, str)
+    def _session_ready(self, generation: int, ready: bool, message: str) -> None:
+        if not self._starting or generation != self._start_generation:
+            return  # This Start was stopped or superseded while its models were loading.
+        self._starting = False
+        # Voice output may have been toggled while the models were loading.
+        self.pipeline.set_voice_output(self.tts_checkbox.isChecked())
         if not ready:
+            self._diagnostic_wav = None
+            self.start_button.setEnabled(True)
+            self.state_label.setText("Model error")
+            self.statusBar().showMessage(message)
             return
-        if "--diagnostic-wav" in sys.argv:
-            argument_index = sys.argv.index("--diagnostic-wav") + 1
-            if argument_index >= len(sys.argv):
-                self._show_error("--diagnostic-wav requires a WAV file path")
-                return
-            self.start_listening()
+        self._begin_listening()
+        path, self._diagnostic_wav = self._diagnostic_wav, None
+        if path is not None and self.capture.running:
             threading.Thread(
                 target=self._submit_diagnostic_wav,
-                args=(Path(sys.argv[argument_index]),),
+                args=(path,),
                 name="diagnostic-wav-input",
                 daemon=True,
             ).start()
-        elif "--diagnostic-auto-start" in sys.argv:
-            self.start_listening()
 
     def _submit_diagnostic_wav(self, path: Path) -> None:
         try:
@@ -337,9 +398,23 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def start_listening(self) -> None:
-        if self.call_bridge_controller is not None:
+        if self.call_bridge_controller is not None or self._call_bridge_starting:
             self._show_error("Stop call bridge mode before starting conversation capture")
             return
+        if self._starting or self.capture.running:
+            return
+        try:
+            session = self.session_pair()
+        except Exception as exc:  # noqa: BLE001 - GUI boundary reports invalid selections.
+            self._show_error(str(exc))
+            return
+        self._starting = True
+        self.start_button.setEnabled(False)
+        self.state_label.setText("Loading models …")
+        self.statusBar().showMessage("Loading the models the selected mode requires …")
+        self._prepare_in_background(session, self.bridge.session_ready)
+
+    def _begin_listening(self) -> None:
         try:
             self.config.audio.input_device = self.input_combo.currentData()
             self.config.audio.output_device = self.output_combo.currentData()
@@ -347,6 +422,7 @@ class MainWindow(QMainWindow):
             self.runner.start()
             self.capture.start()
         except Exception as exc:  # noqa: BLE001 - GUI boundary reports dependency/device failures.
+            self.start_button.setEnabled(True)
             self._show_error(str(exc))
             return
         self.start_button.setEnabled(False)
@@ -358,9 +434,11 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def stop_listening(self) -> None:
+        self._starting = False
+        self._diagnostic_wav = None
         self.capture.stop()
         self.runner.stop()
-        self.start_button.setEnabled(self._models_are_ready)
+        self.start_button.setEnabled(not self._call_bridge_starting)
         self.stop_button.setEnabled(False)
         self.input_combo.setEnabled(True)
         self.output_combo.setEnabled(True)
@@ -370,16 +448,44 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def start_call_bridge(self) -> None:
-        if self.call_bridge_controller is not None:
+        if self.call_bridge_controller is not None or self._call_bridge_starting:
             return
-        if self.capture.running:
+        if self.capture.running or self._starting:
             self.stop_listening()
         try:
             assignments = self.call_bridge_panel.assignments()
-            synthesizer = getattr(self, "_synthesizer", None)
-            if synthesizer is None:
-                raise RuntimeError("Call bridge requires the local speech synthesizer")
-            synthesizer.validate_voice_files()
+            session = self.call_bridge_session()
+        except Exception as exc:  # noqa: BLE001 - GUI boundary reports setup failures.
+            self._show_error(str(exc))
+            return
+        self._call_bridge_starting = True
+        self._pending_assignments = assignments
+        self.call_bridge_panel.set_models_ready(False)
+        self.start_button.setEnabled(False)
+        self.statusBar().showMessage("Loading the call bridge models …")
+        self._prepare_in_background(session, self.bridge.call_bridge_ready)
+
+    @Slot(int, bool, str)
+    def _call_bridge_ready(self, generation: int, ready: bool, message: str) -> None:
+        if not self._call_bridge_starting or generation != self._start_generation:
+            return
+        self._call_bridge_starting = False
+        assignments, self._pending_assignments = self._pending_assignments, None
+        self.call_bridge_panel.set_models_ready(True)
+        if not ready or assignments is None:
+            self.start_button.setEnabled(True)
+            self._show_error(message or "Call bridge setup was cancelled")
+            return
+        self._begin_call_bridge(assignments)
+
+    def _begin_call_bridge(self, assignments) -> None:
+        try:
+            recognizer = self.pipeline.speech_recognizer()
+            translator = self.pipeline.text_translator()
+            synthesizer = self.pipeline.voice_synthesizer()
+            validate_voice_files = getattr(synthesizer, "validate_voice_files", None)
+            if validate_voice_files is not None:
+                validate_voice_files([Language.GERMAN.id, Language.MANDARIN.id])
             scheduler = InferenceScheduler(max_concurrent=2)
             outbound_playback = EndpointPlaybackStream(
                 assignments[EndpointRole.CALL_MICROPHONE_RENDER]
@@ -389,8 +495,8 @@ class MainWindow(QMainWindow):
                 LaneId.OUTBOUND,
                 Language.GERMAN,
                 Language.MANDARIN,
-                self.pipeline.recognizer,
-                self.pipeline.translator,
+                recognizer,
+                translator,
                 synthesizer,
                 outbound_playback.play,
                 scheduler,
@@ -402,8 +508,8 @@ class MainWindow(QMainWindow):
                 LaneId.INBOUND,
                 Language.MANDARIN,
                 Language.GERMAN,
-                self.pipeline.recognizer,
-                self.pipeline.translator,
+                recognizer,
+                translator,
                 synthesizer,
                 inbound_playback.play,
                 scheduler,
@@ -451,6 +557,7 @@ class MainWindow(QMainWindow):
             controller.start()
         except Exception as exc:  # noqa: BLE001 - GUI boundary reports setup failures.
             self.call_bridge_controller = None
+            self.start_button.setEnabled(True)
             self._show_error(str(exc))
             return
         self.call_bridge_panel.apply_to_config()
@@ -468,8 +575,11 @@ class MainWindow(QMainWindow):
         controller, self.call_bridge_controller = self.call_bridge_controller, None
         if controller is not None and not controller.stop(timeout=10.0):
             self._show_error("Call bridge workers did not stop within the shutdown contract")
+        self._call_bridge_starting = False
+        self._pending_assignments = None
         self.call_bridge_panel.set_running(False)
-        self.start_button.setEnabled(self._models_are_ready)
+        self.call_bridge_panel.set_models_ready(True)
+        self.start_button.setEnabled(not self._starting and not self.capture.running)
         self.mode_combo.setEnabled(True)
         self.input_combo.setEnabled(True)
         self.output_combo.setEnabled(True)
@@ -532,9 +642,6 @@ class MainWindow(QMainWindow):
             return
         try:
             assignments = self.call_bridge_panel.assignments()
-            synthesizer = getattr(self, "_synthesizer", None)
-            if synthesizer is None:
-                raise RuntimeError("Speech synthesizer is unavailable")
             endpoint = assignments[role]
         except Exception as exc:  # noqa: BLE001 - UI validation boundary.
             self._show_error(str(exc))
@@ -549,7 +656,9 @@ class MainWindow(QMainWindow):
             text = "通话麦克风测试。" if language is Language.MANDARIN else "Kopfhörer-Test."
             path = None
             try:
-                path = synthesizer.synthesize(text, language)
+                # Constructed on demand; the voice loads on its first synthesis.
+                synthesizer = self.pipeline.voice_synthesizer()
+                path = synthesizer.synthesize(text, language.id)
                 EndpointPlaybackStream(endpoint).play(path)
                 self.bridge.call_bridge_event.emit(
                     BridgeEvent(None, BridgeEventKind.ENDPOINT, "route_test_passed", role.value)
@@ -599,12 +708,7 @@ class MainWindow(QMainWindow):
     @Slot(bool)
     def _toggle_tts(self, enabled: bool) -> None:
         self.config.voice_output = enabled
-        self.pipeline.synthesizer = (
-            getattr(self, "_synthesizer", self.pipeline.synthesizer) if enabled else None
-        )
-
-    def set_synthesizer_reference(self, synthesizer) -> None:
-        self._synthesizer = synthesizer
+        self.pipeline.set_voice_output(enabled)
 
     @Slot()
     def _swap_direction(self) -> None:

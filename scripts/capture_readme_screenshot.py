@@ -17,13 +17,13 @@ class _ReadyRecognizer:
     device = "cpu"
 
     @staticmethod
-    def warm_up() -> None:
+    def warm_up(_languages=()) -> None:
         return None
 
 
 class _ReadyTranslator:
     @staticmethod
-    def warm_up() -> None:
+    def warm_up(_edges=()) -> None:
         return None
 
 

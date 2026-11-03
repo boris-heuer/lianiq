@@ -2,36 +2,48 @@ from __future__ import annotations
 
 import tempfile
 import wave
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 
-from lianiq.domain import Language
 from lianiq.hardware import resolve_onnx_device
+from lianiq.languages.errors import CapabilityMissingError
+from lianiq.languages.registry import BUILTIN_REGISTRY, LanguageId, LanguageRegistry
+from lianiq.languages.requirements import Requirement, RequirementKind
 
 
 class PiperEngine:
-    """Keeps both Piper voices cached to avoid process and model-load latency."""
+    """Piper voices by language ID, each loaded on first use or by ``warm_up`` and cached.
+
+    A language without a configured voice raises ``CapabilityMissingError``.
+    """
 
     def __init__(
         self,
-        de_voice_path: Path,
-        zh_voice_path: Path,
+        voices: Mapping[str, Path],
         length_scale: float = 1.0,
         device: str = "auto",
+        registry: LanguageRegistry = BUILTIN_REGISTRY,
     ) -> None:
-        self.voices = {
-            Language.GERMAN: de_voice_path,
-            Language.MANDARIN: zh_voice_path,
+        self.registry = registry
+        self.voices: dict[LanguageId, Path] = {
+            registry.get(language).id: path for language, path in voices.items()
         }
         self.length_scale = length_scale
         self.device = resolve_onnx_device(device)
-        self._loaded: dict[Language, object] = {}
+        self._loaded: dict[LanguageId, object] = {}
 
-    def validate_voice_files(
-        self, languages: tuple[Language, ...] = (Language.GERMAN, Language.MANDARIN)
-    ) -> None:
+    def _voice_path(self, language: str) -> tuple[LanguageId, Path]:
+        language_id = self.registry.get(language).id
+        voice_path = self.voices.get(language_id)
+        if voice_path is None:
+            raise CapabilityMissingError(Requirement(RequirementKind.VOICE, language_id))
+        return language_id, voice_path
+
+    def validate_voice_files(self, languages: Iterable[str] | None = None) -> None:
+        """Check voice and metadata files of ``languages`` (default: every configured voice)."""
         missing: list[Path] = []
-        for language in languages:
-            voice_path = self.voices[language]
+        for language in self.voices if languages is None else languages:
+            _language_id, voice_path = self._voice_path(language)
             for required in (voice_path, Path(f"{voice_path}.json")):
                 if not required.is_file():
                     missing.append(required)
@@ -42,33 +54,28 @@ class PiperEngine:
                 f"{paths}. Provision license-reviewed voice and metadata files first."
             )
 
-    def _load(self, language: Language):
-        if language in self._loaded:
-            return self._loaded[language]
-        voice_path = self.voices[language]
-        self.validate_voice_files((language,))
+    def _load(self, language: str):
+        language_id, voice_path = self._voice_path(language)
+        if language_id in self._loaded:
+            return self._loaded[language_id]
+        self.validate_voice_files((language_id,))
         try:
             from piper import PiperVoice
         except ImportError as exc:
             raise RuntimeError("piper-tts is not installed") from exc
         voice = PiperVoice.load(str(voice_path), use_cuda=self.device == "cuda")
-        self._loaded[language] = voice
+        self._loaded[language_id] = voice
         return voice
 
-    def warm_up(self) -> None:
-        samples = {
-            Language.GERMAN: "Hallo.",
-            Language.MANDARIN: "你好。",
-        }
-        for language, text in samples.items():
-            output = self.synthesize(text, language)
+    def warm_up(self, languages: Iterable[str]) -> None:
+        """Run one real synthesis per required voice; the sample is the native name."""
+        for language in languages:
+            output = self.synthesize(self.registry.get(language).native_name, language)
             output.unlink(missing_ok=True)
 
-    def synthesize(self, text: str, language: Language) -> Path:
+    def synthesize(self, text: str, language: str) -> Path:
         voice = self._load(language)
-        with tempfile.NamedTemporaryFile(
-            prefix="lianiq-", suffix=".wav", delete=False
-        ) as handle:
+        with tempfile.NamedTemporaryFile(prefix="lianiq-", suffix=".wav", delete=False) as handle:
             output = Path(handle.name)
         try:
             with wave.open(str(output), "wb") as wav_file:

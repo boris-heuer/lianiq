@@ -14,6 +14,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 from lianiq.languages.errors import SameLanguagePairError
@@ -253,6 +254,15 @@ class CapabilityCatalog:
         }
         voices = {language: Path(path) for language, path in config.tts.voices.items() if path}
         return cls(registry, probe, recognition=recognition, translation=translation, voices=voices)
+
+    # Configured paths without probing readiness; adapters are built from these.
+    def translation_paths(self) -> Mapping[DirectedEdge, Path]:
+        """Every configured directed edge and its resolved model directory."""
+        return MappingProxyType(dict(self._translation))
+
+    def voice_paths(self) -> Mapping[LanguageId, Path]:
+        """Every configured voice by language ID and its resolved voice file."""
+        return MappingProxyType(dict(self._voices))
 
     def recognition(self, language: LanguageId) -> RecognitionCapability:
         language_id = self.registry.get(language).id

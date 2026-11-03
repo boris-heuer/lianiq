@@ -1,23 +1,53 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from pathlib import Path
 
 import numpy as np
 
 from lianiq.config import SpeechToTextConfig
-from lianiq.domain import Language, Transcript
+from lianiq.domain import Transcript
 from lianiq.hardware import ctranslate2_cuda_available, resolve_compute_device
+from lianiq.languages.errors import CapabilityMissingError
+from lianiq.languages.registry import BUILTIN_REGISTRY, LanguageId, LanguageRegistry
+from lianiq.languages.requirements import Requirement, RequirementKind
 
 LOGGER = logging.getLogger(__name__)
 
+WHISPER_ENGINE = "whisper"
+
 
 class FasterWhisperEngine:
-    def __init__(self, config: SpeechToTextConfig, model_path: Path) -> None:
+    """One multilingual Whisper model; language IDs map through registry engine codes.
+
+    Only languages listed in ``speech_to_text.languages`` can be forced; any other raises
+    ``CapabilityMissingError``. A detected Whisper code maps back through the registry;
+    an unregistered code yields ``Transcript.language = None`` and is never guessed.
+    """
+
+    def __init__(
+        self,
+        config: SpeechToTextConfig,
+        model_path: Path,
+        registry: LanguageRegistry = BUILTIN_REGISTRY,
+    ) -> None:
         self.config = config
         self.model_path = model_path
+        self.registry = registry
+        self.languages: tuple[LanguageId, ...] = tuple(
+            registry.get(language).id for language in config.languages
+        )
         self.device = resolve_compute_device(config.device, ctranslate2_cuda_available())
         self._model = None
+
+    def engine_code(self, language: str) -> str:
+        """The Whisper code of a configured recognition language."""
+        definition = self.registry.get(language)
+        code = definition.engine_codes.get(WHISPER_ENGINE)
+        if definition.id not in self.languages or code is None:
+            raise CapabilityMissingError(Requirement(RequirementKind.RECOGNITION, definition.id))
+        return code
 
     def _ensure_loaded(self):
         if self._model is not None:
@@ -45,11 +75,15 @@ class FasterWhisperEngine:
         )
         return self._model
 
-    def warm_up(self) -> None:
+    def warm_up(self, languages: Iterable[str]) -> None:
+        """Load the model and run one silent pass for the first required language."""
+        codes = [self.engine_code(language) for language in languages]
+        if not codes:
+            return
         model = self._ensure_loaded()
         segments, _ = model.transcribe(
             np.zeros(8_000, dtype=np.float32),
-            language="de",
+            language=codes[0],
             beam_size=1,
             best_of=1,
             temperature=0.0,
@@ -59,14 +93,15 @@ class FasterWhisperEngine:
         list(segments)
 
     def transcribe(
-        self, samples: np.ndarray, sample_rate: int, language: Language | None = None
+        self, samples: np.ndarray, sample_rate: int, language: LanguageId | None = None
     ) -> Transcript:
         if sample_rate != 16_000:
             raise ValueError("Faster-Whisper requires 16 kHz audio")
+        forced_code = self.engine_code(language) if language is not None else None
         model = self._ensure_loaded()
         segments, info = model.transcribe(
             np.asarray(samples, dtype=np.float32),
-            language=language.value if language else None,
+            language=forced_code,
             beam_size=self.config.beam_size,
             best_of=1,
             temperature=0.0,
@@ -75,37 +110,19 @@ class FasterWhisperEngine:
             word_timestamps=False,
         )
         text = " ".join(segment.text.strip() for segment in segments).strip()
-        detected = _resolve_detected_language(info.language, text)
+        engine_code = str(getattr(info, "language", "") or "")
         probability = float(getattr(info, "language_probability", 0.0))
+        detected = (
+            self.registry.get(language).id
+            if language is not None
+            else self.registry.from_engine_code(WHISPER_ENGINE, engine_code)
+        )
+        if detected is None:
+            LOGGER.warning("Whisper detected language '%s', which is not registered", engine_code)
         return Transcript(
             text=text,
-            language=language or detected,
+            language=detected,
             probability=probability,
             duration_seconds=len(samples) / sample_rate,
+            engine_language_code=engine_code,
         )
-
-
-def _normalize_language(value: str) -> Language:
-    normalized = value.lower().split("-")[0]
-    if normalized == "de":
-        return Language.GERMAN
-    if normalized in {"zh", "cmn"}:
-        return Language.MANDARIN
-    raise ValueError(f"Detected language is not supported: {value}")
-
-
-def _resolve_detected_language(value: str, text: str) -> Language:
-    try:
-        return _normalize_language(value)
-    except ValueError:
-        inferred = (
-            Language.MANDARIN
-            if any("\u3400" <= character <= "\u9fff" for character in text)
-            else Language.GERMAN
-        )
-        LOGGER.warning(
-            "Whisper detected unsupported language '%s'; inferred '%s' from the transcript",
-            value,
-            inferred.value,
-        )
-        return inferred

@@ -157,8 +157,11 @@ models:
 - Select microphone and speakers before starting.
 - Disable or enable spoken output at any time.
 
-Models are loaded into memory when first needed, so the first request is slower than subsequent
-requests.
+No model is loaded before **Start**. **Start** loads only the models the selected mode needs:
+speech recognition for the spoken language(s), the translation model of each direction in use, and
+voices only when spoken output is on. A missing reverse translation model therefore does not block
+a fixed direction. A turn whose detected language is not German or Mandarin is not translated; the
+status bar names the detected language instead of guessing.
 
 ## Measure latency
 
@@ -197,16 +200,18 @@ naming the setting, and no file is changed. Define domain terminology in
 
 ```json
 {
-  "de-zh": {
+  "de>zh-Hans": {
     "Ryzen AI": "锐龙 AI"
   },
-  "zh-de": {
+  "zh-Hans>de": {
     "人工智能": "artificial intelligence"
   }
 }
 ```
 
-Longer glossary terms are replaced before shorter ones. The pipeline retains the last five
+Glossary sections are keyed by translation direction (`"<source>><target>"` language IDs), and
+terms apply only to their own direction. Older glossaries keyed `de-zh` and `zh-de` still load as
+`de>zh-Hans` and `zh-Hans>de`. Longer glossary terms are replaced before shorter ones. The pipeline retains the last five
 conversation entries. MarianMT translates the current sentence only for predictable latency and
 quality; the context interface allows a later context-aware engine without changing capture or UI
 code.

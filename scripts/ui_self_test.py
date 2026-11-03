@@ -30,17 +30,16 @@ def main() -> int:
     configure_logging(Path("logs"), "INFO")
     QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_UseSoftwareOpenGL)
     application = QApplication(sys.argv)
-    pipeline, synthesizer = build_pipeline(config)
+    pipeline = build_pipeline(config)
     window = MainWindow(config, pipeline, persist_settings=False)
-    window.set_synthesizer_reference(synthesizer)
     window.show()
 
     outcome = {"code": 1}
 
     def submit_probe() -> None:
         try:
-            source_wav = synthesizer.synthesize(
-                "Guten Tag, wie geht es Ihnen?", Language.GERMAN
+            source_wav = pipeline.voice_synthesizer().synthesize(
+                "Guten Tag, wie geht es Ihnen?", Language.GERMAN.id
             )
             try:
                 utterance = read_pcm16_mono(source_wav)
@@ -50,20 +49,17 @@ def main() -> int:
         except Exception as exc:  # noqa: BLE001 - diagnostic boundary reports all failures.
             window.bridge.error.emit(f"UI self-test setup failed: {exc}")
 
-    def on_models_ready(ready: bool, message: str) -> None:
+    def on_session_ready(_generation: int, ready: bool, message: str) -> None:
         if not ready:
             print(f"FAIL model warm-up: {message}", flush=True)
             application.exit(2)
             return
-        print("Models ready; starting microphone and UI pipeline", flush=True)
-        window.mode_combo.setCurrentText("German → Mandarin")
-        window.start_listening()
+        print("Models for the selected mode ready; UI pipeline is listening", flush=True)
         threading.Thread(target=submit_probe, name="ui-self-test-input", daemon=True).start()
 
     def on_result(result: TranslationResult) -> None:
         print(
-            f"PASS UI pipeline: {result.total_seconds:.3f} s, "
-            f"translated={result.translated_text}",
+            f"PASS UI pipeline: {result.total_seconds:.3f} s, translated={result.translated_text}",
             flush=True,
         )
         outcome["code"] = 0
@@ -77,10 +73,13 @@ def main() -> int:
         print("FAIL UI pipeline: timed out", flush=True)
         application.exit(4)
 
-    window.bridge.models_ready.connect(on_models_ready)
+    window.bridge.session_ready.connect(on_session_ready)
     window.bridge.result.connect(on_result)
     window.bridge.error.connect(on_error)
     QTimer.singleShot(TIMEOUT_MS, on_timeout)
+    # Models load on Start, for the selected mode only.
+    window.mode_combo.setCurrentText("German → Mandarin")
+    QTimer.singleShot(0, window.start_listening)
     application.exec()
     window.close()
     return outcome["code"]
