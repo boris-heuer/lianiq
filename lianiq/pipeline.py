@@ -221,6 +221,11 @@ class TranslationPipeline:
             )
             if isinstance(route, HeldTurn):
                 with self._held_lock:
+                    if self._epoch() != epoch:
+                        # The session stopped while this turn ran: its held turns were
+                        # already discarded, so this one is dropped with its audio too.
+                        LOGGER.info("Unclear turn finished after the session stopped; dropped")
+                        return None
                     self._held[route.turn_id] = _RetainedTurn(route, item)
                 LOGGER.info(
                     "Turn held (%s): detected=%s probability=%.3f",
@@ -244,6 +249,11 @@ class TranslationPipeline:
         The turn is claimed before any model runs, so it can no longer be discarded while
         it is resolved; its audio is released when it is translated. On failure the turn
         is held again.
+
+        The context epoch is taken when the turn is claimed. If the session stops (context
+        reset or held-turn discard) before the resolution reaches translation, the
+        resolution is dropped: it returns ``None``, its audio is released and nothing is
+        translated, exactly like an unresolved held turn at **Stop**.
         """
         with self._held_lock:
             retained = self._held.get(held.turn_id)
@@ -253,15 +263,22 @@ class TranslationPipeline:
             if source not in pair:
                 raise UnsupportedModeError(f"{source!r} is not a member of the session pair")
             del self._held[held.turn_id]  # claimed: no longer held, not discardable
+            claimed_epoch = self._epoch()
         item = retained.item
         try:
             with self._turn_lock:
-                epoch = self._epoch()
+                if self._epoch() != claimed_epoch:
+                    LOGGER.info("The session stopped before the held turn was resolved; dropped")
+                    return None
+                epoch = claimed_epoch
                 started = time.perf_counter()
                 transcript = self.speech_recognizer().transcribe(
                     item.utterance.samples, item.utterance.sample_rate, source
                 )
                 stt_seconds = time.perf_counter() - started
+                if self._epoch() != epoch:
+                    LOGGER.info("The session stopped while the held turn was re-recognised")
+                    return None
                 if not transcript.text.strip():
                     LOGGER.info("Forced re-recognition returned no text; the turn was dropped")
                     return None
@@ -274,7 +291,9 @@ class TranslationPipeline:
                 )
         except BaseException:
             with self._held_lock:
-                self._held[held.turn_id] = retained
+                # Held again only within its session; after Stop it is dropped with its audio.
+                if self._epoch() == claimed_epoch:
+                    self._held[held.turn_id] = retained
             raise
 
     def discard(self, held: HeldTurn) -> bool:
@@ -287,10 +306,15 @@ class TranslationPipeline:
             return self._held.pop(held.turn_id, None) is not None
 
     def discard_held(self) -> tuple[HeldTurn, ...]:
-        """Discard every unresolved held turn (session stop); returns them by capture time."""
+        """Discard every unresolved held turn (session stop); returns them by capture time.
+
+        This also ends the context epoch under the held-turn lock, so a resolution that
+        claimed its turn before this call is dropped instead of surviving the stop.
+        """
         with self._held_lock:
             discarded = self._sorted_held()
             self._held.clear()
+            self._end_context_epoch()
         return discarded
 
     def held_turns(self) -> tuple[HeldTurn, ...]:
@@ -306,6 +330,9 @@ class TranslationPipeline:
 
         Never waits for a running turn.
         """
+        self._end_context_epoch()
+
+    def _end_context_epoch(self) -> None:
         with self._context_lock:
             self.context.clear()
             self._context_epoch += 1
@@ -449,8 +476,16 @@ class PipelineRunner:
                 pass
             self.on_error("The audio queue was full; the oldest pending segment was dropped.")
 
-    def resolve(self, held: HeldTurn, source: LanguageId) -> threading.Thread:
-        """Resolve a held turn in the background; the result arrives through ``on_result``."""
+    def resolve(
+        self,
+        held: HeldTurn,
+        source: LanguageId,
+        on_done: Callable[[], None] | None = None,
+    ) -> threading.Thread:
+        """Resolve a held turn in the background; the result arrives through ``on_result``.
+
+        ``on_done`` runs after every outcome (result, dropped or error).
+        """
 
         def run() -> None:
             if self.on_busy:
@@ -465,6 +500,8 @@ class PipelineRunner:
             finally:
                 if self.on_busy:
                     self.on_busy(False)
+                if on_done is not None:
+                    on_done()
 
         thread = threading.Thread(target=run, name="held-turn-resolution", daemon=True)
         thread.start()
@@ -521,19 +558,18 @@ class PipelineRunner:
                 dropped += 1
 
     def _run(self) -> None:
-        while not self._abort.is_set():
-            try:
-                item = self._queue.get(timeout=0.2)
-            except queue.Empty:
-                continue
+        while True:
+            # Taking an item and ``stop``'s abort are atomic: an item taken here is started,
+            # an item still queued at abort is counted in ``stop``'s dropped count. The worker
+            # never drops an item on its own, so ``StopReport.dropped`` is complete. ``stop``
+            # waits at most the 0.2 s poll interval for this lock.
             with self._take_lock:
-                aborted = self._abort.is_set()
-            if aborted:
-                # Taken just before ``stop`` drained the queue: dropped, never started.
-                self._queue.task_done()
-                if item is not None:
-                    self._report_dropped(1)
-                return
+                if self._abort.is_set():
+                    return
+                try:
+                    item = self._queue.get(timeout=0.2)
+                except queue.Empty:
+                    continue
             try:
                 if item is None:
                     return

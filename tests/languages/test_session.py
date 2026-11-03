@@ -379,3 +379,27 @@ def test_ac15_completed_turns_keep_their_languages_after_routing_output_and_pair
         "qab: beta",
         "qaa: [qab>qaa] beta",
     ]
+
+
+def test_ac13_change_raises_pair_locked_error_while_running_and_not_after_stop(tmp_path) -> None:
+    """AC-13 unit: the session pair, routing and output are locked until Stop."""
+    harness = Harness(tmp_path, ScriptedRecognizer([]), voices=(DE, ZH))
+    running = SessionPair(QAA_QAB, MICROPHONE_TEXT)
+    harness.controller.start(running)
+    other_pair = AUTOMATIC
+    other_routing = SessionPair(QAA_QAB, fixed(DE).mode, fixed_source=QAA)
+    other_output = SessionPair(
+        QAA_QAB,
+        UsageMode(InputKind.MICROPHONE, RoutingKind.BIDIRECTIONAL, OutputKind.SPOKEN),
+    )
+
+    for candidate in (other_pair, other_routing, other_output, running):
+        with pytest.raises(PairLockedError, match="Stop the session to change"):
+            harness.controller.change(candidate)
+    assert harness.controller.session == running
+    assert harness.controller.running
+
+    harness.controller.stop()
+    harness.controller.change(other_pair)
+    assert harness.controller.session == other_pair
+    assert not harness.controller.running

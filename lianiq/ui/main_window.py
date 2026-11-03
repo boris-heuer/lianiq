@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import itertools
 import sys
 import threading
 from pathlib import Path
@@ -46,7 +47,7 @@ from lianiq.config import AppConfig
 from lianiq.conversation.routing import HeldTurn
 from lianiq.domain import TranslationResult
 from lianiq.hardware import ctranslate2_cuda_available, resolve_compute_device
-from lianiq.languages.errors import ModeUnavailableError
+from lianiq.languages.errors import LanguageContractError, ModeUnavailableError, PairLockedError
 from lianiq.languages.modes import (
     CALL_BRIDGE_MODE,
     InputKind,
@@ -55,19 +56,19 @@ from lianiq.languages.modes import (
     SessionPair,
     UsageMode,
 )
-from lianiq.languages.registry import LanguageId
-from lianiq.languages.requirements import DeviceReadiness, describe
+from lianiq.languages.registry import Availability, LanguageId, LanguagePair
+from lianiq.languages.requirements import DeviceReadiness, ModeAvailability, check, describe
 from lianiq.languages.session import SessionController, format_transcript_v2
 from lianiq.pipeline import PipelineRunner, TranslationPipeline
+from lianiq.ui import strings
 from lianiq.ui.call_bridge_panel import CallBridgePanel
+from lianiq.ui.held_turn_bar import HeldTurnBar
 
-# Routing choices and their fixed source (None = Automatic). The labels stay as they are
-# until CAP-0169 WI-06 builds them from the selected pair and the registry.
-MODE_LABELS: dict[str, LanguageId | None] = {
-    "Automatic": None,
-    "German → Mandarin": LanguageId("de"),
-    "Mandarin → German": LanguageId("zh-Hans"),
-}
+# ``mode_combo`` item data: a fixed source language ID, or this value for Automatic.
+AUTOMATIC_ROUTING = ""
+ROUTING_CONTROL_LABEL = "Conversation direction"
+# A pair is ready when one of its main-window routings has every model it needs.
+MODELS_ONLY = DeviceReadiness(microphone=True, playback=True)
 # Call Bridge lanes stay German (local) / Mandarin (remote) until CAP-0169 WI-05 derives
 # them from the pair and ``call_bridge.local_language``.
 CALL_BRIDGE_LOCAL = LanguageId("de")
@@ -75,14 +76,10 @@ CALL_BRIDGE_REMOTE = LanguageId("zh-Hans")
 ROUTE_TEST_TEXT = {CALL_BRIDGE_LOCAL: "Kopfhörer-Test.", CALL_BRIDGE_REMOTE: "通话麦克风测试。"}
 
 
-def short_label(language: LanguageId) -> str:
-    """Today's short result label (``DE``, ``ZH``) until WI-06 shows registry names."""
-    return language.split("-", 1)[0].upper()
-
-
 class UiBridge(QObject):
     result = Signal(object)
     held = Signal(object)
+    held_resolved = Signal()
     error = Signal(str)
     busy = Signal(bool)
     level = Signal(float)
@@ -107,6 +104,7 @@ class MainWindow(QMainWindow):
         self.bridge = UiBridge()
         self.bridge.result.connect(self._show_result)
         self.bridge.held.connect(self._show_held)
+        self.bridge.held_resolved.connect(self._held_resolved)
         self.bridge.error.connect(self._show_error)
         self.bridge.busy.connect(self._show_busy)
         self.bridge.level.connect(self._show_level)
@@ -127,11 +125,12 @@ class MainWindow(QMainWindow):
         self._pending_assignments = None
         self._pending_session: SessionPair | None = None
         self._diagnostic_wav: Path | None = None
+        self._ready_pairs: list[LanguagePair] = []
         self._endpoint_monitor = QTimer(self)
         self._endpoint_monitor.setInterval(2_000)
         self._endpoint_monitor.timeout.connect(self._reconcile_call_bridge_endpoints)
 
-        self.setWindowTitle("lianiq · German ↔ Mandarin")
+        self.setWindowTitle("lianiq")
         self.resize(1120, 720)
         self.setMinimumSize(850, 560)
         self._build_ui()
@@ -152,16 +151,18 @@ class MainWindow(QMainWindow):
             on_busy=self.bridge.busy.emit,
             on_held=self.bridge.held.emit,
         )
-        # Device presence is still checked when capture and playback open (as before);
-        # the session gate checks the mode's model requirements.
+        # The session gate checks the mode's models and the enumerated audio devices.
         self.session_controller = SessionController(
             pipeline,
             self.runner,
-            devices=lambda: DeviceReadiness(microphone=True, playback=True),
+            devices=self.device_readiness,
             capture=self.capture,
         )
         self.call_bridge_panel.set_models_ready(True)
-        self.statusBar().showMessage("Models load on Start, only for the selected mode.")
+        self._populate_pairs()
+        self.pair_combo.currentIndexChanged.connect(self._pair_selected)
+        self.mode_combo.currentIndexChanged.connect(self._routing_selected)
+        self._refresh_availability()
         if "--diagnostic-wav" in sys.argv:
             argument_index = sys.argv.index("--diagnostic-wav") + 1
             if argument_index >= len(sys.argv):
@@ -195,41 +196,48 @@ class MainWindow(QMainWindow):
 
         controls = QGridLayout()
         controls.setHorizontalSpacing(10)
-        controls.addWidget(QLabel("Conversation direction"), 0, 0)
+        pair_label = QLabel(strings.PAIR_LABEL)
+        controls.addWidget(pair_label, 0, 0)
+        self.pair_combo = QComboBox()
+        self.pair_combo.setAccessibleName(strings.PAIR_LABEL)
+        pair_label.setBuddy(self.pair_combo)
+        controls.addWidget(self.pair_combo, 1, 0)
+        routing_label = QLabel(ROUTING_CONTROL_LABEL)
+        controls.addWidget(routing_label, 0, 1)
         self.mode_combo = QComboBox()
-        self.mode_combo.addItems(MODE_LABELS)
-        languages = self.config.languages
-        self._select_fixed_source(
-            LanguageId(languages.fixed_source) if languages.routing == "fixed" else None
-        )
-        controls.addWidget(self.mode_combo, 1, 0)
+        self.mode_combo.setAccessibleName(ROUTING_CONTROL_LABEL)
+        routing_label.setBuddy(self.mode_combo)
+        controls.addWidget(self.mode_combo, 1, 1)
 
-        controls.addWidget(QLabel("Microphone"), 0, 1)
+        controls.addWidget(QLabel("Microphone"), 0, 2)
         self.input_combo = QComboBox()
-        controls.addWidget(self.input_combo, 1, 1)
-        controls.addWidget(QLabel("Speakers"), 0, 2)
+        controls.addWidget(self.input_combo, 1, 2)
+        controls.addWidget(QLabel("Speakers"), 0, 3)
         self.output_combo = QComboBox()
-        controls.addWidget(self.output_combo, 1, 2)
+        controls.addWidget(self.output_combo, 1, 3)
 
-        controls.addWidget(QLabel("Model profile"), 0, 3)
+        controls.addWidget(QLabel("Model profile"), 0, 4)
         self.model_combo = QComboBox()
         self.model_combo.addItem("Balanced · Whisper small + MarianMT", "balanced")
         self.model_combo.setToolTip("The installed profile is optimized for this EliteBook.")
-        controls.addWidget(self.model_combo, 1, 3)
+        controls.addWidget(self.model_combo, 1, 4)
 
         self.tts_checkbox = QCheckBox("Voice output")
+        self.tts_checkbox.setAccessibleName("Voice output")
+        # Checked = the saved preference while spoken output is available (see
+        # ``_refresh_availability``); the output is bound to the session at Start.
         self.tts_checkbox.setChecked(self.config.voice_output)
         self.tts_checkbox.toggled.connect(self._toggle_tts)
-        controls.addWidget(self.tts_checkbox, 1, 4)
+        controls.addWidget(self.tts_checkbox, 1, 5)
         self.gpu_checkbox = QCheckBox("CUDA GPU")
         recognition_device = self._recognition_device()
         self.gpu_checkbox.setChecked(recognition_device == "cuda")
         self.gpu_checkbox.setEnabled(False)
         runtime_device = recognition_device.upper()
         self.gpu_checkbox.setToolTip(f"Active inference device: {runtime_device}")
-        controls.addWidget(self.gpu_checkbox, 1, 5)
-        controls.setColumnStretch(1, 2)
+        controls.addWidget(self.gpu_checkbox, 1, 6)
         controls.setColumnStretch(2, 2)
+        controls.setColumnStretch(3, 2)
         layout.addLayout(controls)
 
         action_row = QHBoxLayout()
@@ -256,10 +264,13 @@ class MainWindow(QMainWindow):
         self.call_bridge_panel.route_test_requested.connect(self._run_call_bridge_route_test)
         layout.addWidget(self.call_bridge_panel)
 
+        self.held_turn_bar = HeldTurnBar(self.pipeline.registry)
+        self.held_turn_bar.translate_requested.connect(self._resolve_held)
+        self.held_turn_bar.discard_requested.connect(self._discard_held)
+        layout.addWidget(self.held_turn_bar)
+
         splitter = QSplitter(Qt.Horizontal)
-        source_panel, self.source_text = self._text_panel(
-            "Original", "Speak in German or Mandarin …"
-        )
+        source_panel, self.source_text = self._text_panel("Original", "Speak …")
         target_panel, self.target_text = self._text_panel(
             "Translation", "The translation appears here …"
         )
@@ -351,15 +362,213 @@ class MainWindow(QMainWindow):
 
     def current_fixed_source(self) -> LanguageId | None:
         """The fixed source the routing control selects, or ``None`` for Automatic."""
-        return MODE_LABELS[self.mode_combo.currentText()]
+        data = self.mode_combo.currentData()
+        return LanguageId(data) if data else None
+
+    def current_pair(self) -> LanguagePair | None:
+        """The selected language pair; ``None`` if no ready pair can be selected."""
+        data = self.pair_combo.currentData()
+        return data if isinstance(data, LanguagePair) else None
+
+    def device_readiness(self) -> DeviceReadiness:
+        """Microphone and playback availability from the enumerated audio devices."""
+        return DeviceReadiness(
+            microphone=any(device.inputs for device in self.devices),
+            playback=any(device.outputs for device in self.devices),
+        )
 
     def _select_fixed_source(self, source: LanguageId | None) -> None:
-        self.mode_combo.setCurrentText(next(k for k, v in MODE_LABELS.items() if v == source))
+        found = self.mode_combo.findData(source or AUTOMATIC_ROUTING)
+        self.mode_combo.setCurrentIndex(max(found, 0))
+
+    def _session_locked(self) -> bool:
+        return (
+            self._starting
+            or self.capture.running
+            or self._call_bridge_starting
+            or self.call_bridge_controller is not None
+        )
 
     def _set_session_controls_enabled(self, enabled: bool) -> None:
-        # The session pair is bound at Start (PO decision Q2): routing changes need Stop.
-        self.mode_combo.setEnabled(enabled)
-        self.swap_button.setEnabled(enabled)
+        # Pair, routing and output are bound at Start (AC-13, PO decision Q2): changing
+        # them needs Stop. While locked, the tooltip says why they are disabled.
+        for control in (self.pair_combo, self.mode_combo, self.swap_button, self.tts_checkbox):
+            control.setEnabled(enabled)
+            control.setToolTip("" if enabled else strings.LOCKED_TOOLTIP)
+        if enabled:
+            self._refresh_availability()
+
+    @staticmethod
+    def _conversation_session(
+        pair: LanguagePair, fixed_source: LanguageId | None, output: OutputKind
+    ) -> SessionPair:
+        routing = RoutingKind.BIDIRECTIONAL if fixed_source is None else RoutingKind.FIXED
+        return SessionPair(
+            pair, UsageMode(InputKind.MICROPHONE, routing, output), fixed_source=fixed_source
+        )
+
+    def _describe_missing(self, availability: ModeAvailability) -> str:
+        items = ", ".join(describe(item, self.pipeline.registry) for item in availability.missing)
+        return strings.MODE_UNAVAILABLE.format(items=items)
+
+    def _pair_name(self, pair: LanguagePair) -> str:
+        name = self.pipeline.registry.display_name
+        return strings.PAIR_NAME.format(a=name(pair.first), b=name(pair.second))
+
+    def _pair_ready(self, pair: LanguagePair) -> bool:
+        catalog = self.session_controller.catalog
+        return any(
+            check(
+                self._conversation_session(pair, source, OutputKind.TEXT), catalog, MODELS_ONLY
+            ).available
+            for source in (None, *pair.members)
+        )
+
+    def _populate_pairs(self) -> None:
+        """Ready qualified pairs, then every planned language as a disabled entry (AC-02)."""
+        registry = self.pipeline.registry
+        qualified = [
+            item.id for item in registry.languages() if item.availability is Availability.QUALIFIED
+        ]
+        pairs = [registry.pair(a, b) for a, b in itertools.combinations(qualified, 2)]
+        self._ready_pairs = [pair for pair in pairs if self._pair_ready(pair)]
+        self.pair_combo.blockSignals(True)
+        self.pair_combo.clear()
+        for pair in self._ready_pairs:
+            self.pair_combo.addItem(self._pair_name(pair), pair)
+        if not self._ready_pairs:
+            self._add_disabled_item(self.pair_combo, strings.PAIR_NONE_READY)
+        for item in registry.languages():
+            if item.availability is Availability.PLANNED:
+                self._add_disabled_item(
+                    self.pair_combo, f"{item.english_name} {strings.PAIR_PLANNED_SUFFIX}"
+                )
+        try:
+            configured = registry.pair(*self.config.languages.pair)
+        except LanguageContractError:
+            configured = None  # an unusable saved pair falls back to the first ready one
+        index = self._ready_pairs.index(configured) if configured in self._ready_pairs else 0
+        self.pair_combo.setCurrentIndex(index)
+        self.pair_combo.blockSignals(False)
+        languages = self.config.languages
+        selected = self.current_pair()
+        if selected is not None and selected != configured:
+            languages.pair = list(selected.members)
+            languages.routing, languages.fixed_source = "bidirectional", None
+        fixed = LanguageId(languages.fixed_source) if languages.routing == "fixed" else None
+        self._populate_routing(selected, fixed)
+
+    @staticmethod
+    def _add_disabled_item(combo: QComboBox, text: str) -> None:
+        """A visible entry that cannot be selected; its state is part of its text."""
+        combo.addItem(text, None)
+        item = combo.model().item(combo.count() - 1)
+        item.setEnabled(False)
+        item.setSelectable(False)
+        item.setToolTip(text)
+
+    def _populate_routing(self, pair: LanguagePair | None, fixed_source: LanguageId | None) -> None:
+        """Automatic and both fixed directions of ``pair``, labelled with registry names."""
+        name = self.pipeline.registry.display_name
+        self.mode_combo.blockSignals(True)
+        self.mode_combo.clear()
+        title, placeholder = "lianiq", "Speak …"
+        if pair is not None:
+            self.mode_combo.addItem(
+                strings.ROUTING_AUTOMATIC.format(a=name(pair.first), b=name(pair.second)),
+                AUTOMATIC_ROUTING,
+            )
+            for source in pair.members:
+                label = strings.ROUTING_FIXED.format(
+                    source=name(source), target=name(pair.other(source))
+                )
+                self.mode_combo.addItem(label, source)
+            self._select_fixed_source(fixed_source if fixed_source in pair else None)
+            title = strings.WINDOW_TITLE.format(pair=self._pair_name(pair))
+            placeholder = f"Speak in {name(pair.first)} or {name(pair.second)} …"
+        self.mode_combo.blockSignals(False)
+        self.setWindowTitle(title)
+        self.source_text.setPlaceholderText(placeholder)
+
+    def _refresh_availability(self) -> None:
+        """Drive the routing entries, *Voice output* and **Start** from ``check()``."""
+        if self._session_locked():
+            return
+        pair = self.current_pair()
+        for control in (self.mode_combo, self.swap_button):
+            control.setEnabled(pair is not None)
+        if pair is None:
+            self.start_button.setEnabled(False)
+            self.tts_checkbox.setEnabled(False)
+            self.state_label.setText("Not available")
+            self.statusBar().showMessage(strings.NO_PAIR_READY)
+            return
+        catalog = self.session_controller.catalog
+        devices = self.device_readiness()
+        model = self.mode_combo.model()
+        for index in range(self.mode_combo.count()):
+            data = self.mode_combo.itemData(index)
+            entry = self._conversation_session(
+                pair, LanguageId(data) if data else None, OutputKind.TEXT
+            )
+            availability = check(entry, catalog, devices)
+            item = model.item(index)
+            item.setEnabled(availability.available)
+            item.setToolTip("" if availability.available else self._describe_missing(availability))
+        fixed_source = self.current_fixed_source()
+        text = check(
+            self._conversation_session(pair, fixed_source, OutputKind.TEXT), catalog, devices
+        )
+        spoken = check(
+            self._conversation_session(pair, fixed_source, OutputKind.SPOKEN), catalog, devices
+        )
+        # Voice readiness never makes text output unavailable (IS §7).
+        voice_missing = tuple(item for item in spoken.missing if item not in text.missing)
+        self.tts_checkbox.setEnabled(not voice_missing)
+        self.tts_checkbox.setToolTip(
+            self._describe_missing(ModeAvailability(False, voice_missing)) if voice_missing else ""
+        )
+        self.tts_checkbox.blockSignals(True)
+        self.tts_checkbox.setChecked(self.config.voice_output and not voice_missing)
+        self.tts_checkbox.blockSignals(False)
+        availability = self.session_controller.availability(self.session_pair())
+        self.start_button.setEnabled(availability.available)
+        if availability.available:
+            if self.state_label.text() == "Not available":
+                self.state_label.setText("Ready")
+            self.statusBar().showMessage("Models load on Start, only for the selected mode.")
+        else:
+            self.state_label.setText("Not available")
+            self.statusBar().showMessage(self._describe_missing(availability))
+
+    @Slot(int)
+    def _pair_selected(self, _index: int) -> None:
+        pair = self.current_pair()
+        if pair is None or self._session_locked():
+            return
+        languages = self.config.languages
+        fixed_source = self.current_fixed_source()
+        if fixed_source not in pair:
+            fixed_source = None
+        languages.pair = list(pair.members)
+        languages.routing = "bidirectional" if fixed_source is None else "fixed"
+        languages.fixed_source = fixed_source
+        self._populate_routing(pair, fixed_source)
+        self._selection_changed()
+
+    @Slot(int)
+    def _routing_selected(self, _index: int) -> None:
+        if not self._session_locked():
+            self._selection_changed()
+
+    def _selection_changed(self) -> None:
+        """A stopped selection change selects the next session (``SessionController.change``)."""
+        try:
+            self.session_controller.change(self.session_pair())
+        except PairLockedError:
+            self.statusBar().showMessage(strings.LOCKED_TOOLTIP, 10_000)
+            return
+        self._refresh_availability()
 
     def _recognition_device(self) -> str:
         device = getattr(self.pipeline.recognizer, "device", None)
@@ -372,17 +581,11 @@ class MainWindow(QMainWindow):
 
     def session_pair(self) -> SessionPair:
         """The conversation session the current controls select (microphone input)."""
-        fixed_source = self.current_fixed_source()
-        mode = UsageMode(
-            InputKind.MICROPHONE,
-            RoutingKind.BIDIRECTIONAL if fixed_source is None else RoutingKind.FIXED,
-            OutputKind.SPOKEN if self.tts_checkbox.isChecked() else OutputKind.TEXT,
-        )
-        return SessionPair(
-            self.pipeline.registry.pair(*self.config.languages.pair),
-            mode,
-            fixed_source=fixed_source,
-        )
+        pair = self.current_pair()
+        if pair is None:
+            raise RuntimeError(strings.NO_PAIR_READY)
+        output = OutputKind.SPOKEN if self.tts_checkbox.isChecked() else OutputKind.TEXT
+        return self._conversation_session(pair, self.current_fixed_source(), output)
 
     def call_bridge_session(self) -> SessionPair:
         registry = self.pipeline.registry
@@ -412,8 +615,7 @@ class MainWindow(QMainWindow):
             return  # This Start was stopped or superseded while its models were loading.
         self._starting = False
         session, self._pending_session = self._pending_session, None
-        # Voice output may have been toggled while the models were loading.
-        self.pipeline.set_voice_output(self.tts_checkbox.isChecked())
+        # Voice output is bound at Start: ``prepare`` applied the session's output mode.
         if not ready or session is None:
             self._diagnostic_wav = None
             self.start_button.setEnabled(True)
@@ -464,8 +666,7 @@ class MainWindow(QMainWindow):
         self._prepare_in_background(session, self.bridge.session_ready)
 
     def _show_unavailable(self, missing) -> None:
-        names = ", ".join(describe(item, self.pipeline.registry) for item in missing)
-        self._show_error(f"Not available: missing {names}")
+        self._show_error(self._describe_missing(ModeAvailability(False, tuple(missing))))
 
     def _begin_listening(self, session: SessionPair) -> None:
         try:
@@ -497,6 +698,7 @@ class MainWindow(QMainWindow):
         self._diagnostic_wav = None
         # Queued turns finish with their bound pair; unresolved held turns are discarded.
         report = self.session_controller.stop()
+        self.held_turn_bar.clear()
         self.start_button.setEnabled(not self._call_bridge_starting)
         self.stop_button.setEnabled(False)
         self.input_combo.setEnabled(True)
@@ -743,24 +945,44 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def _show_result(self, result: TranslationResult) -> None:
-        self.source_text.appendPlainText(
-            f"{short_label(result.source_language)}: {result.source_text}\n"
-        )
-        self.target_text.appendPlainText(
-            f"{short_label(result.target_language)}: {result.translated_text}\n"
-        )
-        self.latency_label.setText(f"Processing: {result.total_seconds:.2f} s")
+        name = self.pipeline.registry.display_name
+        source, target = name(result.source_language), name(result.target_language)
+        self.source_text.appendPlainText(f"{source}: {result.source_text}\n")
+        self.target_text.appendPlainText(f"{target}: {result.translated_text}\n")
+        direction = strings.ROUTING_FIXED.format(source=source, target=target)
+        self.latency_label.setText(f"{direction} · Processing: {result.total_seconds:.2f} s")
         self.history.append(result)
 
     @Slot(object)
-    def _show_held(self, held: HeldTurn) -> None:
-        # The held-turn bar (CAP-0169 WI-06) lets the user resolve it; until then it is
-        # reported, never translated, and discarded on Stop.
-        detected = held.transcript.engine_language_code or held.transcript.language or "?"
-        self.statusBar().showMessage(
-            f"Language unclear (detected {detected}); the turn was held and not translated.",
-            15_000,
-        )
+    def _show_held(self, _held: HeldTurn) -> None:
+        # Nothing is translated until the user resolves the turn in the held-turn bar.
+        self._refresh_held_bar()
+
+    def _refresh_held_bar(self) -> None:
+        if self.held_turn_bar.resolving:
+            return  # refreshed when the running resolution reports back
+        session = self.session_controller.session
+        if self.session_controller.running and session is not None:
+            self.held_turn_bar.set_held(self.pipeline.held_turns(), session.pair)
+        else:
+            self.held_turn_bar.clear()
+
+    @Slot(object, str)
+    def _resolve_held(self, held: HeldTurn, language: str) -> None:
+        """Re-recognise the held turn as the chosen language; its result is appended."""
+        self.held_turn_bar.set_resolving(True)
+        self.runner.resolve(held, LanguageId(language), on_done=self.bridge.held_resolved.emit)
+
+    @Slot()
+    def _held_resolved(self) -> None:
+        self.held_turn_bar.set_resolving(False)
+        self._refresh_held_bar()
+
+    @Slot(object)
+    def _discard_held(self, held: HeldTurn) -> None:
+        """Drop the held turn and its audio: no result, no history, no export line."""
+        self.pipeline.discard(held)
+        self._refresh_held_bar()
 
     @Slot(str)
     def _show_error(self, message: str) -> None:
@@ -779,18 +1001,33 @@ class MainWindow(QMainWindow):
 
     @Slot(bool)
     def _toggle_tts(self, enabled: bool) -> None:
+        # The saved preference; a running session keeps the output it was started with.
         self.config.voice_output = enabled
-        self.pipeline.set_voice_output(enabled)
+        self._refresh_availability()
 
     @Slot()
     def _swap_direction(self) -> None:
-        pair = self.pipeline.registry.pair(*self.config.languages.pair)
+        """Fixed source to the other member; Automatic to the first available direction."""
+        pair = self.current_pair()
+        if pair is None or self._session_locked():
+            return
         current = self.current_fixed_source()
-        self._select_fixed_source(pair.first if current is None else pair.other(current))
+        candidates = pair.members if current is None else (pair.other(current),)
+        model = self.mode_combo.model()
+        for source in candidates:
+            index = self.mode_combo.findData(source)
+            if model.item(index).isEnabled():
+                self.mode_combo.setCurrentIndex(index)
+                return
+        unavailable = model.item(self.mode_combo.findData(candidates[0])).toolTip()
+        self.statusBar().showMessage(unavailable, 10_000)
 
     def write_transcript(self, path: Path) -> None:
         """Write the in-memory history as transcript v2 (UTF-8), ordered by capture time."""
-        pair = self.pipeline.registry.pair(*self.config.languages.pair)
+        session = self.session_controller.session
+        pair = session.pair if session is not None else self.current_pair()
+        if pair is None:
+            pair = self.pipeline.registry.pair(*self.config.languages.pair)
         Path(path).write_text(format_transcript_v2(pair, self.history), encoding="utf-8")
 
     @Slot()
@@ -814,7 +1051,8 @@ class MainWindow(QMainWindow):
             self.call_bridge_panel.apply_to_config()
             fixed_source = self.current_fixed_source()
             self.config.languages.routing = "bidirectional" if fixed_source is None else "fixed"
+            # ``config.voice_output`` holds the user's preference, kept even while a
+            # missing voice disables the checkbox.
             self.config.languages.fixed_source = fixed_source
-            self.config.voice_output = self.tts_checkbox.isChecked()
             self.config.save()
         event.accept()

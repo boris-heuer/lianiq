@@ -79,7 +79,7 @@ def main() -> int:
     window.bridge.error.connect(on_error)
     QTimer.singleShot(TIMEOUT_MS, on_timeout)
     # Models load on Start, for the selected mode only.
-    window.mode_combo.setCurrentText("German → Mandarin")
+    window.mode_combo.setCurrentIndex(window.mode_combo.findData(LanguageId("de")))
     QTimer.singleShot(0, window.start_listening)
     application.exec()
     window.close()

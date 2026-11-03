@@ -1,0 +1,153 @@
+"""The held-turn bar (CAP-0169 spec §2.3): resolve a turn whose spoken language is unclear.
+
+A one-line bar of stock widgets: a warning icon, the title, the transcript excerpt (at most
+120 characters, full text in the tooltip), the detected language, one **Translate as**
+button per pair member, **Discard** and the counter "1 of n" when several turns are held.
+Nothing is translated until the user clicks a button; ``Esc`` is deliberately not bound.
+"""
+
+from __future__ import annotations
+
+import itertools
+from collections.abc import Sequence
+
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QStyle
+
+from lianiq.conversation.routing import HeldTurn
+from lianiq.languages.errors import UnknownLanguageError
+from lianiq.languages.registry import LanguageId, LanguagePair, LanguageRegistry
+from lianiq.ui import strings
+
+EXCERPT_LENGTH = 120
+
+
+def excerpt(text: str, limit: int = EXCERPT_LENGTH) -> str:
+    """``text`` shortened to ``limit`` characters with a trailing ellipsis."""
+    text = " ".join(text.split())
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+class HeldTurnBar(QFrame):
+    """Shows the oldest held turn; emits the user's explicit choice for it."""
+
+    translate_requested = Signal(object, str)  # held turn, chosen source language ID
+    discard_requested = Signal(object)  # held turn
+
+    def __init__(self, registry: LanguageRegistry) -> None:
+        super().__init__()
+        self.registry = registry
+        self.setObjectName("heldTurnBar")
+        self.setAccessibleName(strings.HELD_TITLE)
+        self.setFrameShape(QFrame.Shape.StyledPanel)
+        self._turn: HeldTurn | None = None
+        self._resolving = False
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 6, 10, 6)
+        icon = QLabel()
+        icon.setPixmap(
+            self.style().standardIcon(QStyle.StandardPixmap.SP_MessageBoxWarning).pixmap(18, 18)
+        )
+        icon.setAccessibleName("Warning")
+        self.title_label = QLabel(strings.HELD_TITLE)
+        self.title_label.setObjectName("heldTitle")
+        self.transcript_label = QLabel()
+        self.transcript_label.setTextFormat(Qt.TextFormat.PlainText)
+        self.detected_label = QLabel()
+        self.counter_label = QLabel()
+        layout.addWidget(icon)
+        layout.addWidget(self.title_label)
+        layout.addWidget(self.transcript_label, 1)
+        layout.addWidget(self.detected_label)
+        layout.addWidget(self.counter_label)
+        self._button_layout = QHBoxLayout()
+        layout.addLayout(self._button_layout)
+        self.translate_buttons: dict[LanguageId, QPushButton] = {}
+        self.discard_button = QPushButton(strings.HELD_DISCARD)
+        self.discard_button.setAccessibleName(strings.HELD_DISCARD)
+        self.discard_button.clicked.connect(self._discard)
+        layout.addWidget(self.discard_button)
+        self._pair: LanguagePair | None = None
+        self.hide()
+
+    @property
+    def turn(self) -> HeldTurn | None:
+        """The held turn the bar shows, or ``None`` while hidden."""
+        return self._turn
+
+    @property
+    def resolving(self) -> bool:
+        return self._resolving
+
+    def set_held(self, turns: Sequence[HeldTurn], pair: LanguagePair | None) -> None:
+        """Show the oldest of ``turns`` with one button per member of ``pair``; hide if none."""
+        if not turns or pair is None:
+            self.clear()
+            return
+        self._set_pair(pair)
+        turn = turns[0]
+        self._turn = turn
+        text = turn.transcript.text
+        self.transcript_label.setText(f"“{excerpt(text)}”")
+        self.transcript_label.setToolTip(text)
+        self.transcript_label.setAccessibleName(text)
+        detected = self._detected_name(turn)
+        self.detected_label.setText(
+            strings.HELD_DETECTED.format(language=detected) if detected else ""
+        )
+        self.detected_label.setVisible(bool(detected))
+        self.counter_label.setText(strings.HELD_COUNTER.format(index=1, count=len(turns)))
+        self.counter_label.setVisible(len(turns) > 1)
+        self._apply_enabled()
+        self.show()
+
+    def set_resolving(self, resolving: bool) -> None:
+        """Disable the buttons while the chosen re-recognition runs."""
+        self._resolving = resolving
+        self._apply_enabled()
+
+    def clear(self) -> None:
+        self._turn = None
+        self.hide()
+
+    def _set_pair(self, pair: LanguagePair) -> None:
+        if pair == self._pair:
+            return
+        for button in self.translate_buttons.values():
+            self._button_layout.removeWidget(button)
+            button.deleteLater()
+        self.translate_buttons = {}
+        for language in pair.members:
+            text = strings.HELD_TRANSLATE_AS.format(language=self.registry.display_name(language))
+            button = QPushButton(text)
+            button.setAccessibleName(text)
+            button.clicked.connect(lambda _checked=False, chosen=language: self._translate(chosen))
+            self._button_layout.addWidget(button)
+            self.translate_buttons[language] = button
+        self._pair = pair
+        # Tab order: the Translate buttons in pair order, then Discard.
+        buttons = [*self.translate_buttons.values(), self.discard_button]
+        for first, second in itertools.pairwise(buttons):
+            QFrame.setTabOrder(first, second)
+
+    def _detected_name(self, turn: HeldTurn) -> str:
+        language = turn.transcript.language
+        if language is not None:
+            try:
+                return self.registry.display_name(language)
+            except UnknownLanguageError:
+                pass
+        return turn.transcript.engine_language_code
+
+    def _apply_enabled(self) -> None:
+        enabled = self._turn is not None and not self._resolving
+        for button in (*self.translate_buttons.values(), self.discard_button):
+            button.setEnabled(enabled)
+
+    def _translate(self, language: LanguageId) -> None:
+        if self._turn is not None and not self._resolving:
+            self.translate_requested.emit(self._turn, language)
+
+    def _discard(self) -> None:
+        if self._turn is not None and not self._resolving:
+            self.discard_requested.emit(self._turn)
