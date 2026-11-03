@@ -9,11 +9,10 @@ import numpy as np
 
 from lianiq.app import build_pipeline
 from lianiq.config import AppConfig
-from lianiq.config_migration import languages_from_legacy_mode
 from lianiq.conversation.routing import HeldTurn
 from lianiq.domain import AudioUtterance
 from lianiq.languages.modes import InputKind, OutputKind, RoutingKind, SessionPair, UsageMode
-from lianiq.languages.registry import LanguageId
+from lianiq.languages.registry import LanguageRegistry
 from lianiq.pipeline import bind_utterance
 
 
@@ -25,10 +24,33 @@ def read_wav(path: Path) -> AudioUtterance:
     return AudioUtterance(samples.astype(np.float32) / 32768.0, 16_000)
 
 
+def benchmark_session(
+    registry: LanguageRegistry, config: AppConfig, source: str | None
+) -> SessionPair:
+    """Automatic routing within the configured pair, or the fixed direction from ``source``."""
+    fixed_source = None if source is None else registry.get(source).id
+    return SessionPair(
+        registry.pair(*config.languages.pair),
+        UsageMode(
+            InputKind.MICROPHONE,
+            RoutingKind.BIDIRECTIONAL if fixed_source is None else RoutingKind.FIXED,
+            OutputKind.SPOKEN if config.voice_output else OutputKind.TEXT,
+        ),
+        fixed_source=fixed_source,
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Measure local end-to-end processing time.")
     parser.add_argument("wav", type=Path)
-    parser.add_argument("--mode", choices=("auto", "de-zh", "zh-de"), default="auto")
+    parser.add_argument(
+        "--source",
+        metavar="LANGUAGE_ID",
+        help=(
+            "Spoken language ID of the WAV, e.g. de or zh-Hans (fixed direction to the other "
+            "language of the configured pair). Default: automatic detection within the pair."
+        ),
+    )
     parser.add_argument("--without-tts", action="store_true")
     args = parser.parse_args()
 
@@ -36,16 +58,7 @@ def main() -> int:
     if args.without_tts:
         config.voice_output = False
     pipeline = build_pipeline(config)
-    routing, fixed_source = languages_from_legacy_mode(args.mode)
-    session = SessionPair(
-        pipeline.registry.pair(*config.languages.pair),
-        UsageMode(
-            InputKind.MICROPHONE,
-            RoutingKind(routing),
-            OutputKind.SPOKEN if config.voice_output else OutputKind.TEXT,
-        ),
-        fixed_source=LanguageId(fixed_source) if fixed_source else None,
-    )
+    session = benchmark_session(pipeline.registry, config, args.source)
     utterance = read_wav(args.wav)
     started = time.perf_counter()
     result = pipeline.process(bind_utterance(utterance, session))
