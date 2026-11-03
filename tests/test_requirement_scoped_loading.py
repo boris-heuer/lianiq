@@ -18,7 +18,6 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import lianiq.app as app_module
 from lianiq.app import build_pipeline
 from lianiq.config import AppConfig, TranslationEdgeConfig
-from lianiq.domain import Language
 from lianiq.languages import (
     BUILTIN_REGISTRY,
     CapabilityMissingError,
@@ -124,6 +123,14 @@ def config_without_stt_and_voices(root: Path, *, reverse_edge: bool = True) -> A
     return config
 
 
+def provision_stt_and_voices(root: Path, config: AppConfig) -> None:
+    """Put the STT model and both voices on disk so the session start gate passes."""
+    config.speech_to_text.model_path = str(model_dir(root, "faster-whisper-small"))
+    for voice in config.tts.voices.values():
+        Path(voice).parent.mkdir(parents=True, exist_ok=True)
+        Path(voice).write_bytes(b"voice")
+
+
 def session(input_kind, routing, output, fixed_source=None) -> SessionPair:
     return SessionPair(PAIR, UsageMode(input_kind, routing, output), fixed_source=fixed_source)
 
@@ -153,10 +160,7 @@ def test_ac05_typed_fixed_text_translates_without_recogniser_or_synthesiser(
 
     assert result is not None
     assert result.translated_text == "[de>zh-Hans] Guten Tag"
-    assert (result.source_language, result.target_language) == (
-        Language.GERMAN,
-        Language.MANDARIN,
-    )
+    assert (result.source_language, result.target_language) == (DE, ZH)
     assert spies.constructed == ["translator"]
     assert spies.translator.warmed_edges == ["de>zh-Hans"]  # one MT model
     assert spies.translator.calls == [("Guten Tag", "de>zh-Hans", ())]
@@ -239,29 +243,35 @@ def test_real_marian_adapter_refuses_an_unconfigured_edge(tmp_path) -> None:
         translator.translate("你好", PAIR_EDGE.reversed())
 
 
+def build_window(tmp_path: Path, monkeypatch, *, provisioned: bool = True):
+    """A shown MainWindow over spy adapters; ``provisioned`` puts STT and voices on disk."""
+    pytest.importorskip("PySide6")
+    from PySide6.QtWidgets import QApplication
+
+    import lianiq.ui.main_window as main_window_module
+    from lianiq.audio.endpoints import EndpointInventory
+
+    QApplication.instance() or QApplication([])
+    monkeypatch.setattr(main_window_module, "list_audio_devices", list)
+    monkeypatch.setattr(main_window_module, "list_audio_endpoints", lambda: EndpointInventory([]))
+    capture = main_window_module.MicrophoneCapture
+    monkeypatch.setattr(capture, "start", lambda self: setattr(self, "_stream", object()))
+    monkeypatch.setattr(capture, "stop", lambda self: setattr(self, "_stream", None))
+    config = config_without_stt_and_voices(tmp_path)
+    if provisioned:
+        provision_stt_and_voices(tmp_path, config)
+    pipeline = build_pipeline(config, probe=ReadinessProbe(tmp_path))
+    window = main_window_module.MainWindow(config, pipeline, persist_settings=False)
+    window.show()
+    return window
+
+
 class TestMainWindowLoadsOnlyOnStart:
     """AC-20: no model loads before Start; Start loads only mode-required adapters."""
 
     @pytest.fixture
     def window(self, tmp_path, spies, monkeypatch):
-        pytest.importorskip("PySide6")
-        from PySide6.QtWidgets import QApplication
-
-        import lianiq.ui.main_window as main_window_module
-        from lianiq.audio.endpoints import EndpointInventory
-
-        QApplication.instance() or QApplication([])
-        monkeypatch.setattr(main_window_module, "list_audio_devices", list)
-        monkeypatch.setattr(
-            main_window_module, "list_audio_endpoints", lambda: EndpointInventory([])
-        )
-        capture = main_window_module.MicrophoneCapture
-        monkeypatch.setattr(capture, "start", lambda self: setattr(self, "_stream", object()))
-        monkeypatch.setattr(capture, "stop", lambda self: setattr(self, "_stream", None))
-        config = config_without_stt_and_voices(tmp_path)
-        pipeline = build_pipeline(config, probe=ReadinessProbe(tmp_path))
-        window = main_window_module.MainWindow(config, pipeline, persist_settings=False)
-        window.show()
+        window = build_window(tmp_path, monkeypatch)
         yield window
         window.close()
 

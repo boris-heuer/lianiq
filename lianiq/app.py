@@ -7,6 +7,7 @@ import sys
 from lianiq.audio.playback import play_wav
 from lianiq.config import PROJECT_ROOT, AppConfig
 from lianiq.config_migration import SettingsMigrationError
+from lianiq.conversation.routing import TurnRouter
 from lianiq.languages.capabilities import CapabilityCatalog, ReadinessProbe
 from lianiq.languages.registry import BUILTIN_REGISTRY, LanguageRegistry
 from lianiq.logging_setup import configure_logging
@@ -56,6 +57,7 @@ def build_pipeline(
         playback=play_wav,
         context_sentences=config.translation.context_sentences,
         output_device=config.audio.output_device,
+        turn_router=TurnRouter(config.languages.detection_min_probability),
         factories=AdapterFactories(recognizer, translator, synthesizer),
         registry=registry,
         catalog=catalog,

@@ -1,7 +1,7 @@
-"""Language pair contract: registry, directed capabilities, usage modes and requirements.
+"""Language pair contract: registry, capabilities, usage modes, requirements and sessions.
 
-See ``docs/products/lianiq/capabilities/language-pair-contract/contract.md`` §3.1.1-§3.1.4
-and §3.1.8 in ``boris-heuer/app-shared``.
+See ``docs/products/lianiq/capabilities/language-pair-contract/contract.md`` §3.1.1-§3.1.4,
+§3.1.7 (session lifecycle, export v2) and §3.1.8 in ``boris-heuer/app-shared``.
 """
 
 from lianiq.languages.capabilities import (
@@ -51,11 +51,18 @@ from lianiq.languages.requirements import (
     describe,
     requirements,
 )
+from lianiq.languages.session import (
+    TRANSCRIPT_V2_HEADER,
+    SessionController,
+    StopReport,
+    format_transcript_v2,
+)
 
 __all__ = [
     "BUILTIN_LANGUAGES",
     "BUILTIN_REGISTRY",
     "CALL_BRIDGE_MODE",
+    "TRANSCRIPT_V2_HEADER",
     "Availability",
     "CapabilityCatalog",
     "CapabilityMissingError",
@@ -79,8 +86,10 @@ __all__ = [
     "RequirementKind",
     "RoutingKind",
     "SameLanguagePairError",
+    "SessionController",
     "SessionPair",
     "SettingsMigrationError",
+    "StopReport",
     "TranslationCapability",
     "UnknownLanguageError",
     "UnsupportedModeError",
@@ -88,6 +97,7 @@ __all__ = [
     "VoiceCapability",
     "check",
     "describe",
+    "format_transcript_v2",
     "normalize_language_id",
     "requirements",
 ]

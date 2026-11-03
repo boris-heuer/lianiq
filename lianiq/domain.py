@@ -1,54 +1,18 @@
+"""Turn data shared by the conversation pipeline, the Call Bridge and the UI.
+
+Languages are registry ``LanguageId`` values (CAP-0169 contract.md §3.1.5 and §3.1.7);
+there is no language enum and no conversation-mode enum.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from datetime import datetime
+from uuid import UUID
 
 import numpy as np
 
 from lianiq.languages.registry import LanguageId
-
-
-class Language(str, Enum):
-    GERMAN = "de"
-    MANDARIN = "zh"
-
-    @property
-    def other(self) -> Language:
-        return Language.MANDARIN if self is Language.GERMAN else Language.GERMAN
-
-    # Transitional bridge to registry language IDs while routing, results and the UI
-    # still use this enum (removed with it by CAP-0169 WI-04). Adapters take IDs only.
-    @property
-    def id(self) -> LanguageId:
-        return _LANGUAGE_IDS[self]
-
-    @classmethod
-    def from_id(cls, language_id: str | None) -> Language | None:
-        """The enum member for a registry ID, or ``None`` for any other ID (no guessing)."""
-        for member, member_id in _LANGUAGE_IDS.items():
-            if language_id == member_id:
-                return member
-        return None
-
-
-_LANGUAGE_IDS: dict[Language, LanguageId] = {
-    Language.GERMAN: LanguageId("de"),
-    Language.MANDARIN: LanguageId("zh-Hans"),
-}
-
-
-class ConversationMode(str, Enum):
-    AUTO = "auto"
-    DE_TO_ZH = "de-zh"
-    ZH_TO_DE = "zh-de"
-
-    @property
-    def forced_source(self) -> Language | None:
-        if self is ConversationMode.DE_TO_ZH:
-            return Language.GERMAN
-        if self is ConversationMode.ZH_TO_DE:
-            return Language.MANDARIN
-        return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,10 +32,14 @@ class Transcript:
 
 @dataclass(frozen=True, slots=True)
 class TranslationResult:
+    """One completed turn; its languages never change after it was produced."""
+
+    turn_id: UUID
+    captured_at: datetime
     source_text: str
     translated_text: str
-    source_language: Language
-    target_language: Language
+    source_language: LanguageId
+    target_language: LanguageId
     stt_seconds: float
     translation_seconds: float
     tts_seconds: float = 0.0

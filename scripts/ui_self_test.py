@@ -11,7 +11,8 @@ os.environ.setdefault("QT_QUICK_BACKEND", "software")
 from lianiq.app import build_pipeline
 from lianiq.audio.wav import read_pcm16_mono
 from lianiq.config import AppConfig
-from lianiq.domain import Language, TranslationResult
+from lianiq.domain import TranslationResult
+from lianiq.languages.registry import LanguageId
 from lianiq.logging_setup import configure_logging
 
 TIMEOUT_MS = 90_000
@@ -39,7 +40,7 @@ def main() -> int:
     def submit_probe() -> None:
         try:
             source_wav = pipeline.voice_synthesizer().synthesize(
-                "Guten Tag, wie geht es Ihnen?", Language.GERMAN.id
+                "Guten Tag, wie geht es Ihnen?", LanguageId("de")
             )
             try:
                 utterance = read_pcm16_mono(source_wav)

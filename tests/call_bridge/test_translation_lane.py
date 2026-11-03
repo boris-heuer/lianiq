@@ -9,7 +9,11 @@ import numpy as np
 from lianiq.call_bridge.contracts import BridgeEventKind, LaneId
 from lianiq.call_bridge.inference_scheduler import InferenceScheduler
 from lianiq.call_bridge.translation_lane import TranslationLane
-from lianiq.domain import AudioUtterance, Language, Transcript
+from lianiq.domain import AudioUtterance, Transcript
+from lianiq.languages.registry import LanguageId
+
+GERMAN = LanguageId("de")
+MANDARIN = LanguageId("zh-Hans")
 
 
 class Recognizer:
@@ -37,8 +41,8 @@ def test_lane_has_fixed_direction_and_preserves_order() -> None:
     results = []
     lane = TranslationLane(
         lane_id=LaneId.OUTBOUND,
-        source_language=Language.GERMAN,
-        target_language=Language.MANDARIN,
+        source_language=GERMAN,
+        target_language=MANDARIN,
         recognizer=Recognizer(),
         translator=Translator(),
         synthesizer=Synthesizer(),
@@ -54,7 +58,7 @@ def test_lane_has_fixed_direction_and_preserves_order() -> None:
     assert lane.stop(timeout=1.0)
 
     assert [result.source_text for result in results] == ["1", "2"]
-    assert [result.source_language for result in results] == [Language.GERMAN] * 2
+    assert [result.source_language for result in results] == [GERMAN] * 2
     assert played == ["zh-Hans-zh-Hans:1.wav", "zh-Hans-zh-Hans:2.wav"]
 
 
@@ -68,8 +72,8 @@ def test_failed_synthesis_never_reaches_playback() -> None:
 
     lane = TranslationLane(
         lane_id=LaneId.INBOUND,
-        source_language=Language.MANDARIN,
-        target_language=Language.GERMAN,
+        source_language=MANDARIN,
+        target_language=GERMAN,
         recognizer=Recognizer(),
         translator=Translator(),
         synthesizer=FailingSynthesizer(),
@@ -97,8 +101,8 @@ def test_playback_failure_is_sanitized_and_classified_for_endpoint_muting() -> N
 
     lane = TranslationLane(
         lane_id=LaneId.OUTBOUND,
-        source_language=Language.GERMAN,
-        target_language=Language.MANDARIN,
+        source_language=GERMAN,
+        target_language=MANDARIN,
         recognizer=Recognizer(),
         translator=Translator(),
         synthesizer=Synthesizer(),
@@ -127,8 +131,8 @@ def test_stale_and_overflow_work_is_dropped_and_reported() -> None:
 
     lane = TranslationLane(
         lane_id=LaneId.OUTBOUND,
-        source_language=Language.GERMAN,
-        target_language=Language.MANDARIN,
+        source_language=GERMAN,
+        target_language=MANDARIN,
         recognizer=BlockingRecognizer(),
         translator=Translator(),
         synthesizer=Synthesizer(),
@@ -164,8 +168,8 @@ def test_stop_during_inference_mutes_late_output() -> None:
 
     lane = TranslationLane(
         lane_id=LaneId.OUTBOUND,
-        source_language=Language.GERMAN,
-        target_language=Language.MANDARIN,
+        source_language=GERMAN,
+        target_language=MANDARIN,
         recognizer=BlockingRecognizer(),
         translator=Translator(),
         synthesizer=Synthesizer(),

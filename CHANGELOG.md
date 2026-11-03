@@ -23,6 +23,14 @@ All notable user-visible changes are documented here.
   instead of using another model. A turn in a language outside German/Mandarin is reported and not
   translated; the script-based language guess was removed. `config/glossary.json` is keyed by
   direction (`de>zh-Hans`, `zh-Hans>de`); legacy `de-zh`/`zh-de` keys still load.
+- A conversation session keeps the language pair and routing selected at **Start**: the routing
+  control and *Switch direction* are disabled until **Stop**, and **Start** is refused with
+  "Not available: missing …" when a model the mode needs is missing. Automatic routes each turn
+  only to a detected German or Mandarin language at or above `languages.detection_min_probability`
+  (0.7); any other turn is held, not translated, and discarded on **Stop**. **Stop** finishes the
+  already-queued turns with their original languages and clears the translation context.
+  **Export transcript** writes format v2 (`# lianiq transcript v2`, language IDs per turn, ordered
+  by capture time).
 - Renamed the product, repository metadata, Python package, command, Windows executable, and
   documentation to `lianiq`.
 
