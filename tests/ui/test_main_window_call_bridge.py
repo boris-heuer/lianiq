@@ -91,6 +91,10 @@ def build_call_bridge_window(tmp_path, monkeypatch, *, local_language: str = DE)
     monkeypatch.setattr(main_window_module, "list_audio_endpoints", lambda: inventory)
     monkeypatch.setattr(main_window_module, "EndpointCaptureStream", FakeCaptureStream)
     monkeypatch.setattr(main_window_module, "EndpointPlaybackStream", FakePlaybackStream)
+    # No real microphone: conversation capture is faked as in build_window().
+    capture = main_window_module.MicrophoneCapture
+    monkeypatch.setattr(capture, "start", lambda self: setattr(self, "_stream", object()))
+    monkeypatch.setattr(capture, "stop", lambda self: setattr(self, "_stream", None))
     FakeCaptureStream.instances = []
     FakePlaybackStream.played = []
     config = config_without_stt_and_voices(tmp_path)
