@@ -243,16 +243,22 @@ def test_real_marian_adapter_refuses_an_unconfigured_edge(tmp_path) -> None:
         translator.translate("你好", PAIR_EDGE.reversed())
 
 
-def build_window(tmp_path: Path, monkeypatch, *, provisioned: bool = True):
-    """A shown MainWindow over spy adapters; ``provisioned`` puts STT and voices on disk."""
+def build_window(tmp_path: Path, monkeypatch, *, provisioned: bool = True, configure=None):
+    """A shown MainWindow over spy adapters; ``provisioned`` puts STT and voices on disk.
+
+    ``configure(config, root)`` adjusts the settings and files before the catalog is built.
+    """
     pytest.importorskip("PySide6")
     from PySide6.QtWidgets import QApplication
 
     import lianiq.ui.main_window as main_window_module
+    from lianiq.audio.devices import AudioDevice
     from lianiq.audio.endpoints import EndpointInventory
 
     QApplication.instance() or QApplication([])
-    monkeypatch.setattr(main_window_module, "list_audio_devices", list)
+    # One microphone and one speaker, so the device requirements of every mode are met.
+    devices = [AudioDevice(0, "Test microphone", 1, 0), AudioDevice(1, "Test speakers", 0, 2)]
+    monkeypatch.setattr(main_window_module, "list_audio_devices", lambda: list(devices))
     monkeypatch.setattr(main_window_module, "list_audio_endpoints", lambda: EndpointInventory([]))
     capture = main_window_module.MicrophoneCapture
     monkeypatch.setattr(capture, "start", lambda self: setattr(self, "_stream", object()))
@@ -260,6 +266,8 @@ def build_window(tmp_path: Path, monkeypatch, *, provisioned: bool = True):
     config = config_without_stt_and_voices(tmp_path)
     if provisioned:
         provision_stt_and_voices(tmp_path, config)
+    if configure is not None:
+        configure(config, tmp_path)
     pipeline = build_pipeline(config, probe=ReadinessProbe(tmp_path))
     window = main_window_module.MainWindow(config, pipeline, persist_settings=False)
     window.show()
@@ -288,9 +296,15 @@ class TestMainWindowLoadsOnlyOnStart:
     @pytest.mark.parametrize(
         ("mode_label", "spoken", "recognition", "edges", "voices"),
         [
-            ("Automatic", False, ["de", "zh-Hans"], ["de>zh-Hans", "zh-Hans>de"], None),
-            ("German → Mandarin", False, ["de"], ["de>zh-Hans"], None),
-            ("Mandarin → German", True, ["zh-Hans"], ["zh-Hans>de"], ["de"]),
+            (
+                "Automatic (German ↔ Mandarin (Simplified))",
+                False,
+                ["de", "zh-Hans"],
+                ["de>zh-Hans", "zh-Hans>de"],
+                None,
+            ),
+            ("German → Mandarin (Simplified)", False, ["de"], ["de>zh-Hans"], None),
+            ("Mandarin (Simplified) → German", True, ["zh-Hans"], ["zh-Hans>de"], ["de"]),
         ],
     )
     def test_ac20_start_warms_only_the_started_modes_requirements(
@@ -319,17 +333,27 @@ class TestMainWindowLoadsOnlyOnStart:
         window.stop_listening()
 
     @pytest.mark.parametrize("spoken", [False, True])
-    def test_voice_output_toggled_while_models_load_is_applied(self, window, spies, spoken) -> None:
-        window.mode_combo.setCurrentText("German → Mandarin")
+    def test_voice_output_is_bound_at_start_and_locked_while_models_load(
+        self, window, spies, spoken
+    ) -> None:
+        # CAP-0169 AC-13 (WI-04 review F6): Voice output is part of the session bound at
+        # Start; it is disabled while the models load and while the session runs.
+        window.mode_combo.setCurrentText("German → Mandarin (Simplified)")
         window.tts_checkbox.setChecked(spoken)
         spies.release_warm_up.clear()
         window.start_listening()
-        window.tts_checkbox.setChecked(not spoken)
+        assert not window.tts_checkbox.isEnabled()
+        assert window.tts_checkbox.toolTip() == "Stop the session to change language pair or mode"
+        window.tts_checkbox.setChecked(not spoken)  # a programmatic toggle changes nothing
         spies.release_warm_up.set()
 
         assert self.wait_until(lambda: window.capture.running)
-        assert window.pipeline.voice_output is (not spoken)
+        assert window.pipeline.voice_output is spoken
+        expected = OutputKind.SPOKEN if spoken else OutputKind.TEXT
+        assert window.session_controller.session.mode.output is expected
+        assert not window.tts_checkbox.isEnabled()
         window.stop_listening()
+        assert window.tts_checkbox.isEnabled()
 
     def test_a_stopped_start_never_starts_capture_for_the_next_start(self, window, spies) -> None:
         spies.failing_warm_up_calls = {2}
@@ -337,7 +361,7 @@ class TestMainWindowLoadsOnlyOnStart:
         window.start_listening()  # Start A; its warm-up blocks
         assert self.wait_until(lambda: spies.translator is not None)
         window.stop_listening()
-        window.mode_combo.setCurrentText("German → Mandarin")
+        window.mode_combo.setCurrentText("German → Mandarin (Simplified)")
         window.start_listening()  # Start B; its warm-up fails
         spies.release_warm_up.set()
 

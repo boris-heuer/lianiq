@@ -1,7 +1,8 @@
 """MainWindow session wiring (CAP-0169 WI-04): start gate, bound pair, Stop, export v2.
 
-The held-turn bar, pair control and lock tooltips are WI-06; these tests drive the
-existing controls with pytest-qt style offscreen clicks over spy adapters.
+WI-06 adds the pair control, lock tooltips and held-turn bar
+(``test_main_window_languages.py``); these tests drive the controls with pytest-qt style
+offscreen clicks over spy adapters.
 """
 
 from __future__ import annotations
@@ -57,21 +58,21 @@ def test_start_is_refused_and_loads_nothing_when_the_mode_is_unavailable(
     unprovisioned_window,
     spies,  # noqa: F811
 ) -> None:
-    window = unprovisioned_window
+    window = unprovisioned_window  # no speech recognition model: no routing is available
 
     click(window.start_button)
+    window.start_listening()  # also refused when invoked directly (F8, diagnostics)
 
     assert window.statusBar().currentMessage() == (
-        "Not available: missing speech recognition German, speech recognition Mandarin (Simplified)"
+        "No language pair is ready. Provision languages first (Language readiness)."
     )
     assert spies.constructed == []
     assert not window.capture.running
-    assert window.start_button.isEnabled()
-    assert window.mode_combo.isEnabled() and window.swap_button.isEnabled()
+    assert not window.start_button.isEnabled()
 
 
 def test_routing_is_bound_at_start_and_released_by_stop(window, spies) -> None:  # noqa: F811
-    window.mode_combo.setCurrentText("Mandarin → German")
+    window.mode_combo.setCurrentText("Mandarin (Simplified) → German")
     click(window.start_button)
     assert wait_until(lambda: window.capture.running)
 
@@ -98,9 +99,7 @@ def test_turns_show_results_and_export_v2_after_stop(window, spies, tmp_path) ->
     window.runner.submit(AUDIO)
     assert wait_until(lambda: len(window.history) == 1)
     window.runner.submit(AUDIO)
-    assert wait_until(
-        lambda: "Language unclear (detected en)" in window.statusBar().currentMessage()
-    )
+    assert wait_until(lambda: window.held_turn_bar.isVisible())
     assert len(window.pipeline.held_turns()) == 1
     assert len(window.history) == 1  # a held turn is never translated
 
@@ -110,8 +109,11 @@ def test_turns_show_results_and_export_v2_after_stop(window, spies, tmp_path) ->
         "Capture stopped; 1 turn(s) with an unclear language were discarded"
     )
     assert window.pipeline.held_turns() == ()
-    assert window.source_text.toPlainText().strip() == "DE: Guten Tag"
-    assert window.target_text.toPlainText().strip() == "ZH: [de>zh-Hans] Guten Tag"
+    assert not window.held_turn_bar.isVisible()
+    assert window.source_text.toPlainText().strip() == "German: Guten Tag"
+    assert window.target_text.toPlainText().strip() == (
+        "Mandarin (Simplified): [de>zh-Hans] Guten Tag"
+    )
     path = tmp_path / "transcript.txt"
     window.write_transcript(path)
     lines = path.read_text(encoding="utf-8").splitlines()

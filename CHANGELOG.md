@@ -31,6 +31,15 @@ All notable user-visible changes are documented here.
   already-queued turns with their original languages and clears the translation context.
   **Export transcript** writes format v2 (`# lianiq transcript v2`, language IDs per turn, ordered
   by capture time).
+- The main window has a *Language pair* control: ready pairs are selectable, and English, Spanish
+  and French are listed as "planned, unavailable". Routing entries, results and the window title
+  use language names instead of `DE`/`ZH`. Unavailable routing entries and *Voice output* are
+  disabled with a tooltip naming the missing model, voice or device, and **Start** is disabled
+  with the reason in the status bar (or "No language pair is ready …" when no pair has its
+  models). While a session runs, *Language pair*, routing, *Switch direction* and *Voice output*
+  are disabled until **Stop**. A turn with an unclear language shows a held-turn bar with
+  **Translate as** one of the pair languages or **Discard**; later turns keep flowing, and
+  **Stop** discards unresolved turns.
 - Renamed the product, repository metadata, Python package, command, Windows executable, and
   documentation to `lianiq`.
 
