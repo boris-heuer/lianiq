@@ -17,6 +17,12 @@ All notable user-visible changes are documented here.
   models as directed `translation.edges`, voices in `tts.voices` by language ID, and
   `call_bridge.local_language`. Existing settings migrate without loss on load, and the first save
   keeps the original `config/settings.local.json` once as `config/settings.local.v1.json`.
+- Models load on **Start**, only for the selected mode: no model loads at application start,
+  text output never loads a voice, and a fixed direction loads only its own recognition and
+  translation models. A missing reverse translation model raises an error naming that direction
+  instead of using another model. A turn in a language outside German/Mandarin is reported and not
+  translated; the script-based language guess was removed. `config/glossary.json` is keyed by
+  direction (`de>zh-Hans`, `zh-Hans>de`); legacy `de-zh`/`zh-de` keys still load.
 - Renamed the product, repository metadata, Python package, command, Windows executable, and
   documentation to `lianiq`.
 

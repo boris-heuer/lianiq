@@ -19,13 +19,13 @@ class Recognizer:
 
 
 class Translator:
-    def translate(self, text, source, target, context=()):
-        return f"{target.value}:{text}"
+    def translate(self, text, edge, context=()):
+        return f"{edge.target}:{text}"
 
 
 class Synthesizer:
     def synthesize(self, text, language):
-        return Path(f"{language.value}-{text}.wav")
+        return Path(f"{language}-{text}.wav")
 
 
 def utterance(marker: int) -> AudioUtterance:
@@ -55,7 +55,7 @@ def test_lane_has_fixed_direction_and_preserves_order() -> None:
 
     assert [result.source_text for result in results] == ["1", "2"]
     assert [result.source_language for result in results] == [Language.GERMAN] * 2
-    assert played == ["zh-zh:1.wav", "zh-zh:2.wav"]
+    assert played == ["zh-Hans-zh-Hans:1.wav", "zh-Hans-zh-Hans:2.wav"]
 
 
 def test_failed_synthesis_never_reaches_playback() -> None:

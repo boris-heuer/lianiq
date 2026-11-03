@@ -9,8 +9,10 @@ from lianiq.app import build_pipeline
 from lianiq.audio.wav import read_pcm16_mono
 from lianiq.config import AppConfig
 from lianiq.domain import ConversationMode, Language
+from lianiq.languages.modes import InputKind, OutputKind, RoutingKind, SessionPair, UsageMode
 
 MAX_PROCESSING_SECONDS = 3.0
+
 
 def validate_wav(path: Path, _output_device: int | None) -> None:
     with wave.open(str(path), "rb") as wav_file:
@@ -23,11 +25,17 @@ def main() -> int:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     config = AppConfig.load()
     config.voice_output = True
-    pipeline, synthesizer = build_pipeline(config)
+    pipeline = build_pipeline(config)
     pipeline.playback = validate_wav
+    # Conversation with spoken output needs every model the two fixed cases use.
+    session = SessionPair(
+        pipeline.registry.pair(*config.languages.pair),
+        UsageMode(InputKind.MICROPHONE, RoutingKind.BIDIRECTIONAL, OutputKind.SPOKEN),
+    )
 
     warmup_started = time.perf_counter()
-    pipeline.warm_up()
+    pipeline.prepare(session)
+    synthesizer = pipeline.voice_synthesizer()
     print(f"Warm-up: {time.perf_counter() - warmup_started:.3f} s")
     print(
         "Devices: "
@@ -42,7 +50,7 @@ def main() -> int:
     ]
     passed = True
     for source_text, source_language, mode in cases:
-        source_wav = synthesizer.synthesize(source_text, source_language)
+        source_wav = synthesizer.synthesize(source_text, source_language.id)
         try:
             utterance = read_pcm16_mono(source_wav)
         finally:

@@ -17,6 +17,7 @@ from lianiq.call_bridge.contracts import (
 from lianiq.call_bridge.health import LaneHealthSnapshot
 from lianiq.call_bridge.inference_scheduler import InferenceScheduler
 from lianiq.domain import AudioUtterance, Language, TranslationResult
+from lianiq.languages.capabilities import DirectedEdge
 from lianiq.pipeline import SpeechRecognizer, Synthesizer, Translator
 
 LOGGER = logging.getLogger(__name__)
@@ -221,7 +222,7 @@ class TranslationLane:
             transcript = self.recognizer.transcribe(
                 utterance.samples,
                 utterance.sample_rate,
-                self.source_language,
+                self.source_language.id,
             )
         except Exception:  # noqa: BLE001 - external STT adapter boundary.
             raise _StageFailure("stt_failure") from None
@@ -232,15 +233,14 @@ class TranslationLane:
         try:
             translated = self.translator.translate(
                 transcript.text,
-                self.source_language,
-                self.target_language,
+                DirectedEdge(self.source_language.id, self.target_language.id),
             )
         except Exception:  # noqa: BLE001 - external translation adapter boundary.
             raise _StageFailure("translation_failure") from None
         translation_seconds = time.perf_counter() - translated_started
         tts_started = time.perf_counter()
         try:
-            output = self.synthesizer.synthesize(translated, self.target_language)
+            output = self.synthesizer.synthesize(translated, self.target_language.id)
         except Exception:  # noqa: BLE001 - external TTS adapter boundary.
             raise _StageFailure("tts_failure") from None
         tts_seconds = time.perf_counter() - tts_started

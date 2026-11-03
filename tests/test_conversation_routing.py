@@ -82,15 +82,17 @@ def test_pipeline_preserves_order_for_synthetic_conversations(
     class SequenceRecognizer:
         def transcribe(self, samples, sample_rate, language=None):
             turn = next(pending)
-            return Transcript(turn.text, turn.detected_language, 0.99, len(samples) / sample_rate)
+            return Transcript(
+                turn.text, turn.detected_language.id, 0.99, len(samples) / sample_rate
+            )
 
     class RecordingTranslator:
         def __init__(self) -> None:
             self.calls = []
 
-        def translate(self, text, source, target, context=()):
-            self.calls.append((text, source, target, context))
-            return f"{target.value}:{text}"
+        def translate(self, text, edge, context=()):
+            self.calls.append((text, edge, context))
+            return f"{edge.target}:{text}"
 
     translator = RecordingTranslator()
     pipeline = TranslationPipeline(SequenceRecognizer(), translator, None, None)
