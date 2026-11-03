@@ -6,6 +6,7 @@ import sys
 
 from lianiq.audio.playback import play_wav
 from lianiq.config import PROJECT_ROOT, AppConfig
+from lianiq.config_migration import SettingsMigrationError
 from lianiq.logging_setup import configure_logging
 from lianiq.pipeline import TranslationPipeline
 from lianiq.stt.faster_whisper_engine import FasterWhisperEngine
@@ -35,7 +36,7 @@ def build_pipeline(config: AppConfig) -> tuple[TranslationPipeline, PiperEngine]
     pipeline = TranslationPipeline(
         recognizer,
         translator,
-        synthesizer if config.tts.enabled else None,
+        synthesizer if config.voice_output else None,
         play_wav,
         context_sentences=config.translation.context_sentences,
         output_device=config.audio.output_device,
@@ -43,8 +44,30 @@ def build_pipeline(config: AppConfig) -> tuple[TranslationPipeline, PiperEngine]
     return pipeline, synthesizer
 
 
+def report_settings_error(error: SettingsMigrationError) -> None:
+    """Show why settings could not be loaded; no settings file is written."""
+    message = (
+        f"{error}.\n\nLianiq did not change any settings file. Correct or remove this "
+        "value in config/settings.local.json and start Lianiq again."
+    )
+    if sys.stderr is not None:
+        print(message, file=sys.stderr)
+    try:
+        from PySide6.QtWidgets import QApplication, QMessageBox
+    except ImportError:
+        return
+    # The dialog needs a QApplication; keep the reference alive while it is shown.
+    application = QApplication.instance() or QApplication(sys.argv)
+    application.setApplicationName("lianiq")
+    QMessageBox.critical(None, "lianiq settings", message)
+
+
 def main() -> int:
-    config = AppConfig.load()
+    try:
+        config = AppConfig.load()
+    except SettingsMigrationError as error:
+        report_settings_error(error)
+        return 2
     configure_logging(PROJECT_ROOT / "logs", config.ui.log_level)
     os.environ.setdefault("QT_OPENGL", "software")
     os.environ.setdefault("QT_QUICK_BACKEND", "software")

@@ -10,5 +10,6 @@ dist/
 logs/
 models/
 config/settings.local.json
+config/settings.local.v1.json
 .package-smoke/
 .ci-venv/

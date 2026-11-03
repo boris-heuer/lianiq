@@ -1,4 +1,15 @@
 {
+  "schema_version": 2,
+  "languages": {
+    "pair": [
+      "de",
+      "zh-Hans"
+    ],
+    "routing": "bidirectional",
+    "fixed_source": null,
+    "output": "text",
+    "detection_min_probability": 0.7
+  },
   "audio": {
     "sample_rate": 16000,
     "chunk_ms": 30,
@@ -12,31 +23,42 @@
   },
   "speech_to_text": {
     "model_path": "models/faster-whisper-small",
+    "languages": [
+      "de",
+      "zh-Hans"
+    ],
     "device": "auto",
     "compute_type": "int8",
     "cpu_threads": 8,
     "beam_size": 1
   },
   "translation": {
-    "de_zh_model_path": "models/opus-mt-de-zh",
-    "zh_de_model_path": "models/opus-mt-zh-de",
+    "edges": {
+      "de>zh-Hans": {
+        "model_path": "models/opus-mt-de-zh"
+      },
+      "zh-Hans>de": {
+        "model_path": "models/opus-mt-zh-de"
+      }
+    },
     "cpu_threads": 8,
     "device": "auto",
     "context_sentences": 5,
     "glossary_path": "config/glossary.json"
   },
   "tts": {
-    "enabled": false,
-    "de_voice_path": "models/piper/de_DE-thorsten-medium.onnx",
-    "zh_voice_path": "models/piper/zh_CN-user-provided.onnx",
+    "voices": {
+      "de": "models/piper/de_DE-thorsten-medium.onnx",
+      "zh-Hans": "models/piper/zh_CN-user-provided.onnx"
+    },
     "length_scale": 1.0,
     "device": "auto"
   },
   "ui": {
-    "mode": "auto",
     "log_level": "INFO"
   },
   "call_bridge": {
+    "local_language": "de",
     "enabled": false,
     "local_microphone_endpoint_id": null,
     "call_microphone_render_endpoint_id": null,

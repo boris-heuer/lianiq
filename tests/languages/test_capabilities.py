@@ -15,7 +15,7 @@ from synthetic import (
     write_model_file,
 )
 
-from lianiq.config import AppConfig
+from lianiq.config import AppConfig, TranslationEdgeConfig
 from lianiq.languages import (
     BUILTIN_REGISTRY,
     CapabilityCatalog,
@@ -201,9 +201,9 @@ def test_hashing_is_lazy_per_required_capability_and_cached(
     assert hashed == ["de.onnx", "de.onnx"]
 
 
-def test_from_config_maps_todays_v1_settings_to_directed_capabilities(tmp_path: Path) -> None:
+def test_from_config_maps_default_v2_settings_to_directed_capabilities(tmp_path: Path) -> None:
     config = AppConfig()
-    config.tts.zh_voice_path = ""
+    config.tts.voices["zh-Hans"] = ""
     write_model_directory(tmp_path, "models/opus-mt-de-zh", {"pytorch_model.bin": b"a"})
     write_model_file(tmp_path, "models/piper/de_DE-thorsten-medium.onnx")
 
@@ -216,3 +216,24 @@ def test_from_config_maps_todays_v1_settings_to_directed_capabilities(tmp_path: 
     assert catalog.recognition(ZH).status is ReadinessStatus.MISSING
     assert catalog.voice(DE).status is ReadinessStatus.INSTALLED
     assert catalog.voice(ZH).status is ReadinessStatus.NOT_CONFIGURED
+
+
+def test_from_config_reads_only_the_configured_v2_edges_voices_and_languages(
+    tmp_path: Path,
+) -> None:
+    config = AppConfig()
+    config.speech_to_text.languages = ["de"]
+    config.translation.edges = {"de>zh-Hans": TranslationEdgeConfig("models/custom-de-zh")}
+    config.tts.voices = {"zh-Hans": "models/piper/zh.onnx"}
+    write_model_directory(tmp_path, "models/custom-de-zh", {"pytorch_model.bin": b"a"})
+
+    catalog = CapabilityCatalog.from_config(config, BUILTIN_REGISTRY, ReadinessProbe(tmp_path))
+
+    assert catalog.translation(DE_ZH).status is ReadinessStatus.INSTALLED
+    assert catalog.translation(DE_ZH).model_path == tmp_path / "models/custom-de-zh"
+    # The reverse edge is not configured and is never derived from the forward edge.
+    assert catalog.translation(ZH_DE).status is ReadinessStatus.NOT_CONFIGURED
+    assert catalog.recognition(DE).status is ReadinessStatus.MISSING
+    assert catalog.recognition(ZH).status is ReadinessStatus.NOT_CONFIGURED
+    assert catalog.voice(DE).status is ReadinessStatus.NOT_CONFIGURED
+    assert catalog.voice(ZH).status is ReadinessStatus.MISSING

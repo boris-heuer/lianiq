@@ -137,7 +137,7 @@ Model download is the only setup step that requires internet access. Existing do
 from the Hugging Face cache. Spoken output is disabled by default because Mandarin speech output is
 not preconfigured. Provide a Piper-compatible,
 license-reviewed Mandarin `.onnx` voice file and its matching `.onnx.json` metadata file, then set
-`tts.zh_voice_path` (the intended default location is
+`tts.voices["zh-Hans"]` (the intended default location is
 `models/piper/zh_CN-user-provided.onnx`). To validate an existing installation without requesting
 models:
 
@@ -188,7 +188,11 @@ speech, renders the result, plays the translated voice, and closes after a succe
 
 [`config/settings.json`](config/settings.json) contains safe repository defaults for audio
 thresholds, model paths, and thread counts. Runtime selections, including private Windows endpoint
-IDs, are saved to the ignored `config/settings.local.json` overlay. Define domain terminology in
+IDs, are saved to the ignored `config/settings.local.json` overlay. Both files use settings
+schema v2 (`"schema_version": 2`). An older overlay without `schema_version` is migrated when it
+is loaded; the first save keeps its original bytes once in the ignored
+`config/settings.local.v1.json`. A legacy value that cannot be mapped stops the start with an error
+naming the setting, and no file is changed. Define domain terminology in
 [`config/glossary.json`](config/glossary.json):
 
 ```json
