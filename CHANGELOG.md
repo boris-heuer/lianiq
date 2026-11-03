@@ -40,6 +40,11 @@ All notable user-visible changes are documented here.
   are disabled until **Stop**. A turn with an unclear language shows a held-turn bar with
   **Translate as** one of the pair languages or **Discard**; later turns keep flowing, and
   **Stop** discards unresolved turns.
+- The experimental Call Bridge takes its lane directions from the language pair and
+  `call_bridge.local_language` (local → remote to the call, remote → local to the headphones),
+  fixed for the whole call. Role labels and test buttons name those languages. **Start call
+  bridge** is refused before any model loads with "Not available: missing …", naming every
+  missing model, voice and unassigned endpoint.
 - Renamed the product, repository metadata, Python package, command, Windows executable, and
   documentation to `lianiq`.
 
