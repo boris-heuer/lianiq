@@ -1,8 +1,19 @@
+"""``scripts/doctor.py`` reports readiness per capability of the configured pair (WI-07, S-02)."""
+
 from __future__ import annotations
 
+import hashlib
 import importlib.util
+import json
 import sys
 from pathlib import Path
+
+import pytest
+
+from lianiq.config import AppConfig
+
+DE_VOICE = "models/piper/de_DE-thorsten-medium.onnx"
+ZH_VOICE = "models/piper/zh_CN-user-provided.onnx"
 
 
 def load_doctor_module():
@@ -15,28 +26,109 @@ def load_doctor_module():
     return module
 
 
-def provision(root: Path, relative_paths: tuple[str, ...]) -> None:
+def provision(root: Path, *relative_paths: str) -> None:
     for relative in relative_paths:
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"fixture")
 
 
-def test_mandarin_voice_is_optional_for_default_doctor(tmp_path, monkeypatch) -> None:
-    doctor = load_doctor_module()
-    monkeypatch.setattr(doctor, "ROOT", tmp_path)
-    provision(tmp_path, doctor.REQUIRED_MODEL_PATHS)
+def provision_models(root: Path) -> None:
+    """The repository default layout without the user-provided Mandarin voice (data D-01)."""
+    provision(
+        root,
+        "models/faster-whisper-small/model.bin",
+        "models/opus-mt-de-zh/config.json",
+        "models/opus-mt-zh-de/config.json",
+        DE_VOICE,
+        f"{DE_VOICE}.json",
+    )
 
-    assert all(doctor.check_models(require_mandarin_voice=False))
+
+@pytest.fixture
+def doctor(tmp_path, monkeypatch):
+    module = load_doctor_module()
+    monkeypatch.setattr(module, "ROOT", tmp_path)
+    return module
 
 
-def test_operational_doctor_requires_user_provided_mandarin_pair(tmp_path, monkeypatch) -> None:
-    doctor = load_doctor_module()
-    monkeypatch.setattr(doctor, "ROOT", tmp_path)
-    provision(tmp_path, doctor.REQUIRED_MODEL_PATHS)
+def test_s02_doctor_prints_readiness_per_capability(doctor, tmp_path, capsys) -> None:
+    provision_models(tmp_path)
 
-    assert not all(doctor.check_models(require_mandarin_voice=True))
+    checks = doctor.check_capabilities(AppConfig(), require_voices=False)
 
-    provision(tmp_path, doctor.MANDARIN_VOICE_PATHS)
+    assert all(checks)
+    lines = capsys.readouterr().out.splitlines()
+    assert lines == [
+        "[OK ] Language pair: de (German) ↔ zh-Hans (Mandarin (Simplified))",
+        "[OK ] recognition de (German): installed",
+        "[OK ] recognition zh-Hans (Mandarin (Simplified)): installed",
+        "[OK ] translation de>zh-Hans (German → Mandarin (Simplified)): installed",
+        "[OK ] translation zh-Hans>de (Mandarin (Simplified) → German): installed",
+        "[OK ] voice de (German): installed",
+        (
+            "[WARN] voice zh-Hans (Mandarin (Simplified)): missing; "
+            "spoken output in this language stays unavailable"
+        ),
+    ]
 
-    assert all(doctor.check_models(require_mandarin_voice=True))
+
+def test_operational_doctor_requires_every_voice_of_the_pair(doctor, tmp_path, capsys) -> None:
+    provision_models(tmp_path)
+
+    assert not all(doctor.check_capabilities(AppConfig(), require_voices=True))
+    assert "[MISSING] voice zh-Hans (Mandarin (Simplified)): missing" in capsys.readouterr().out
+
+    provision(tmp_path, ZH_VOICE)  # voice without its metadata file
+    assert not all(doctor.check_capabilities(AppConfig(), require_voices=True))
+    assert "zh-Hans (Mandarin (Simplified)): missing metadata file" in capsys.readouterr().out
+
+    provision(tmp_path, f"{ZH_VOICE}.json")
+    assert all(doctor.check_capabilities(AppConfig(), require_voices=True))
+
+
+def test_a_missing_reverse_edge_fails_and_is_named(doctor, tmp_path, capsys) -> None:
+    provision_models(tmp_path)
+    config = AppConfig()
+    del config.translation.edges["zh-Hans>de"]
+
+    assert not all(doctor.check_capabilities(config, require_voices=False))
+    assert "[MISSING] translation zh-Hans>de (Mandarin (Simplified) → German): not_configured" in (
+        capsys.readouterr().out
+    )
+
+
+def test_a_manifest_mismatch_is_invalid_even_for_an_optional_voice(
+    doctor, tmp_path, capsys
+) -> None:
+    provision_models(tmp_path)
+    provision(tmp_path, ZH_VOICE, f"{ZH_VOICE}.json")
+    good = hashlib.sha256(b"fixture").hexdigest()
+    manifest = {
+        "schema_version": 1,
+        "artifacts": [
+            {"path": "models/opus-mt-de-zh/config.json", "sha256": good},
+            {"path": ZH_VOICE, "sha256": "0" * 64},
+        ],
+    }
+    (tmp_path / "models" / "model-manifest.json").write_text(json.dumps(manifest), "utf-8")
+
+    assert not all(doctor.check_capabilities(AppConfig(), require_voices=False))
+    output = capsys.readouterr().out
+    assert "[OK ] translation de>zh-Hans (German → Mandarin (Simplified)): validated" in output
+    assert "[MISSING] voice zh-Hans (Mandarin (Simplified)): invalid" in output
+
+
+def test_an_unusable_pair_fails_with_its_reason(doctor, capsys) -> None:
+    config = AppConfig()
+    config.languages.pair = ["de", "en"]
+
+    assert doctor.check_capabilities(config, require_voices=False) == [False]
+    assert "[MISSING] Language pair:" in capsys.readouterr().out
+
+
+def test_main_reports_settings_and_exits_nonzero_without_models(doctor, capsys) -> None:
+    assert doctor.main([]) == 1
+    output = capsys.readouterr().out
+    assert "[OK ] Settings: schema v2" in output
+    assert "[MISSING] recognition de (German): missing" in output
