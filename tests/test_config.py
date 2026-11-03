@@ -67,29 +67,26 @@ def test_legacy_tts_cuda_setting_is_migrated(tmp_path: Path) -> None:
     assert config.tts.device == "cuda"
 
 
-def test_compatibility_accessors_read_v2_values() -> None:
+def test_voice_output_flag_reads_and_writes_languages_output() -> None:
     config = AppConfig()
-    config.translation.edges["zh-Hans>de"] = TranslationEdgeConfig("models/custom-zh-de")
-    config.tts.voices["de"] = "models/piper/custom-de.onnx"
-
-    assert config.translation.de_zh_model_path == "models/opus-mt-de-zh"
-    assert config.translation.zh_de_model_path == "models/custom-zh-de"
-    assert config.tts.de_voice_path == "models/piper/custom-de.onnx"
-    assert config.tts.zh_voice_path == "models/piper/zh_CN-user-provided.onnx"
-    del config.translation.edges["zh-Hans>de"]
-    assert config.translation.zh_de_model_path == ""
 
     assert config.voice_output is False
     config.voice_output = True
     assert config.languages.output == "spoken"
+    config.voice_output = False
+    assert config.languages.output == "text"
 
-    assert config.legacy_mode == "auto"
-    config.legacy_mode = "zh-de"
-    assert (config.languages.routing, config.languages.fixed_source) == ("fixed", "zh-Hans")
-    config.legacy_mode = "de-zh"
-    assert (config.languages.routing, config.languages.fixed_source) == ("fixed", "de")
-    config.legacy_mode = "auto"
-    assert (config.languages.routing, config.languages.fixed_source) == ("bidirectional", None)
+
+def test_de_zh_compatibility_accessors_are_removed() -> None:
+    # AC-18: the configured paths are read by language ID or edge key only.
+    config = AppConfig()
+    for name in ("de_zh_model_path", "zh_de_model_path"):
+        assert not hasattr(config.translation, name)
+    for name in ("de_voice_path", "zh_voice_path"):
+        assert not hasattr(config.tts, name)
+    assert not hasattr(config, "legacy_mode")
+    assert config.translation.edges["zh-Hans>de"].model_path == "models/opus-mt-zh-de"
+    assert config.tts.voices["de"] == "models/piper/de_DE-thorsten-medium.onnx"
 
 
 @pytest.mark.parametrize(
