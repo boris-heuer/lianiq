@@ -9,10 +9,12 @@ desktop call application such as WeChat.
 
 ## Objective
 
-Place the interpreter between a local headset and a call application so that:
+Place the interpreter between a local headset and a call application so that, for the selected
+language pair and `call_bridge.local_language` (by default German `de` locally and Mandarin
+(Simplified) `zh-Hans` remotely):
 
-- local German speech reaches the remote participant as Mandarin audio;
-- remote Mandarin speech reaches the local user as German audio;
+- local speech reaches the remote participant in the remote language;
+- remote speech reaches the local user in the local language;
 - audio remains local except for the synthesized target-language stream sent through the call;
 - consecutive turns in the same language work without assuming speaker alternation; and
 - the two directions remain isolated and cannot create a digital feedback loop.
@@ -25,10 +27,10 @@ services and do not build a custom Windows kernel audio driver for the first rel
 
 Use two independent virtual audio cables supplied and installed separately:
 
-1. `TX Cable` carries synthesized Mandarin from the interpreter to the call application's virtual
-   microphone.
-2. `RX Cable` carries remote Mandarin audio from the call application's virtual speaker to the
-   interpreter.
+1. `TX Cable` carries synthesized remote-language audio (by default Mandarin) from the interpreter
+   to the call application's virtual microphone.
+2. `RX Cable` carries remote audio (by default Mandarin) from the call application's virtual
+   speaker to the interpreter.
 
 The application must depend only on normal Windows audio endpoint contracts. Product code must
 not hard-code a particular virtual-cable vendor or device display name.
@@ -53,8 +55,8 @@ flowchart LR
     end
 
     subgraph Interpreter[lianiq]
-        TX[Outbound lane<br/>VAD -> German STT -> DE-to-ZH -> Mandarin TTS]
-        RX[Inbound lane<br/>VAD -> Mandarin STT -> ZH-to-DE -> German TTS]
+        TX[Outbound lane local>remote<br/>VAD -> STT de -> de>zh-Hans -> voice zh-Hans]
+        RX[Inbound lane remote>local<br/>VAD -> STT zh-Hans -> zh-Hans>de -> voice de]
         Control[FullDuplexBridgeController<br/>lifecycle, health, queues, failure policy]
         Control --- TX
         Control --- RX
@@ -79,15 +81,15 @@ flowchart LR
 
     Remote[Remote participant]
 
-    HeadsetMic -->|German PCM| TX
-    TX -->|Mandarin PCM| TXRender
+    HeadsetMic -->|local-language PCM| TX
+    TX -->|remote-language PCM| TXRender
     TXCapture --> CallMic
-    Network -->|Mandarin audio| Remote
+    Network -->|remote-language audio| Remote
 
-    Remote -->|Mandarin speech| Network
+    Remote -->|remote-language speech| Network
     CallSpeaker --> RXRender
     RXCapture --> RX
-    RX -->|German PCM| Headphones
+    RX -->|local-language PCM| Headphones
 ```
 
 Virtual-cable names are counterintuitive on common Windows drivers: an application writes to the
@@ -97,16 +99,21 @@ must therefore show both the Windows display name and the semantic role shown ab
 ## Fixed-direction lanes
 
 Call-bridge routing is more reliable than automatic language routing because the selected endpoint
-defines the direction:
+defines the direction. `CallBridgeLanes.from_session` derives both lanes as directed edges from the
+selected pair and `call_bridge.local_language`; the inbound edge is always the reverse of the
+outbound edge. The table shows the default settings:
 
-| Lane | Capture endpoint | Source | Target | Playback endpoint |
-|---|---|---|---|---|
-| Outbound | Physical headset microphone | German | Mandarin | TX cable playback endpoint |
-| Inbound | RX cable recording endpoint | Mandarin | German | Physical headset headphones |
+| Lane | Capture endpoint | Edge | Playback endpoint |
+|---|---|---|---|
+| Outbound | Physical headset microphone | `local>remote`, by default `de>zh-Hans` | TX cable playback endpoint |
+| Inbound | RX cable recording endpoint | `remote>local`, by default `zh-Hans>de` | Physical headset headphones |
 
-Speaker identity is not part of routing. Multiple German speakers on the local side still produce
-German-to-Mandarin turns. Multiple Mandarin speakers on the remote side still produce
-Mandarin-to-German turns.
+Setting `call_bridge.local_language` to `zh-Hans` reverses both lanes. A lane's edge is read-only
+and used for every turn of the session; it cannot change while the Call Bridge runs, and the
+language pair and routing controls stay locked until it stops.
+
+Speaker identity is not part of routing. Multiple local speakers still produce `local>remote`
+turns, and multiple remote speakers still produce `remote>local` turns.
 
 ## Runtime components
 
@@ -119,8 +126,8 @@ lianiq/
     resampler.py              # Endpoint format to STT format conversion
     ring_buffer.py            # Bounded real-time audio buffer
   call_bridge/
-    contracts.py              # Frames, endpoint roles, lane configuration
-    translation_lane.py       # One fixed-direction processing lane
+    contracts.py              # Frames, endpoint roles, lanes from the session pair
+    translation_lane.py       # One lane with a fixed directed edge
     controller.py             # Full-duplex lifecycle and health coordination
     inference_scheduler.py    # Bounded access to shared model resources
     health.py                 # Device loss, underrun, overrun, and latency state
@@ -146,11 +153,17 @@ be persisted because they can change after reboot, driver installation, or Bluet
 `AudioFrame` carries the endpoint role, lane identifier, monotonic timestamp, sequence number,
 sample rate, channel count, and PCM samples. Model inference must never run in an audio callback.
 
-`TranslationLane` owns one segmenter, one bounded queue, one fixed source/target language pair,
-and one ordered output stream. Each lane preserves its own ordering independently.
+`TranslationLane` owns one segmenter, one bounded queue, one fixed `DirectedEdge`, and one ordered
+output stream. Each lane preserves its own ordering independently.
 
 `FullDuplexBridgeController` starts and stops both lanes as one session, validates endpoint
 assignments, publishes health state, and applies a fail-closed policy when routing becomes unsafe.
+It rejects lanes that do not match the session pair. Before any lane or capture starts, it checks
+requirement row 7 of the language-pair contract: recognition for both languages, translation in
+both directions, both voices, and all four endpoints. If anything is missing, it raises
+`ModeUnavailableError`, which names every missing item, and returns to `STOPPED`. The main window
+runs the same check when **Start call bridge** is clicked, before any model loads, and shows, for
+example, "Not available: missing voice Mandarin (Simplified), call microphone endpoint".
 
 ## Threading and buffering
 
@@ -183,8 +196,8 @@ STOPPED
   -> STOPPED
 ```
 
-Starting must fail if the same virtual endpoint is assigned to conflicting roles or if either
-virtual cable is incomplete. A device-loss event must stop the affected lane and must never fall
+Starting must fail if the same virtual endpoint is assigned to conflicting roles, if either
+virtual cable is incomplete, or if any model or voice of either lane is missing. A device-loss event must stop the affected lane and must never fall
 back silently to the Windows default microphone or speakers.
 
 ## Failure and privacy policy
@@ -196,7 +209,7 @@ The default policy is `mute`:
 - raw microphone or remote audio is not stored;
 - logs contain endpoint roles, timing, queue state, and errors but no transcript or PCM content;
 - test tones require an explicit operator action; and
-- only synthesized Mandarin is written to the call microphone endpoint.
+- only synthesized remote-language speech is written to the call microphone endpoint.
 
 An optional future `pass_original` mode requires an explicit warning because it changes the
 privacy and language guarantees.
