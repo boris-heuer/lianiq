@@ -13,7 +13,7 @@ redistribution license was not established for this project.
 
 An operator who enables Mandarin speech must obtain a Piper-compatible `.onnx` voice and its
 matching `.onnx.json` metadata, review the voice-model and training-data terms, and set
-`tts.zh_voice_path` to the local `.onnx` path. Keep a copy of the relevant license and the
+`tts.voices["zh-Hans"]` to the local `.onnx` path. Keep a copy of the relevant license and the
 voice source revision with the deployment. Do not infer redistribution permission from the
 Piper package license or the repository hosting a voice.
 

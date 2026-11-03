@@ -22,7 +22,7 @@ def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     config = AppConfig.load()
-    config.tts.enabled = True
+    config.voice_output = True
     pipeline, synthesizer = build_pipeline(config)
     pipeline.playback = validate_wav
 

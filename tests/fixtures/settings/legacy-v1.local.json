@@ -1,0 +1,30 @@
+{
+  "audio": {
+    "start_rms": 0.021,
+    "input_device": 3,
+    "output_device": 5
+  },
+  "speech_to_text": {
+    "model_path": "models/custom/faster-whisper-medium",
+    "device": "cpu",
+    "cpu_threads": 4
+  },
+  "translation": {
+    "de_zh_model_path": "models/opus-mt-de-zh",
+    "zh_de_model_path": "models/custom/opus-mt-zh-de",
+    "context_sentences": 3
+  },
+  "tts": {
+    "enabled": true,
+    "de_voice_path": "models/custom/de_DE-custom.onnx",
+    "zh_voice_path": "models/custom/zh_CN-custom.onnx",
+    "length_scale": 1.1
+  },
+  "ui": {
+    "mode": "zh-de",
+    "log_level": "DEBUG"
+  },
+  "call_bridge": {
+    "max_pending_age_ms": 5000
+  }
+}

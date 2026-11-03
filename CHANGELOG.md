@@ -13,6 +13,10 @@ All notable user-visible changes are documented here.
 
 ### Changed
 
+- Settings use schema v2: language pair, routing and output in a `languages` block, translation
+  models as directed `translation.edges`, voices in `tts.voices` by language ID, and
+  `call_bridge.local_language`. Existing settings migrate without loss on load, and the first save
+  keeps the original `config/settings.local.json` once as `config/settings.local.v1.json`.
 - Renamed the product, repository metadata, Python package, command, Windows executable, and
   documentation to `lianiq`.
 

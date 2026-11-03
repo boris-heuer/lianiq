@@ -29,7 +29,7 @@ def main() -> int:
 
     config = AppConfig.load()
     if args.without_tts:
-        config.tts.enabled = False
+        config.voice_output = False
     pipeline, _ = build_pipeline(config)
     utterance = read_wav(args.wav)
     started = time.perf_counter()

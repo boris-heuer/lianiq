@@ -234,34 +234,24 @@ class CapabilityCatalog:
     def from_config(
         cls, config: AppConfig, registry: LanguageRegistry, probe: ReadinessProbe
     ) -> CapabilityCatalog:
-        """Build the catalog from today's settings (schema v1).
+        """Build the catalog from settings schema v2 (contract.md §4.2).
 
-        Settings v1 has no language list for recognition; the migration default
-        ``["de", "zh-Hans"]`` (contract.md §4.2) applies. Settings schema v2 (WI-02) moves
-        this mapping to ``speech_to_text.languages``, ``translation.edges`` and
-        ``tts.voices``. An empty path counts as not configured.
+        Recognition languages come from ``speech_to_text.languages`` (one shared model),
+        directed edges from ``translation.edges`` keyed ``"<source>><target>"`` and voices
+        from ``tts.voices`` keyed by language ID. An empty path counts as not configured.
         """
-        recognition = {
-            language: Path(config.speech_to_text.model_path)
-            for language in ("de", "zh-Hans")
-            if config.speech_to_text.model_path
-        }
+        model_path = config.speech_to_text.model_path
+        recognition = (
+            {language: Path(model_path) for language in config.speech_to_text.languages}
+            if model_path
+            else {}
+        )
         translation = {
-            DirectedEdge(LanguageId(source), LanguageId(target)): Path(path)
-            for source, target, path in (
-                ("de", "zh-Hans", config.translation.de_zh_model_path),
-                ("zh-Hans", "de", config.translation.zh_de_model_path),
-            )
-            if path
+            DirectedEdge.from_key(key): Path(edge.model_path)
+            for key, edge in config.translation.edges.items()
+            if edge.model_path
         }
-        voices = {
-            language: Path(path)
-            for language, path in (
-                ("de", config.tts.de_voice_path),
-                ("zh-Hans", config.tts.zh_voice_path),
-            )
-            if path
-        }
+        voices = {language: Path(path) for language, path in config.tts.voices.items() if path}
         return cls(registry, probe, recognition=recognition, translation=translation, voices=voices)
 
     def recognition(self, language: LanguageId) -> RecognitionCapability:

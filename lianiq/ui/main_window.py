@@ -143,7 +143,7 @@ class MainWindow(QMainWindow):
         controls.addWidget(QLabel("Conversation direction"), 0, 0)
         self.mode_combo = QComboBox()
         self.mode_combo.addItems(MODE_LABELS)
-        initial_mode = ConversationMode(self.config.ui.mode)
+        initial_mode = ConversationMode(self.config.legacy_mode)
         self.mode_combo.setCurrentText(next(k for k, v in MODE_LABELS.items() if v is initial_mode))
         controls.addWidget(self.mode_combo, 1, 0)
 
@@ -161,7 +161,7 @@ class MainWindow(QMainWindow):
         controls.addWidget(self.model_combo, 1, 3)
 
         self.tts_checkbox = QCheckBox("Voice output")
-        self.tts_checkbox.setChecked(self.config.tts.enabled)
+        self.tts_checkbox.setChecked(self.config.voice_output)
         self.tts_checkbox.toggled.connect(self._toggle_tts)
         controls.addWidget(self.tts_checkbox, 1, 4)
         self.gpu_checkbox = QCheckBox("CUDA GPU")
@@ -598,7 +598,7 @@ class MainWindow(QMainWindow):
 
     @Slot(bool)
     def _toggle_tts(self, enabled: bool) -> None:
-        self.config.tts.enabled = enabled
+        self.config.voice_output = enabled
         self.pipeline.synthesizer = (
             getattr(self, "_synthesizer", self.pipeline.synthesizer) if enabled else None
         )
@@ -645,7 +645,7 @@ class MainWindow(QMainWindow):
         self.stop_listening()
         if self.persist_settings:
             self.call_bridge_panel.apply_to_config()
-            self.config.ui.mode = self.current_mode().value
-            self.config.tts.enabled = self.tts_checkbox.isChecked()
+            self.config.legacy_mode = self.current_mode().value
+            self.config.voice_output = self.tts_checkbox.isChecked()
             self.config.save()
         event.accept()
