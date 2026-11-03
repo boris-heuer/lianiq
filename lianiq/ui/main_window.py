@@ -37,10 +37,11 @@ from lianiq.call_bridge.contracts import (
     BridgeEvent,
     BridgeEventKind,
     BridgeState,
+    CallBridgeLanes,
     EndpointRole,
     LaneId,
 )
-from lianiq.call_bridge.controller import FullDuplexBridgeController
+from lianiq.call_bridge.controller import FullDuplexBridgeController, check_call_bridge
 from lianiq.call_bridge.inference_scheduler import InferenceScheduler
 from lianiq.call_bridge.translation_lane import TranslationLane
 from lianiq.config import AppConfig
@@ -69,11 +70,9 @@ AUTOMATIC_ROUTING = ""
 ROUTING_CONTROL_LABEL = "Conversation direction"
 # A pair is ready when one of its main-window routings has every model it needs.
 MODELS_ONLY = DeviceReadiness(microphone=True, playback=True)
-# Call Bridge lanes stay German (local) / Mandarin (remote) until CAP-0169 WI-05 derives
-# them from the pair and ``call_bridge.local_language``.
-CALL_BRIDGE_LOCAL = LanguageId("de")
-CALL_BRIDGE_REMOTE = LanguageId("zh-Hans")
-ROUTE_TEST_TEXT = {CALL_BRIDGE_LOCAL: "Kopfhörer-Test.", CALL_BRIDGE_REMOTE: "通话麦克风测试。"}
+# Route-test phrases per language (functional data). The Call Bridge lanes themselves come
+# from the session pair and ``call_bridge.local_language`` (``CallBridgeLanes``).
+ROUTE_TEST_TEXT = {LanguageId("de"): "Kopfhörer-Test.", LanguageId("zh-Hans"): "通话麦克风测试。"}
 
 
 class UiBridge(QObject):
@@ -123,6 +122,7 @@ class MainWindow(QMainWindow):
         # Each Start gets a generation; a ready signal of a cancelled Start is ignored.
         self._start_generation = 0
         self._pending_assignments = None
+        self._pending_call_bridge_session: SessionPair | None = None
         self._pending_session: SessionPair | None = None
         self._diagnostic_wav: Path | None = None
         self._ready_pairs: list[LanguagePair] = []
@@ -258,7 +258,10 @@ class MainWindow(QMainWindow):
         action_row.addWidget(export_button)
         layout.addLayout(action_row)
 
-        self.call_bridge_panel = CallBridgePanel(self.config.call_bridge)
+        local_name, remote_name = self._call_bridge_language_names()
+        self.call_bridge_panel = CallBridgePanel(
+            self.config.call_bridge, local_name=local_name, remote_name=remote_name
+        )
         self.call_bridge_panel.start_requested.connect(self.start_call_bridge)
         self.call_bridge_panel.stop_requested.connect(self.stop_call_bridge)
         self.call_bridge_panel.route_test_requested.connect(self._run_call_bridge_route_test)
@@ -553,6 +556,8 @@ class MainWindow(QMainWindow):
         languages.pair = list(pair.members)
         languages.routing = "bidirectional" if fixed_source is None else "fixed"
         languages.fixed_source = fixed_source
+        # The Call Bridge lanes and labels follow the pair and ``call_bridge.local_language``.
+        self.call_bridge_panel.set_languages(*self._call_bridge_language_names())
         self._populate_routing(pair, fixed_source)
         self._selection_changed()
 
@@ -594,6 +599,15 @@ class MainWindow(QMainWindow):
             CALL_BRIDGE_MODE,
             local_language=registry.get(self.config.call_bridge.local_language).id,
         )
+
+    def _call_bridge_language_names(self) -> tuple[str, str]:
+        """Registry names of the local and remote Call Bridge languages for the panel."""
+        try:
+            lanes = CallBridgeLanes.from_session(self.call_bridge_session())
+        except Exception:  # noqa: BLE001 - an invalid setting is reported on Start.
+            return "local language", "remote language"
+        registry = self.pipeline.registry
+        return registry.display_name(lanes.local), registry.display_name(lanes.remote)
 
     def _prepare_in_background(self, session: SessionPair, ready: Signal) -> None:
         self._start_generation += 1
@@ -715,16 +729,28 @@ class MainWindow(QMainWindow):
     def start_call_bridge(self) -> None:
         if self.call_bridge_controller is not None or self._call_bridge_starting:
             return
-        if self.capture.running or self._starting:
-            self.stop_listening()
         try:
-            assignments = self.call_bridge_panel.assignments()
             session = self.call_bridge_session()
+            # Requirement row 7 before any model loads: name every missing item.
+            availability = check_call_bridge(
+                session, self.pipeline.catalog, self.call_bridge_panel.assigned_roles()
+            )
         except Exception as exc:  # noqa: BLE001 - GUI boundary reports setup failures.
             self._show_error(str(exc))
             return
+        if not availability.available:
+            self._show_unavailable(availability.missing)
+            return
+        try:
+            assignments = self.call_bridge_panel.assignments()
+        except Exception as exc:  # noqa: BLE001 - GUI boundary reports setup failures.
+            self._show_error(str(exc))
+            return
+        if self.capture.running or self._starting:
+            self.stop_listening()
         self._call_bridge_starting = True
         self._pending_assignments = assignments
+        self._pending_call_bridge_session = session
         self.call_bridge_panel.set_models_ready(False)
         self.start_button.setEnabled(False)
         self.statusBar().showMessage("Loading the call bridge models …")
@@ -736,21 +762,23 @@ class MainWindow(QMainWindow):
             return
         self._call_bridge_starting = False
         assignments, self._pending_assignments = self._pending_assignments, None
+        session, self._pending_call_bridge_session = self._pending_call_bridge_session, None
         self.call_bridge_panel.set_models_ready(True)
-        if not ready or assignments is None:
-            self.start_button.setEnabled(True)
+        if not ready or assignments is None or session is None:
+            self._refresh_availability()  # Start follows the selected mode's availability
             self._show_error(message or "Call bridge setup was cancelled")
             return
-        self._begin_call_bridge(assignments)
+        self._begin_call_bridge(assignments, session)
 
-    def _begin_call_bridge(self, assignments) -> None:
+    def _begin_call_bridge(self, assignments, session: SessionPair) -> None:
         try:
+            lanes = CallBridgeLanes.from_session(session)
             recognizer = self.pipeline.speech_recognizer()
             translator = self.pipeline.text_translator()
             synthesizer = self.pipeline.voice_synthesizer()
             validate_voice_files = getattr(synthesizer, "validate_voice_files", None)
             if validate_voice_files is not None:
-                validate_voice_files([CALL_BRIDGE_LOCAL, CALL_BRIDGE_REMOTE])
+                validate_voice_files([lanes.local, lanes.remote])
             scheduler = InferenceScheduler(max_concurrent=2)
             outbound_playback = EndpointPlaybackStream(
                 assignments[EndpointRole.CALL_MICROPHONE_RENDER]
@@ -758,8 +786,7 @@ class MainWindow(QMainWindow):
             inbound_playback = EndpointPlaybackStream(assignments[EndpointRole.LOCAL_HEADPHONES])
             outbound_lane = TranslationLane(
                 LaneId.OUTBOUND,
-                CALL_BRIDGE_LOCAL,
-                CALL_BRIDGE_REMOTE,
+                lanes.outbound,
                 recognizer,
                 translator,
                 synthesizer,
@@ -771,8 +798,7 @@ class MainWindow(QMainWindow):
             )
             inbound_lane = TranslationLane(
                 LaneId.INBOUND,
-                CALL_BRIDGE_REMOTE,
-                CALL_BRIDGE_LOCAL,
+                lanes.inbound,
                 recognizer,
                 translator,
                 synthesizer,
@@ -817,12 +843,19 @@ class MainWindow(QMainWindow):
                     EndpointRole.CALL_SPEAKER_CAPTURE: inbound_capture,
                     EndpointRole.LOCAL_HEADPHONES: inbound_playback,
                 },
+                session=session,
+                catalog=self.pipeline.catalog,
             )
             self.call_bridge_controller = controller
             controller.start()
+        except ModeUnavailableError as exc:
+            self.call_bridge_controller = None
+            self._refresh_availability()
+            self._show_unavailable(exc.missing)
+            return
         except Exception as exc:  # noqa: BLE001 - GUI boundary reports setup failures.
             self.call_bridge_controller = None
-            self.start_button.setEnabled(True)
+            self._refresh_availability()
             self._show_error(str(exc))
             return
         self.call_bridge_panel.apply_to_config()
@@ -842,6 +875,7 @@ class MainWindow(QMainWindow):
             self._show_error("Call bridge workers did not stop within the shutdown contract")
         self._call_bridge_starting = False
         self._pending_assignments = None
+        self._pending_call_bridge_session = None
         self.call_bridge_panel.set_running(False)
         self.call_bridge_panel.set_models_ready(True)
         self.start_button.setEnabled(not self._starting and not self.capture.running)
@@ -908,17 +942,19 @@ class MainWindow(QMainWindow):
         try:
             assignments = self.call_bridge_panel.assignments()
             endpoint = assignments[role]
+            lanes = CallBridgeLanes.from_session(self.call_bridge_session())
         except Exception as exc:  # noqa: BLE001 - UI validation boundary.
             self._show_error(str(exc))
             return
+        # The call microphone carries the remote language, the headphones the local one.
+        language = lanes.remote if role is EndpointRole.CALL_MICROPHONE_RENDER else lanes.local
+        text = ROUTE_TEST_TEXT.get(language)
+        if text is None:
+            name = self.pipeline.registry.display_name(language)
+            self._show_error(f"No route test phrase for {name}")
+            return
 
         def run_test() -> None:
-            language = (
-                CALL_BRIDGE_REMOTE
-                if role is EndpointRole.CALL_MICROPHONE_RENDER
-                else CALL_BRIDGE_LOCAL
-            )
-            text = ROUTE_TEST_TEXT[language]
             path = None
             try:
                 # Constructed on demand; the voice loads on its first synthesis.
