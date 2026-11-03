@@ -5,15 +5,19 @@ import time
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from lianiq.call_bridge.contracts import BridgeEventKind, LaneId
 from lianiq.call_bridge.inference_scheduler import InferenceScheduler
 from lianiq.call_bridge.translation_lane import TranslationLane
 from lianiq.domain import AudioUtterance, Transcript
+from lianiq.languages.capabilities import DirectedEdge
 from lianiq.languages.registry import LanguageId
 
 GERMAN = LanguageId("de")
 MANDARIN = LanguageId("zh-Hans")
+DE_ZH = DirectedEdge(GERMAN, MANDARIN)
+ZH_DE = DirectedEdge(MANDARIN, GERMAN)
 
 
 class Recognizer:
@@ -41,8 +45,7 @@ def test_lane_has_fixed_direction_and_preserves_order() -> None:
     results = []
     lane = TranslationLane(
         lane_id=LaneId.OUTBOUND,
-        source_language=GERMAN,
-        target_language=MANDARIN,
+        edge=DE_ZH,
         recognizer=Recognizer(),
         translator=Translator(),
         synthesizer=Synthesizer(),
@@ -72,8 +75,7 @@ def test_failed_synthesis_never_reaches_playback() -> None:
 
     lane = TranslationLane(
         lane_id=LaneId.INBOUND,
-        source_language=MANDARIN,
-        target_language=GERMAN,
+        edge=ZH_DE,
         recognizer=Recognizer(),
         translator=Translator(),
         synthesizer=FailingSynthesizer(),
@@ -101,8 +103,7 @@ def test_playback_failure_is_sanitized_and_classified_for_endpoint_muting() -> N
 
     lane = TranslationLane(
         lane_id=LaneId.OUTBOUND,
-        source_language=GERMAN,
-        target_language=MANDARIN,
+        edge=DE_ZH,
         recognizer=Recognizer(),
         translator=Translator(),
         synthesizer=Synthesizer(),
@@ -131,8 +132,7 @@ def test_stale_and_overflow_work_is_dropped_and_reported() -> None:
 
     lane = TranslationLane(
         lane_id=LaneId.OUTBOUND,
-        source_language=GERMAN,
-        target_language=MANDARIN,
+        edge=DE_ZH,
         recognizer=BlockingRecognizer(),
         translator=Translator(),
         synthesizer=Synthesizer(),
@@ -168,8 +168,7 @@ def test_stop_during_inference_mutes_late_output() -> None:
 
     lane = TranslationLane(
         lane_id=LaneId.OUTBOUND,
-        source_language=GERMAN,
-        target_language=MANDARIN,
+        edge=DE_ZH,
         recognizer=BlockingRecognizer(),
         translator=Translator(),
         synthesizer=Synthesizer(),
@@ -188,3 +187,46 @@ def test_stop_during_inference_mutes_late_output() -> None:
     assert lane.stop(timeout=1.0) is True
 
     assert played == []
+
+
+def test_ac09_lane_edge_is_fixed_and_used_for_every_turn() -> None:
+    edges = []
+
+    class RecordingTranslator(Translator):
+        def translate(self, text, edge, context=()):
+            edges.append(edge)
+            return super().translate(text, edge, context)
+
+    lane = TranslationLane(
+        LaneId.INBOUND,
+        ZH_DE,
+        Recognizer(),
+        RecordingTranslator(),
+        Synthesizer(),
+        lambda _path: None,
+        InferenceScheduler(max_concurrent=1),
+    )
+    with pytest.raises(AttributeError):
+        lane.edge = DE_ZH  # type: ignore[misc]
+
+    lane.start()
+    lane.submit(utterance(1))
+    lane.submit(utterance(2))
+    assert lane.wait_until_idle(timeout=1.0)
+    assert lane.stop(timeout=1.0)
+
+    assert edges == [ZH_DE, ZH_DE]
+    assert (lane.source_language, lane.target_language) == (MANDARIN, GERMAN)
+
+
+def test_lane_requires_a_directed_edge() -> None:
+    with pytest.raises(TypeError, match="DirectedEdge"):
+        TranslationLane(
+            LaneId.OUTBOUND,
+            (GERMAN, MANDARIN),  # type: ignore[arg-type]
+            Recognizer(),
+            Translator(),
+            Synthesizer(),
+            lambda _path: None,
+            InferenceScheduler(max_concurrent=1),
+        )
