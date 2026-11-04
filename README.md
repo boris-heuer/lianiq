@@ -52,7 +52,7 @@ Microphone (16 kHz mono)
   -> energy-based speech and pause detection
   -> bounded real-time queue
   -> Faster-Whisper small (CPU INT8)
-  -> MarianMT de <-> zh
+  -> MarianMT, one model per translation direction of the selected language pair
   -> Piper TTS
   -> selected speakers
 ```
@@ -61,8 +61,11 @@ Microphone processing is muted while Piper speaks, preventing the application fr
 its own output. If the bounded queue fills, the oldest pending segment is dropped to prevent the
 conversation from accumulating increasing delay.
 
-Automatic mode detects and routes every completed utterance independently. It never assumes that
-participants alternate, so any number of German or Mandarin turns may occur consecutively. See
+Languages are identified by BCP 47 language IDs from a built-in registry (`de` German,
+`zh-Hans` Mandarin (Simplified)); English, Spanish, and French are listed as planned and cannot be
+selected yet. Automatic routing detects and routes every completed utterance independently, but
+only within the selected language pair. It never assumes that participants alternate, so any number
+of German or Mandarin turns may occur consecutively. See
 [`docs/conversation-architecture.md`](docs/conversation-architecture.md) for multi-participant
 scenarios, overlap limitations, and the TDD strategy.
 
@@ -110,10 +113,18 @@ application evidence, headset constraints, and the acceptance required before ch
 
 The application persists native Windows MMDevice identities and resolves the current WASAPI index
 at runtime. Missing or ambiguous devices mute the affected lane; they never fall back to a Windows
-default endpoint. This command is a local model check, not proof of safe hardware routing or a
+default endpoint. The lanes are fixed for a Call Bridge session: the local lane translates from
+`call_bridge.local_language` (default `de`) to the other language of the selected pair, and the
+remote lane translates back. Before any lane starts, the Call Bridge checks every model, both
+voices, and all four endpoints, and names each missing item instead of starting.
+
+The synthetic self-test needs no models. It checks that both lanes stay fixed for the session and
+that a missing lane voice fails closed and is named. The model-backed run without `--synthetic`
+needs every model and both voices. Both are local checks, not proof of safe hardware routing or a
 working real call:
 
 ```powershell
+.\.venv\Scripts\python.exe .\scripts\call_bridge_self_test.py --synthetic
 .\.venv\Scripts\python.exe .\scripts\call_bridge_self_test.py
 ```
 
@@ -145,6 +156,14 @@ models:
 .\.venv\Scripts\python.exe .\scripts\doctor.py
 ```
 
+The doctor prints the readiness of each capability of the configured language pair: speech
+recognition per language, translation per direction (for example `de>zh-Hans` and `zh-Hans>de`), and
+the voice per language. A status is `not_configured`, `missing`, `installed` (files present),
+`validated` (files match `models/model-manifest.json`), or `invalid` (files do not match).
+Recognition and both translation directions are required. A missing voice is a warning, because
+spoken output in that language then stays unavailable while text output works. Add
+`--require-voices` to require the voices of both languages.
+
 ## Run
 
 ```powershell
@@ -153,24 +172,43 @@ models:
 
 - `F8`: start capture
 - `F9`: stop capture
-- Choose automatic direction, German to Mandarin, or Mandarin to German.
+- Choose the **Language pair**. It is currently German ↔ Mandarin (Simplified); planned languages
+  are shown as "planned, unavailable" and cannot be selected.
+- Choose automatic direction within the pair, German → Mandarin (Simplified), or Mandarin
+  (Simplified) → German. An unavailable entry is disabled, and its tooltip names what is missing.
 - Select microphone and speakers before starting.
-- Disable or enable spoken output at any time.
+- Choose **Voice output** before starting. It is available only when the voices of the selected
+  direction are provisioned; otherwise its tooltip names the missing voice and text output still
+  works.
+
+The language pair, direction, and **Voice output** are bound at **Start**. While a session or the
+Call Bridge runs, these controls are disabled; stop the session to change them.
 
 No model is loaded before **Start**. **Start** loads only the models the selected mode needs:
 speech recognition for the spoken language(s), the translation model of each direction in use, and
 voices only when spoken output is on. A missing reverse translation model therefore does not block
-a fixed direction. A turn whose detected language is not German or Mandarin is not translated; the
-status bar names the detected language instead of guessing.
+a fixed direction. If a required model or device is missing, **Start** is disabled and the status
+bar names each missing item.
+
+In automatic mode, a turn is held instead of guessed when its language is outside the pair,
+unknown, or detected with a probability below `languages.detection_min_probability` (default
+`0.7`). The held-turn bar shows the transcript and the detected language. Choose **Translate as
+German** or **Translate as Mandarin (Simplified)** to recognize the turn again in that language
+and translate it, or **Discard** it. Later turns keep flowing while a turn is held, and **Stop**
+discards any turn that is still held. **Export transcript** writes the `# lianiq transcript v2`
+format with the language IDs of every turn, in capture order.
 
 ## Measure latency
 
 Use your own 16 kHz mono PCM16 WAV files with spoken test sentences:
 
 ```powershell
-.\.venv\Scripts\python.exe .\scripts\benchmark.py C:\path\german.wav --mode de-zh
-.\.venv\Scripts\python.exe .\scripts\benchmark.py C:\path\mandarin.wav --mode zh-de
+.\.venv\Scripts\python.exe .\scripts\benchmark.py C:\path\german.wav --source de
+.\.venv\Scripts\python.exe .\scripts\benchmark.py C:\path\mandarin.wav --source zh-Hans
 ```
+
+`--source` takes the language ID spoken in the WAV file and fixes the direction to the other
+language of the configured pair. Without it, the benchmark uses automatic routing within the pair.
 
 The benchmark returns exit code `0` when end-to-end processing, including voice output, takes no
 more than three seconds. Use `--without-tts` to measure STT and translation only.
@@ -195,7 +233,19 @@ IDs, are saved to the ignored `config/settings.local.json` overlay. Both files u
 schema v2 (`"schema_version": 2`). An older overlay without `schema_version` is migrated when it
 is loaded; the first save keeps its original bytes once in the ignored
 `config/settings.local.v1.json`. A legacy value that cannot be mapped stops the start with an error
-naming the setting, and no file is changed. Define domain terminology in
+naming the setting, and no file is changed.
+
+Schema v2 keys every language setting by language ID:
+
+- `languages`: the selected `pair`, `routing` (`bidirectional`, or `fixed` with `fixed_source`),
+  `output` (`text` or `spoken`), and `detection_min_probability`;
+- `speech_to_text.languages`: the languages the recognition model serves;
+- `translation.edges`: one model per direction, keyed `"<source>><target>"`, such as
+  `"de>zh-Hans"`; a reverse direction is never derived from a configured one;
+- `tts.voices`: one voice file per language ID;
+- `call_bridge.local_language`: the language spoken on the local side of the Call Bridge.
+
+Define domain terminology in
 [`config/glossary.json`](config/glossary.json):
 
 ```json
@@ -250,7 +300,8 @@ files more predictably than a single executable.
 - Native faults are written to `logs\native-crash.log`; Qt uses software rendering for stability
   on the integrated Radeon GPU.
 - Missing dependencies and models produce actionable error messages.
-- `scripts\doctor.py` validates dependencies and every required model file.
+- `scripts\doctor.py` validates dependencies and reports the readiness of every capability of the
+  configured language pair.
 - `scripts\self_test.py` validates both complete model pipelines against the three-second target.
 
 ## Model sources and licensing

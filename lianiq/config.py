@@ -9,8 +9,6 @@ from typing import Any
 from lianiq.config_migration import (
     SCHEMA_VERSION,
     backup_legacy_settings,
-    languages_from_legacy_mode,
-    legacy_mode_from_languages,
     read_settings_file,
 )
 
@@ -107,19 +105,6 @@ class TranslationConfig:
             if not separator or not source or not target or ">" in target:
                 raise ValueError(f"translation.edges key must be '<source>><target>': {key!r}")
 
-    # Compatibility accessors for the de/zh translator until WI-03 moves it to edges.
-    @property
-    def de_zh_model_path(self) -> str:
-        return self._edge_path("de>zh-Hans")
-
-    @property
-    def zh_de_model_path(self) -> str:
-        return self._edge_path("zh-Hans>de")
-
-    def _edge_path(self, key: str) -> str:
-        edge = self.edges.get(key)
-        return edge.model_path if edge is not None else ""
-
 
 @dataclass(slots=True)
 class TtsConfig:
@@ -134,15 +119,6 @@ class TtsConfig:
     )
     length_scale: float = 1.0
     device: str = "auto"
-
-    # Compatibility accessors for the de/zh voice adapter until WI-03 moves it to IDs.
-    @property
-    def de_voice_path(self) -> str:
-        return self.voices.get("de", "")
-
-    @property
-    def zh_voice_path(self) -> str:
-        return self.voices.get("zh-Hans", "")
 
 
 @dataclass(slots=True)
@@ -226,8 +202,7 @@ class AppConfig:
             json.dumps(asdict(self), ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
 
-    # Compatibility accessors for the de/zh conversation UI until WI-04 moves it to
-    # language IDs and usage modes.
+    # ``languages.output`` as a flag: spoken output on or off.
     @property
     def voice_output(self) -> bool:
         return self.languages.output == "spoken"
@@ -235,14 +210,6 @@ class AppConfig:
     @voice_output.setter
     def voice_output(self, enabled: bool) -> None:
         self.languages.output = "spoken" if enabled else "text"
-
-    @property
-    def legacy_mode(self) -> str:
-        return legacy_mode_from_languages(self.languages.routing, self.languages.fixed_source)
-
-    @legacy_mode.setter
-    def legacy_mode(self, mode: str) -> None:
-        self.languages.routing, self.languages.fixed_source = languages_from_legacy_mode(mode)
 
     @staticmethod
     def resolve(value: str) -> Path:

@@ -45,6 +45,11 @@ All notable user-visible changes are documented here.
   fixed for the whole call. Role labels and test buttons name those languages. **Start call
   bridge** is refused before any model loads with "Not available: missing …", naming every
   missing model, voice and unassigned endpoint.
+- `scripts/doctor.py` prints the readiness of each capability of the configured language pair
+  (recognition per language, translation per direction, voice per language). A missing voice is a
+  warning, including the German voice, which was required before; `--require-voices` replaces
+  `--require-mandarin-voice`. `scripts/benchmark.py` takes `--source <language ID>` instead of
+  `--mode de-zh|zh-de`.
 - Renamed the product, repository metadata, Python package, command, Windows executable, and
   documentation to `lianiq`.
 

@@ -134,7 +134,7 @@ try {
         }
 
         if ($Mode -eq 'Operational') {
-            & $python (Join-Path $clonePath 'scripts\doctor.py') --require-mandarin-voice
+            & $python (Join-Path $clonePath 'scripts\doctor.py') --require-voices
             if ($LASTEXITCODE -ne 0) {
                 throw 'Operational verification failed. Provision all documented local models in the clone; no model download was attempted.'
             }

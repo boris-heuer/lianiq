@@ -396,3 +396,67 @@ def test_selecting_another_pair_rebuilds_call_bridge_labels_and_lanes(
         assert (lanes.outbound.key, lanes.inbound.key) == ("de>qaa", "qaa>de")
     finally:
         window.close()
+
+
+# AC-18 (pytest-qt UI-nav) and the Call Bridge stop path (CAP-0169 WI-07) ------------------
+
+
+def test_ac18_call_bridge_and_result_labels_show_registry_names(
+    window,
+    spies,  # noqa: F811
+) -> None:
+    from tests.ui.test_main_window_languages import assert_no_language_codes, blocks
+
+    panel = window.call_bridge_panel
+    assert {role: label.text() for role, label in panel.role_label_widgets.items()} == {
+        EndpointRole.LOCAL_MICROPHONE: "Local microphone · German source",
+        EndpointRole.CALL_MICROPHONE_RENDER: "Call microphone output · Mandarin (Simplified) to call",
+        EndpointRole.CALL_SPEAKER_CAPTURE: "Call speaker input · Mandarin (Simplified) from call",
+        EndpointRole.LOCAL_HEADPHONES: "Local headphones · German playback",
+    }
+    assert panel.outbound_test_button.text() == "Test Mandarin (Simplified) → call mic"
+    assert panel.inbound_test_button.text() == "Test German → headphones"
+    assign(window)
+
+    click(panel.start_button)
+    assert wait_until(lambda: window.call_bridge_controller is not None)
+    controller = window.call_bridge_controller
+    outbound_capture, inbound_capture = FakeCaptureStream.instances
+    spies.recognizer.results = [
+        Transcript("Guten Tag", None, 1.0, 0.1),
+        Transcript("你好", None, 1.0, 0.1),
+    ]
+    outbound_capture.on_utterance(AUDIO)
+    assert controller.outbound_lane.wait_until_idle(timeout=2.0)
+    inbound_capture.on_utterance(AUDIO)
+    assert controller.inbound_lane.wait_until_idle(timeout=2.0)
+    assert wait_until(lambda: len(window.history) == 2)
+
+    assert blocks(window.source_text) == ["German: Guten Tag", "Mandarin (Simplified): 你好"]
+    assert blocks(window.target_text) == [
+        "Mandarin (Simplified): [de>zh-Hans] Guten Tag",
+        "German: [zh-Hans>de] 你好",
+    ]
+    assert_no_language_codes(window)
+
+
+def test_stopping_the_call_bridge_restores_start_from_the_current_availability(
+    window,
+    spies,  # noqa: F811
+) -> None:
+    import shutil
+
+    assign(window)
+    click(window.call_bridge_panel.start_button)
+    assert wait_until(lambda: window.call_bridge_controller is not None)
+    assert not window.start_button.isEnabled()
+    # The speech recognition model disappears while the Call Bridge runs.
+    shutil.rmtree(window.config.speech_to_text.model_path)
+
+    click(window.call_bridge_panel.stop_button)
+
+    assert window.call_bridge_controller is None
+    assert not window.start_button.isEnabled()  # not blindly re-enabled
+    assert window.state_label.text() == "Not available"
+    assert window.pair_combo.isEnabled()  # the session lock is released
+    assert window.call_bridge_panel.start_button.isEnabled()

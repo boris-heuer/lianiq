@@ -164,7 +164,7 @@ def test_ac16_legacy_local_overlay_is_migrated_backed_up_once_and_idempotent(
     assert saved["translation"]["glossary_path"] == "config/glossary.json"
     assert saved["languages"]["pair"] == ["de", "zh-Hans"]
     assert saved["call_bridge"]["local_language"] == "de"
-    assert first.legacy_mode == "zh-de"
+    assert (first.languages.routing, first.languages.fixed_source) == ("fixed", "zh-Hans")
     assert first.voice_output is True
 
     backup = settings_dir / "settings.local.v1.json"
