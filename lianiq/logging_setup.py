@@ -37,7 +37,11 @@ def configure_logging(log_dir: Path, level: str = "INFO") -> None:
         faulthandler.disable()
         _FAULT_LOG.close()
     _FAULT_LOG = (log_dir / "native-crash.log").open("a", encoding="utf-8")
-    faulthandler.enable(_FAULT_LOG, all_threads=True)
+    # On Windows faulthandler also reports exceptions that are handled afterwards, such as
+    # the COM error 0x8001010d that UI Automation clients (Narrator) raise and handle. Dumping
+    # *other* threads' frames while they run can then crash the process with an access
+    # violation (lianiq#69), so on Windows only the reporting thread is dumped.
+    faulthandler.enable(_FAULT_LOG, all_threads=sys.platform != "win32")
     sys.excepthook = _handle_unhandled_exception
     threading.excepthook = _handle_thread_exception
 
