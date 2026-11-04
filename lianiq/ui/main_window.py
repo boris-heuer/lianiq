@@ -994,11 +994,24 @@ class MainWindow(QMainWindow):
     def _show_result(self, result: TranslationResult) -> None:
         name = self.pipeline.registry.display_name
         source, target = name(result.source_language), name(result.target_language)
-        self.source_text.appendPlainText(f"{source}: {result.source_text}\n")
-        self.target_text.appendPlainText(f"{target}: {result.translated_text}\n")
+        self._append_result_line(self.source_text, f"{source}: {result.source_text}\n")
+        self._append_result_line(self.target_text, f"{target}: {result.translated_text}\n")
         direction = strings.ROUTING_FIXED.format(source=source, target=target)
         self.latency_label.setText(f"{direction} · Processing: {result.total_seconds:.2f} s")
         self.history.append(result)
+
+    @staticmethod
+    def _append_result_line(panel: QPlainTextEdit, line: str) -> None:
+        """Append ``line`` and always scroll the panel to it.
+
+        ``appendPlainText`` follows new text only while the view is already at the bottom. A
+        screen reader or UI Automation client that selects or scrolls to earlier text (Narrator
+        reading a panel) leaves it elsewhere, and every later result would then be appended out
+        of view (lianiq#69). Only the view moves; the caret and selection are kept.
+        """
+        panel.appendPlainText(line)
+        scroll_bar = panel.verticalScrollBar()
+        scroll_bar.setValue(scroll_bar.maximum())
 
     @Slot(object)
     def _show_held(self, _held: HeldTurn) -> None:
