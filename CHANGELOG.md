@@ -60,6 +60,10 @@ All notable user-visible changes are documented here.
 - At the default window width the held-turn buttons and the *Language pair* and *Conversation
   direction* controls show their full text: the transcript excerpt is shortened to the space left,
   and *Voice output* and *CUDA GPU* moved next to *Switch direction*.
+- New results stay visible after a screen reader such as Narrator has read the *Original* or
+  *Translation* panel: each result scrolls its panel to the end. On Windows the native crash log
+  dumps only the reporting thread, so a COM error reported while Narrator is active can no longer
+  crash Lianiq.
 
 ## 0.1.0 - 2026-10-06
 
