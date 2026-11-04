@@ -221,6 +221,15 @@ class MainWindow(QMainWindow):
         self.model_combo.addItem("Balanced · Whisper small + MarianMT", "balanced")
         self.model_combo.setToolTip("The installed profile is optimized for this EliteBook.")
         controls.addWidget(self.model_combo, 1, 4)
+        # The pair and routing combos keep the width of their longest entry; the device and
+        # model combos share the remaining width and may shorten their text. *Voice output*
+        # and *CUDA GPU* sit in the action row, so the grid fits the default window width
+        # in one row (WI-08 DEV-02).
+        for combo in (self.input_combo, self.output_combo, self.model_combo):
+            combo.setSizeAdjustPolicy(
+                QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+            )
+            combo.setMinimumContentsLength(10)
 
         self.tts_checkbox = QCheckBox("Voice output")
         self.tts_checkbox.setAccessibleName("Voice output")
@@ -228,16 +237,15 @@ class MainWindow(QMainWindow):
         # ``_refresh_availability``); the output is bound to the session at Start.
         self.tts_checkbox.setChecked(self.config.voice_output)
         self.tts_checkbox.toggled.connect(self._toggle_tts)
-        controls.addWidget(self.tts_checkbox, 1, 5)
         self.gpu_checkbox = QCheckBox("CUDA GPU")
         recognition_device = self._recognition_device()
         self.gpu_checkbox.setChecked(recognition_device == "cuda")
         self.gpu_checkbox.setEnabled(False)
         runtime_device = recognition_device.upper()
         self.gpu_checkbox.setToolTip(f"Active inference device: {runtime_device}")
-        controls.addWidget(self.gpu_checkbox, 1, 6)
         controls.setColumnStretch(2, 2)
         controls.setColumnStretch(3, 2)
+        controls.setColumnStretch(4, 1)
         layout.addLayout(controls)
 
         action_row = QHBoxLayout()
@@ -254,6 +262,9 @@ class MainWindow(QMainWindow):
         action_row.addWidget(self.start_button)
         action_row.addWidget(self.stop_button)
         action_row.addWidget(self.swap_button)
+        action_row.addSpacing(12)
+        action_row.addWidget(self.tts_checkbox)
+        action_row.addWidget(self.gpu_checkbox)
         action_row.addStretch()
         action_row.addWidget(export_button)
         layout.addLayout(action_row)
@@ -1085,10 +1096,13 @@ class MainWindow(QMainWindow):
         self.stop_listening()
         if self.persist_settings:
             self.call_bridge_panel.apply_to_config()
-            fixed_source = self.current_fixed_source()
-            self.config.languages.routing = "bidirectional" if fixed_source is None else "fixed"
+            # Without a ready pair the routing control is empty: the migrated or saved
+            # routing is kept, never replaced by Automatic (E-09, WI-08 DEF-01).
+            if self.current_pair() is not None:
+                fixed_source = self.current_fixed_source()
+                self.config.languages.routing = "bidirectional" if fixed_source is None else "fixed"
+                self.config.languages.fixed_source = fixed_source
             # ``config.voice_output`` holds the user's preference, kept even while a
             # missing voice disables the checkbox.
-            self.config.languages.fixed_source = fixed_source
             self.config.save()
         event.accept()

@@ -53,6 +53,14 @@ All notable user-visible changes are documented here.
 - Renamed the product, repository metadata, Python package, command, Windows executable, and
   documentation to `lianiq`.
 
+### Fixed
+
+- Closing the window without a ready language pair no longer replaces the saved or migrated
+  routing with Automatic.
+- At the default window width the held-turn buttons and the *Language pair* and *Conversation
+  direction* controls show their full text: the transcript excerpt is shortened to the space left,
+  and *Voice output* and *CUDA GPU* moved next to *Switch direction*.
+
 ## 0.1.0 - 2026-10-06
 
 ### Added

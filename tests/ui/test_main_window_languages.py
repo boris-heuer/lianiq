@@ -358,7 +358,7 @@ def test_ac11_vor03_unclear_turn_is_held_until_translate_as_german_is_clicked(
     bar = window.held_turn_bar
     assert wait_until(bar.isVisible)
     assert bar.title_label.text() == "Language unclear — choose the spoken language"
-    assert bar.transcript_label.text() == "“Good morning, this is a test.”"
+    assert bar.excerpt == "“Good morning, this is a test.”"
     assert bar.detected_label.text() == shown
     assert not bar.counter_label.isVisible()
     buttons = [*bar.translate_buttons.values(), bar.discard_button]
@@ -430,7 +430,7 @@ def test_held_turn_bar_keyboard_resolution_excerpt_counter_and_resolving_state(
     assert wait_until(lambda: bar.counter_label.isVisible())
 
     assert bar.counter_label.text() == "1 of 2"
-    shown = bar.transcript_label.text().strip("“”")
+    shown = bar.excerpt.strip("“”")
     assert len(shown) == 120 and shown.endswith("…")
     assert bar.transcript_label.toolTip() == long_text
 
@@ -460,7 +460,7 @@ def test_held_turn_bar_keyboard_resolution_excerpt_counter_and_resolving_state(
     assert wait_until(lambda: len(window.history) == 1)
     assert wait_until(lambda: not bar.resolving)
     assert bar.isVisible() and not bar.counter_label.isVisible()  # the second turn remains
-    assert bar.transcript_label.text() == "“Second unclear turn”"
+    assert bar.excerpt == "“Second unclear turn”"
     assert german.isEnabled()
     window.stop_listening()
 
