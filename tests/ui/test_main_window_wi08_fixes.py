@@ -268,5 +268,5 @@ def test_dev02_language_combos_show_the_full_selected_value_at_the_default_width
             or control.mapTo(window, control.rect().topRight()).x() > window.width()
         ] == []
         # The device and model combos may shorten their text, but stay readable.
-        for combo in (window.input_combo, window.output_combo, window.model_combo) :
+        for combo in (window.input_combo, window.output_combo, window.model_combo):
             assert combo.width() >= combo.minimumSizeHint().width() > 0
