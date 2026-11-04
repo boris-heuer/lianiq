@@ -4,6 +4,9 @@ A one-line bar of stock widgets: a warning icon, the title, the transcript excer
 120 characters, full text in the tooltip), the detected language, one **Translate as**
 button per pair member, **Discard** and the counter "1 of n" when several turns are held.
 Nothing is translated until the user clicks a button; ``Esc`` is deliberately not bound.
+
+The excerpt yields the bar's width: it is elided to the space the other controls leave,
+so the buttons always show their full labels (WI-08 DEV-01).
 """
 
 from __future__ import annotations
@@ -11,8 +14,8 @@ from __future__ import annotations
 import itertools
 from collections.abc import Sequence
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QStyle
+from PySide6.QtCore import QEvent, QObject, Qt, Signal
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QStyle
 
 from lianiq.conversation.routing import HeldTurn
 from lianiq.languages.errors import UnknownLanguageError
@@ -53,6 +56,12 @@ class HeldTurnBar(QFrame):
         self.title_label.setObjectName("heldTitle")
         self.transcript_label = QLabel()
         self.transcript_label.setTextFormat(Qt.TextFormat.PlainText)
+        # Ignored width: the excerpt takes only the space left over and is elided to it.
+        self.transcript_label.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
+        )
+        self.transcript_label.installEventFilter(self)
+        self._excerpt = ""
         self.detected_label = QLabel()
         self.counter_label = QLabel()
         layout.addWidget(icon)
@@ -79,6 +88,16 @@ class HeldTurnBar(QFrame):
     def resolving(self) -> bool:
         return self._resolving
 
+    @property
+    def excerpt(self) -> str:
+        """The quoted excerpt (at most 120 characters) before it is elided to the bar."""
+        return self._excerpt
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if watched is self.transcript_label and event.type() == QEvent.Type.Resize:
+            self._fit_excerpt()
+        return super().eventFilter(watched, event)
+
     def set_held(self, turns: Sequence[HeldTurn], pair: LanguagePair | None) -> None:
         """Show the oldest of ``turns`` with one button per member of ``pair``; hide if none."""
         if not turns or pair is None:
@@ -88,7 +107,8 @@ class HeldTurnBar(QFrame):
         turn = turns[0]
         self._turn = turn
         text = turn.transcript.text
-        self.transcript_label.setText(f"“{excerpt(text)}”")
+        self._excerpt = f"“{excerpt(text)}”"
+        self._fit_excerpt()
         self.transcript_label.setToolTip(text)
         self.transcript_label.setAccessibleName(text)
         detected = self._detected_name(turn)
@@ -109,6 +129,12 @@ class HeldTurnBar(QFrame):
     def clear(self) -> None:
         self._turn = None
         self.hide()
+
+    def _fit_excerpt(self) -> None:
+        label = self.transcript_label
+        width = label.contentsRect().width()
+        metrics = label.fontMetrics()
+        label.setText(metrics.elidedText(self._excerpt, Qt.TextElideMode.ElideRight, width))
 
     def _set_pair(self, pair: LanguagePair) -> None:
         if pair == self._pair:
