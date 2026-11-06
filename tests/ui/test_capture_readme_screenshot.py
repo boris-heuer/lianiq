@@ -65,3 +65,28 @@ def test_screenshot_pipeline_reports_the_default_pair_ready_without_loading_mode
     finally:
         window.close()
     assert pipeline.recognizer is not None and pipeline.synthesizer is None
+
+
+def test_screenshot_shows_the_sample_held_turn_with_one_button_per_pair_member(
+    tmp_path, monkeypatch
+) -> None:
+    pytest.importorskip("PySide6")
+    from PySide6.QtWidgets import QApplication
+
+    import lianiq.ui.main_window as main_window_module
+
+    QApplication.instance() or QApplication([])
+    capture = load_capture_module()
+    shown = []
+    original_close = main_window_module.MainWindow.close
+
+    def record_and_close(window):
+        bar = window.held_turn_bar
+        shown.append((bar.isVisible(), bar.turn, sorted(bar.translate_buttons)))
+        return original_close(window)
+
+    monkeypatch.setattr(main_window_module.MainWindow, "close", record_and_close)
+
+    assert capture.main(["--output", str(tmp_path / "application-ui.png")]) == 0
+
+    assert shown == [(True, capture.SAMPLE_HELD_TURN, ["de", "zh-Hans"])]
