@@ -18,7 +18,7 @@ Describe the user problem and the change.
 - [ ] Remaining gaps include cause, impact, responsible actor, and exact unblock action
 - [ ] Artifact completion, code verification, and runtime SystemOK are reported separately; this PR does not claim runtime SystemOK without the required profile evidence
 
-Follow the [binding Definition of Done](https://github.com/boris-heuer/lianiq/blob/main/docs/sdlc/definition-of-done.md), [native Windows evidence profile](https://github.com/boris-heuer/lianiq/blob/main/docs/sdlc/native-windows-evidence-profile.md), and [current canonical factory ownership guidance](https://github.com/boris-heuer/app-shared/blob/main/repo-config/skills/implement-capability/references/repo-ownership-routing.md). Canonical registration remains pending [#40](https://github.com/boris-heuer/lianiq/issues/40); this template does not authorize a local substitute.
+Follow the [binding Definition of Done](https://github.com/boris-heuer/lianiq/blob/main/docs/sdlc/definition-of-done.md), [native Windows evidence profile](https://github.com/boris-heuer/lianiq/blob/main/docs/sdlc/native-windows-evidence-profile.md), and [current canonical factory ownership guidance](https://github.com/boris-heuer/app-shared/blob/main/repo-config/skills/implement-capability/references/repo-ownership-routing.md). Canonical product and capability artefacts live in [`app-shared/docs/products/lianiq/`](https://github.com/boris-heuer/app-shared/tree/main/docs/products/lianiq); this template does not authorize a local substitute.
 
 ## Safety and privacy
 
