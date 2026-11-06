@@ -23,7 +23,32 @@ stack.
    and [PR workflow](https://github.com/boris-heuer/app-shared/blob/main/repo-config/dev-guides/pr-workflow.md)
    for review, CI, merge, and completion evidence.
 
-Canonical capability registration remains blocked until SDLC-03 ([#40](https://github.com/boris-heuer/lianiq/issues/40)) resolves its factory consumer-admission dependency. Do not create a local catalog, capability folder, or `factory.config` as a workaround. Artifact-only adoption work owned by [#37](https://github.com/boris-heuer/lianiq/issues/37) may use its issue and the adoption baseline; runtime feature dispatch under [#20](https://github.com/boris-heuer/lianiq/issues/20) waits for coherent canonical owner/spec mapping.
+Lianiq is registered as a factory product (SDLC-03,
+[#40](https://github.com/boris-heuer/lianiq/issues/40), closed). Canonical product and
+capability artefacts — `product.md`, the product capability model, the integration
+contract, and one folder per capability (for example `language-pair-contract`, CAP-0169) —
+live in
+[`app-shared/docs/products/lianiq/`](https://github.com/boris-heuer/app-shared/tree/main/docs/products/lianiq).
+Specifications, work items, and contract changes are made there, not in this repository.
+Do not create a local catalog, capability folder, or `factory.config`. This repository
+owns the runtime source, tests, user documentation, and app-specific evidence.
+
+## Code map
+
+- `lianiq/languages/`: the built-in language registry (BCP 47 language IDs, qualified and
+  planned languages), language pairs, directed capabilities, usage-mode requirements, and
+  readiness. Language IDs and edge keys are not hard-coded elsewhere in `lianiq/`;
+  `tests/test_no_hardcoded_languages.py` enforces this and its docstring lists the few
+  permitted exceptions.
+- `lianiq/config.py` and `lianiq/config_migration.py`: settings schema v2 (`languages`,
+  `translation.edges`, `tts.voices`, `tts.engines`) and the lossless v1 migration.
+- `lianiq/conversation/routing.py`: pair-scoped turn routing and held turns.
+- `lianiq/stt/`, `lianiq/translation/`, `lianiq/tts/`: Faster-Whisper, MarianMT per
+  directed edge, and voices per language (Piper, sherpa-onnx, selected by `voice_router`).
+- `lianiq/call_bridge/` and `lianiq/audio/`: the experimental Call Bridge and audio I/O.
+- `lianiq/ui/`: the PySide6 window, held-turn bar, and accessibility names.
+- `scripts/download_models.py` and `models/model-manifest.json`: pinned model provisioning;
+  record model licences in [MODEL_LICENSES.md](MODEL_LICENSES.md).
 
 ## Delivery rules
 
@@ -40,11 +65,20 @@ Canonical capability registration remains blocked until SDLC-03 ([#40](https://g
   of Done; missing required evidence leaves the work open.
 - Route every question or decision to the originating parent/operator chat. Do not
   redirect it to a separate agent chat.
+- Publish branches, commits, pull requests, and merges only through the Factory SCM
+  Gateway (squash auto-merge pinned to the reviewed head). Do not use `git push`, the
+  `gh` CLI, another GitHub integration, or a direct merge. The Gateway writes at most
+  32 KiB (decoded) per file; a larger file, such as `lianiq/ui/main_window.py`, needs
+  explicit operator approval for that file. On an unknown outcome, read the state back
+  before acting; never retry automatically.
+- Before the first commit, an independent reviewer reviews the frozen staged tree; record
+  the review receipt as the PR workflow requires.
 
 ## Fresh-session walkthrough
 
-From this file, open the assigned issue, then the adoption baseline and Definition
-of Done. Resolve canonical ownership at the linked current `app-shared` guidance;
-then follow the issue's evidence route. The pull-request template repeats the
-required evidence record. This guidance does not authorize hooks, MCP, credentials,
-system configuration, or runtime changes.
+From this file, open the assigned issue or canonical work item, then the adoption
+baseline and Definition of Done. Resolve canonical ownership at the linked current
+`app-shared` guidance and the product folder above; then follow the evidence route.
+The development commands are in [CONTRIBUTING.md](CONTRIBUTING.md#development-checks).
+The pull-request template repeats the required evidence record. This guidance does not
+authorize hooks, MCP, credentials, system configuration, or runtime changes.
