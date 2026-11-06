@@ -136,7 +136,7 @@ BUILTIN_LANGUAGES: tuple[LanguageDefinition, ...] = (
         LanguageId("zh-Hans"),
         "Mandarin (Simplified)",
         "普通话（简体）",
-        {"whisper": "zh", "piper": "zh_CN"},
+        {"whisper": "zh", "piper": "zh_CN", "sherpa-onnx": "zh"},
         Availability.QUALIFIED,
     ),
     LanguageDefinition(
