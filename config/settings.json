@@ -49,7 +49,18 @@
   "tts": {
     "voices": {
       "de": "models/piper/de_DE-thorsten-medium.onnx",
-      "zh-Hans": "models/piper/zh_CN-user-provided.onnx"
+      "zh-Hans": "models/sherpa/vits-icefall-zh-aishell3"
+    },
+    "engines": {
+      "de": {
+        "engine": "piper"
+      },
+      "zh-Hans": {
+        "engine": "sherpa-onnx",
+        "speaker_id": 20,
+        "length_scale": 1.15,
+        "num_threads": 4
+      }
     },
     "length_scale": 1.0,
     "device": "auto"
