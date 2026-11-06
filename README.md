@@ -53,11 +53,11 @@ Microphone (16 kHz mono)
   -> bounded real-time queue
   -> Faster-Whisper small (CPU INT8)
   -> MarianMT, one model per translation direction of the selected language pair
-  -> Piper TTS
+  -> voice per language: Piper (German), sherpa-onnx (Mandarin)
   -> selected speakers
 ```
 
-Microphone processing is muted while Piper speaks, preventing the application from translating
+Microphone processing is muted while a voice speaks, preventing the application from translating
 its own output. If the bounded queue fills, the oldest pending segment is dropped to prevent the
 conversation from accumulating increasing delay.
 
@@ -141,16 +141,15 @@ The script:
 
 1. creates a Python 3.12 virtual environment in `.venv`,
 2. installs the hash-locked Windows dependencies and the application,
-3. downloads Faster-Whisper, both MarianMT models, and the German Piper voice,
+3. downloads Faster-Whisper, both MarianMT models, the German Piper voice, and the Mandarin
+   sherpa-onnx voice (pinned archive, size and SHA-256 verified),
 4. validates the installation with the offline doctor.
 
 Model download is the only setup step that requires internet access. Existing downloads are reused
-from the Hugging Face cache. Spoken output is disabled by default because Mandarin speech output is
-not preconfigured. Provide a Piper-compatible,
-license-reviewed Mandarin `.onnx` voice file and its matching `.onnx.json` metadata file, then set
-`tts.voices["zh-Hans"]` (the intended default location is
-`models/piper/zh_CN-user-provided.onnx`). To validate an existing installation without requesting
-models:
+from the Hugging Face cache. Spoken output is off by default (`languages.output` is `text`). The
+Mandarin voice is the sherpa-onnx model in `models/sherpa/vits-icefall-zh-aishell3/`
+(`tts.engines["zh-Hans"]`; see [MODEL_LICENSES.md](MODEL_LICENSES.md)); German uses Piper. To
+validate an existing installation without requesting models:
 
 ```powershell
 .\.venv\Scripts\python.exe .\scripts\doctor.py
@@ -309,8 +308,8 @@ files more predictably than a single executable.
 - Speech recognition: `Systran/faster-whisper-small`
 - Translation: `Helsinki-NLP/opus-mt-de-zh` and `Helsinki-NLP/opus-mt-zh-de`
 - German voice: `rhasspy/piper-voices`, `de_DE-thorsten-medium`
-- Mandarin voice: supplied separately by the user as a Piper-compatible ONNX model with matching
-  metadata; the user is responsible for confirming its license and distribution terms
+- Mandarin voice: sherpa-onnx `vits-icefall-zh-aishell3` (pinned release archive; licences and
+  open provenance questions in [MODEL_LICENSES.md](MODEL_LICENSES.md))
 
 Review and redistribute all applicable package and model licenses with any binary distribution.
 Review the license for the exact Piper runtime and voice artifacts selected for distribution.
