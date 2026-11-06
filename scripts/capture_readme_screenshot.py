@@ -3,7 +3,9 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
+from uuid import UUID
 
 os.environ.setdefault("QT_OPENGL", "software")
 os.environ.setdefault("QT_QUICK_BACKEND", "software")
@@ -12,9 +14,12 @@ os.environ.setdefault("QT_SCALE_FACTOR", "1")
 from lianiq.audio.devices import AudioDevice
 from lianiq.audio.endpoints import EndpointInventory
 from lianiq.config import AppConfig
+from lianiq.conversation.routing import HeldTurn
+from lianiq.domain import Transcript
 from lianiq.languages import (
     BUILTIN_REGISTRY,
     CapabilityCatalog,
+    LanguageId,
     ReadinessProbe,
     ReadinessStatus,
 )
@@ -24,6 +29,20 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUTPUT = ROOT / "docs" / "assets" / "application-ui.png"
 # Generic, host-independent devices; the public screenshot never enumerates real hardware.
 GENERIC_DEVICES = (AudioDevice(0, "Microphone", 1, 0), AudioDevice(1, "Speakers", 0, 2))
+CAPTURE_HEIGHT = 800
+# A synthetic held turn (spoken language outside the pair) so the held-turn bar is shown.
+SAMPLE_HELD_TURN = HeldTurn(
+    turn_id=UUID(int=0),
+    captured_at=datetime(2026, 1, 1, tzinfo=UTC),
+    transcript=Transcript(
+        text="Could you repeat the last sentence, please?",
+        language=LanguageId("en"),
+        probability=0.93,
+        duration_seconds=2.4,
+        engine_language_code="en",
+    ),
+    reason="out_of_pair",
+)
 
 
 class _ReadyRecognizer:
@@ -91,7 +110,12 @@ def main(argv: list[str] | None = None) -> int:
         window = main_window_module.MainWindow(
             config, build_screenshot_pipeline(config), persist_settings=False
         )
+        # Taller than the default so the held-turn bar does not compress the other rows.
+        window.resize(window.width(), max(window.height(), CAPTURE_HEIGHT))
         window.show()
+        window.held_turn_bar.set_held(
+            [SAMPLE_HELD_TURN], BUILTIN_REGISTRY.pair(*config.languages.pair)
+        )
         QTest.qWait(500)
         application.processEvents()
 
