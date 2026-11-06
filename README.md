@@ -24,9 +24,11 @@ application screenshot or a performance claim.
 
 ![Sanitized lianiq application window with the experimental Call Bridge disabled](docs/assets/application-ui.png)
 
-This screenshot is captured from the Windows application with generic device selections, empty
-transcript panels, and the experimental Call Bridge disabled. It demonstrates the current UI only;
-it is not evidence that the hardware, latency, reconnect, or real-call acceptance gates passed.
+This screenshot is captured from the Windows application by `scripts/capture_readme_screenshot.py`
+with generic device selections, empty transcript panels, a synthetic held turn in the held-turn bar,
+and the experimental Call Bridge disabled. It shows the language pair selector, **Voice output** and
+**CUDA GPU** in the action row, and the held-turn choices. It demonstrates the current UI only; it
+is not evidence that the hardware, latency, reconnect, or real-call acceptance gates passed.
 
 ## Reference system and portability
 
