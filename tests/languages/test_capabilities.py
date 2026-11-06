@@ -237,3 +237,32 @@ def test_from_config_reads_only_the_configured_v2_edges_voices_and_languages(
     assert catalog.recognition(ZH).status is ReadinessStatus.NOT_CONFIGURED
     assert catalog.voice(DE).status is ReadinessStatus.NOT_CONFIGURED
     assert catalog.voice(ZH).status is ReadinessStatus.MISSING
+
+
+def test_voice_directory_readiness_follows_its_manifest_records(tmp_path: Path) -> None:
+    """WI-09: a sherpa-onnx voice is a directory; its records decide validated/invalid."""
+    voice = write_model_directory(
+        tmp_path,
+        "models/sherpa/vits-icefall-zh-aishell3",
+        {"model.onnx": b"model", "tokens.txt": b"tokens"},
+    )
+    catalog = CapabilityCatalog(BUILTIN_REGISTRY, ReadinessProbe(tmp_path), voices={ZH: voice})
+    assert catalog.voice(ZH).status is ReadinessStatus.INSTALLED
+
+    write_manifest(
+        tmp_path,
+        [
+            manifest_record(tmp_path, voice / "model.onnx"),
+            manifest_record(tmp_path, voice / "tokens.txt"),
+        ],
+    )
+    catalog = CapabilityCatalog(BUILTIN_REGISTRY, ReadinessProbe(tmp_path), voices={ZH: voice})
+    assert catalog.voice(ZH).status is ReadinessStatus.VALIDATED
+
+    (voice / "tokens.txt").write_bytes(b"changed")
+    catalog = CapabilityCatalog(BUILTIN_REGISTRY, ReadinessProbe(tmp_path), voices={ZH: voice})
+    assert catalog.voice(ZH).status is ReadinessStatus.INVALID
+
+    missing = tmp_path / "models" / "sherpa" / "absent"
+    catalog = CapabilityCatalog(BUILTIN_REGISTRY, ReadinessProbe(tmp_path), voices={ZH: missing})
+    assert catalog.voice(ZH).status is ReadinessStatus.MISSING
