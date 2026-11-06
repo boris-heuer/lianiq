@@ -7,6 +7,10 @@ Nothing is translated until the user clicks a button; ``Esc`` is deliberately no
 
 The excerpt yields the bar's width: it is elided to the space the other controls leave,
 so the buttons always show their full labels (WI-08 DEV-01).
+
+Keyboard focus never falls through to an unrelated control (WI-10 DEF-05): while a resolve
+runs the bar itself keeps focus and the next held turn's first button receives it afterwards;
+when the bar hides with focus inside it, focus goes to the first enabled focus return target.
 """
 
 from __future__ import annotations
@@ -14,8 +18,16 @@ from __future__ import annotations
 import itertools
 from collections.abc import Sequence
 
-from PySide6.QtCore import QEvent, QObject, Qt, Signal
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QStyle
+from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QStyle,
+    QWidget,
+)
 
 from lianiq.conversation.routing import HeldTurn
 from lianiq.languages.errors import UnknownLanguageError
@@ -77,6 +89,7 @@ class HeldTurnBar(QFrame):
         self.discard_button.clicked.connect(self._discard)
         layout.addWidget(self.discard_button)
         self._pair: LanguagePair | None = None
+        self._focus_return: tuple[QWidget, ...] = ()
         self.hide()
 
     @property
@@ -92,6 +105,15 @@ class HeldTurnBar(QFrame):
     def excerpt(self) -> str:
         """The quoted excerpt (at most 120 characters) before it is elided to the bar."""
         return self._excerpt
+
+    def set_focus_return(self, *widgets: QWidget) -> None:
+        """Where focus goes when the bar hides with focus inside it: the first enabled one."""
+        self._focus_return = widgets
+
+    def has_focus_within(self) -> bool:
+        """Whether the bar or one of its buttons has the window's focus (also while inactive)."""
+        focused = self.window().focusWidget()
+        return focused is not None and (focused is self or self.isAncestorOf(focused))
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         if watched is self.transcript_label and event.type() == QEvent.Type.Resize:
@@ -120,15 +142,37 @@ class HeldTurnBar(QFrame):
         self.counter_label.setVisible(len(turns) > 1)
         self._apply_enabled()
         self.show()
+        if self.window().focusWidget() is self and not self._resolving:
+            # Focus was parked on the bar during a resolve; continue with the next turn.
+            next(iter(self.translate_buttons.values()), self.discard_button).setFocus(
+                Qt.FocusReason.OtherFocusReason
+            )
 
     def set_resolving(self, resolving: bool) -> None:
         """Disable the buttons while the chosen re-recognition runs."""
+        if resolving and self.has_focus_within():
+            # Disabling the focused button would move focus along the chain to an unrelated
+            # control; the bar (named after its title) keeps it until the resolve reports back.
+            self.setFocus(Qt.FocusReason.OtherFocusReason)
         self._resolving = resolving
         self._apply_enabled()
 
     def clear(self) -> None:
+        if self.has_focus_within():
+            chosen = self._return_focus()
+            if chosen is not None:
+                # A stop clears the bar before it disables **Stop** and enables **Start**;
+                # once that settles, a target that became disabled hands focus on.
+                QTimer.singleShot(0, self, lambda: chosen.isEnabled() or self._return_focus())
         self._turn = None
         self.hide()
+
+    def _return_focus(self) -> QWidget | None:
+        for widget in self._focus_return:
+            if widget.isEnabled() and widget.isVisible():
+                widget.setFocus(Qt.FocusReason.OtherFocusReason)
+                return widget
+        return None
 
     def _fit_excerpt(self) -> None:
         label = self.transcript_label
