@@ -35,7 +35,11 @@ def test_ac01_builtin_registry_lists_qualified_and_planned_languages() -> None:
         assert set(item.engine_codes.values()) != {item.id}
     assert BUILTIN_REGISTRY.get("zh-Hans").english_name == "Mandarin (Simplified)"
     assert BUILTIN_REGISTRY.get("zh-Hans").native_name == "普通话（简体）"
-    assert dict(BUILTIN_REGISTRY.get("zh-Hans").engine_codes) == {"whisper": "zh", "piper": "zh_CN"}
+    assert dict(BUILTIN_REGISTRY.get("zh-Hans").engine_codes) == {
+        "whisper": "zh",
+        "piper": "zh_CN",
+        "sherpa-onnx": "zh",
+    }
 
 
 def test_engine_codes_map_back_to_language_ids() -> None:
