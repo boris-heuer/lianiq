@@ -76,6 +76,10 @@ All notable user-visible changes are documented here.
   *Translation* panel: each result scrolls its panel to the end. On Windows the native crash log
   dumps only the reporting thread, so a COM error reported while Narrator is active can no longer
   crash Lianiq.
+- Screen readers such as Narrator now announce the *Microphone*, *Speakers* and *Model profile*
+  controls and the *Original* and *Translation* panels by name. After you resolve a held turn with
+  the keyboard, focus moves to the next held turn's first button; when no held turn is left,
+  focus moves to **Stop** (**Start** after a stop) instead of jumping to an unrelated control.
 
 ## 0.1.0 - 2026-10-06
 
