@@ -13,6 +13,18 @@ All notable user-visible changes are documented here.
 
 ### Changed
 
+- Mandarin spoken output uses the sherpa-onnx voice `vits-icefall-zh-aishell3` (speaker 20,
+  8 kHz, CPU), downloaded by `scripts/download_models.py` from a pinned archive verified by size
+  and SHA-256 into `models/sherpa/vits-icefall-zh-aishell3/`; German stays on Piper. Settings
+  select the voice engine per language in `tts.engines` (`piper` or `sherpa-onnx`, with
+  `speaker_id`, `length_scale` and `num_threads` for sherpa-onnx). An existing setting that still
+  names the old placeholder `models/piper/zh_CN-user-provided.onnx` loads as the new voice; any
+  other `.onnx` voice keeps Piper. To keep your own Piper voice at that placeholder path, set
+  `tts.engines["zh-Hans"]` to `{"engine": "piper"}` in `config/settings.local.json`.
+  `scripts/doctor.py` checks the files of a sherpa-onnx voice
+  directory. Voice quality is interim
+  ([#81](https://github.com/boris-heuer/lianiq/issues/81)).
+
 - Settings use schema v2: language pair, routing and output in a `languages` block, translation
   models as directed `translation.edges`, voices in `tts.voices` by language ID, and
   `call_bridge.local_language`. Existing settings migrate without loss on load, and the first save
