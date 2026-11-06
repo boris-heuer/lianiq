@@ -106,19 +106,59 @@ class TranslationConfig:
                 raise ValueError(f"translation.edges key must be '<source>><target>': {key!r}")
 
 
+VOICE_ENGINES = frozenset({"piper", "sherpa-onnx"})
+
+
+@dataclass(slots=True)
+class VoiceEngineConfig:
+    """Engine of one language's voice; a language without an entry uses Piper.
+
+    ``speaker_id``, ``length_scale`` and ``num_threads`` apply to sherpa-onnx voices only;
+    Piper voices use ``tts.length_scale``.
+    """
+
+    engine: str = "piper"
+    speaker_id: int = 0
+    length_scale: float = 1.0
+    num_threads: int = 4
+
+    def __post_init__(self) -> None:
+        if self.engine not in VOICE_ENGINES:
+            raise ValueError(f"Unsupported tts engine: {self.engine!r}")
+        if self.speaker_id < 0:
+            raise ValueError("tts speaker_id must not be negative")
+        if self.length_scale <= 0:
+            raise ValueError("tts length_scale must be positive")
+        if self.num_threads <= 0:
+            raise ValueError("tts num_threads must be positive")
+
+
 @dataclass(slots=True)
 class TtsConfig:
-    # A redistributable Mandarin voice is intentionally not bundled. Spoken output is
-    # selected by ``languages.output`` and stays "text" until the operator provisions
-    # and reviews both configured voices.
+    # A Piper voice is an ``.onnx`` file with its ``.onnx.json`` metadata; a sherpa-onnx
+    # voice is a model directory. Spoken output is selected by ``languages.output`` and
+    # stays "text" until the operator provisions both configured voices.
     voices: dict[str, str] = field(
         default_factory=lambda: {
             "de": "models/piper/de_DE-thorsten-medium.onnx",
-            "zh-Hans": "models/piper/zh_CN-user-provided.onnx",
+            "zh-Hans": "models/sherpa/vits-icefall-zh-aishell3",
+        }
+    )
+    # Per-language engine selection (CAP-0169 WI-09); languages without an entry use Piper.
+    engines: dict[str, VoiceEngineConfig] = field(
+        default_factory=lambda: {
+            "de": VoiceEngineConfig("piper"),
+            "zh-Hans": VoiceEngineConfig("sherpa-onnx", speaker_id=20, length_scale=1.15),
         }
     )
     length_scale: float = 1.0
     device: str = "auto"
+
+    def __post_init__(self) -> None:
+        self.engines = {
+            key: value if isinstance(value, VoiceEngineConfig) else VoiceEngineConfig(**value)
+            for key, value in self.engines.items()
+        }
 
 
 @dataclass(slots=True)
