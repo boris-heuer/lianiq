@@ -21,6 +21,9 @@ from lianiq.languages.errors import SettingsMigrationError
 
 __all__ = [
     "LEGACY_GLOSSARY_EDGES",
+    "LEGACY_MANDARIN_VOICE",
+    "MANDARIN_SHERPA_ENGINE",
+    "MANDARIN_SHERPA_VOICE",
     "SCHEMA_VERSION",
     "SettingsMigrationError",
     "backup_legacy_settings",
@@ -40,6 +43,20 @@ LEGACY_GLOSSARY_EDGES: Mapping[str, str] = {
     "de-zh": "de>zh-Hans",
     "zh-de": "zh-Hans>de",
 }
+
+# The Mandarin voice placeholder of lianiq before CAP-0169 WI-09 (a Piper voice the
+# operator had to provide) and the pinned sherpa-onnx voice directory and engine settings
+# it maps to on load. Applies to v1 ``tts.zh_voice_path`` and to v2 ``tts.voices`` of a
+# file written before ``tts.engines`` existed.
+LEGACY_MANDARIN_VOICE = "models/piper/zh_CN-user-provided.onnx"
+MANDARIN_SHERPA_VOICE = "models/sherpa/vits-icefall-zh-aishell3"
+MANDARIN_SHERPA_ENGINE: Mapping[str, Any] = {
+    "engine": "sherpa-onnx",
+    "speaker_id": 20,
+    "length_scale": 1.15,
+    "num_threads": 4,
+}
+_MANDARIN_ID = "zh-Hans"
 
 # Frozen snapshot of the schema v1 keys (lianiq before CAP-0169 WI-02). Any other key
 # in a v1 file is not mappable and raises instead of being dropped silently.
@@ -120,8 +137,8 @@ def migrate_settings(raw: object) -> dict[str, Any]:
     if "schema_version" in raw:
         if not _is_schema_version(raw["schema_version"]):
             raise SettingsMigrationError("schema_version")
-        return copy.deepcopy(dict(raw))
-    return _migrate_v1(raw)
+        return _migrate_voice_engines(copy.deepcopy(dict(raw)))
+    return _migrate_voice_engines(_migrate_v1(raw))
 
 
 def read_settings_file(path: Path) -> dict[str, Any]:
@@ -238,6 +255,34 @@ def _migrate_v1(raw: Mapping[str, Any]) -> dict[str, Any]:
     if languages:
         result = {"schema_version": SCHEMA_VERSION, "languages": languages, **result}
     return result
+
+
+def _migrate_voice_engines(settings: dict[str, Any]) -> dict[str, Any]:
+    """Add ``tts.engines`` to a file written before per-language engine selection.
+
+    Only a ``tts`` block with ``voices`` and without ``engines`` changes: the legacy
+    Mandarin placeholder becomes the pinned sherpa-onnx voice, and every other ``.onnx``
+    voice keeps Piper explicitly, so a merged default never switches its engine.
+    """
+    tts = settings.get("tts")
+    if not isinstance(tts, dict) or "engines" in tts:
+        return settings
+    voices = tts.get("voices")
+    if not isinstance(voices, dict):
+        return settings
+    engines: dict[str, Any] = {}
+    for language, path in voices.items():
+        if not isinstance(path, str):
+            continue
+        normalized = path.replace("\\", "/")
+        if normalized == LEGACY_MANDARIN_VOICE and str(language).lower() == _MANDARIN_ID.lower():
+            voices[language] = MANDARIN_SHERPA_VOICE
+            engines[language] = dict(MANDARIN_SHERPA_ENGINE)
+        elif normalized.lower().endswith(".onnx"):
+            engines[language] = {"engine": "piper"}
+    if engines:
+        tts["engines"] = engines
+    return settings
 
 
 def _path_value(value: object, key: str) -> str:

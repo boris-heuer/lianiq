@@ -172,3 +172,39 @@ def test_call_bridge_configuration_is_disabled_and_round_trips_stable_ids(tmp_pa
     assert loaded.call_bridge.call_microphone_render_endpoint_id == "wasapi:render:def"
     assert loaded.call_bridge.call_speaker_capture_endpoint_id == "wasapi:capture:ghi"
     assert loaded.call_bridge.local_headphones_endpoint_id == "wasapi:render:jkl"
+
+
+def test_default_tts_selects_sherpa_onnx_for_mandarin_and_piper_for_german() -> None:
+    from lianiq.config import VoiceEngineConfig
+
+    config = AppConfig.load(config_module.DEFAULT_CONFIG_PATH)
+
+    assert config.tts.voices["zh-Hans"] == "models/sherpa/vits-icefall-zh-aishell3"
+    assert config.tts.engines == {
+        "de": VoiceEngineConfig("piper"),
+        "zh-Hans": VoiceEngineConfig("sherpa-onnx", speaker_id=20, length_scale=1.15),
+    }
+    assert config.tts.engines == AppConfig().tts.engines
+
+
+@pytest.mark.parametrize(
+    ("engine", "message"),
+    [
+        ({"engine": "espeak"}, "Unsupported tts engine"),
+        ({"engine": "sherpa-onnx", "speaker_id": -1}, "speaker_id"),
+        ({"engine": "sherpa-onnx", "length_scale": 0}, "length_scale"),
+        ({"engine": "sherpa-onnx", "num_threads": 0}, "num_threads"),
+    ],
+)
+def test_invalid_voice_engine_settings_are_rejected(engine: dict, message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        AppConfig.from_mapping({"tts": {"engines": {"zh-Hans": engine}}})
+
+
+def test_engine_selection_round_trips(tmp_path: Path) -> None:
+    path = tmp_path / "settings.local.json"
+    config = AppConfig()
+    config.tts.engines["zh-Hans"].speaker_id = 33
+    config.save(path)
+
+    assert AppConfig.load(path).tts.engines["zh-Hans"].speaker_id == 33

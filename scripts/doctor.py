@@ -17,6 +17,7 @@ from lianiq.languages import (
     ReadinessProbe,
     ReadinessStatus,
 )
+from lianiq.tts.sherpa_onnx_engine import REQUIRED_FILES as SHERPA_VOICE_FILES
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -44,8 +45,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _voice_metadata_present(voice_path: Path | None) -> bool:
-    return voice_path is not None and Path(f"{voice_path}.json").is_file()
+def _voice_files_problem(voice_path: Path | None) -> str | None:
+    """What a present voice still lacks: Piper metadata or sherpa-onnx directory files."""
+    if voice_path is None:
+        return None
+    if voice_path.is_dir():
+        missing = [name for name in SHERPA_VOICE_FILES if not (voice_path / name).is_file()]
+        return f"missing voice files ({', '.join(missing)})" if missing else None
+    if not Path(f"{voice_path}.json").is_file():
+        return "missing metadata file (.onnx.json)"
+    return None
 
 
 def check_capabilities(
@@ -96,8 +105,9 @@ def check_capabilities(
         capability = catalog.voice(language)
         label = f"voice {name(language)}"
         detail = capability.status.value
-        if capability.status.is_ready and not _voice_metadata_present(capability.voice_path):
-            detail = "missing metadata file (.onnx.json)"
+        problem = _voice_files_problem(capability.voice_path)
+        if capability.status.is_ready and problem is not None:
+            detail = problem
         elif capability.status.is_ready:
             checks.append(status(True, label, detail))
             continue
@@ -118,7 +128,10 @@ def main(argv: list[str] | None = None) -> int:
         checks.append(
             status(importlib.util.find_spec(module) is not None, f"Python module {module}")
         )
-    checks.append(status(importlib.util.find_spec("piper") is not None, "Python module piper"))
+    for module in ("piper", "sherpa_onnx"):
+        checks.append(
+            status(importlib.util.find_spec(module) is not None, f"Python module {module}")
+        )
 
     try:
         config = AppConfig.load()

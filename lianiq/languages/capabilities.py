@@ -83,7 +83,7 @@ class TranslationCapability:
 @dataclass(frozen=True, slots=True)
 class VoiceCapability:
     language: LanguageId
-    voice_path: Path | None  # None only when NOT_CONFIGURED
+    voice_path: Path | None  # file or model directory; None only when NOT_CONFIGURED
     status: ReadinessStatus
 
 
@@ -261,7 +261,7 @@ class CapabilityCatalog:
         return MappingProxyType(dict(self._translation))
 
     def voice_paths(self) -> Mapping[LanguageId, Path]:
-        """Every configured voice by language ID and its resolved voice file."""
+        """Every configured voice by language ID and its resolved voice file or directory."""
         return MappingProxyType(dict(self._voices))
 
     def recognition(self, language: LanguageId) -> RecognitionCapability:
@@ -285,5 +285,10 @@ class CapabilityCatalog:
     def voice(self, language: LanguageId) -> VoiceCapability:
         language_id = self.registry.get(language).id
         path = self._voices.get(language_id)
-        status = ReadinessStatus.NOT_CONFIGURED if path is None else self._probe.probe_file(path)
+        if path is None:
+            status = ReadinessStatus.NOT_CONFIGURED
+        elif path.is_dir():  # a voice model directory (sherpa-onnx)
+            status = self._probe.probe_directory(path)
+        else:  # a voice file (Piper)
+            status = self._probe.probe_file(path)
         return VoiceCapability(language_id, path, status)

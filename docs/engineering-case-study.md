@@ -53,7 +53,7 @@ its recorded profile. Details are in [the SystemOK evidence record](call-bridge-
 | Audio leakage or feedback | Two cables, explicit roles, no default fallback | Prove with the physical loop test |
 | CPU contention | Bounded queues and scheduled model work | Measure on the actual device |
 | Privacy exposure | Local processing and redacted diagnostics | Operator still protects files and call consent |
-| Driver and voice licensing/support | Drivers are installed separately; Mandarin voice is user-provided | Review vendor/voice terms before distribution |
+| Driver and voice licensing/support | Drivers are installed separately; Mandarin voice is the pinned sherpa-onnx `vits-icefall-zh-aishell3` (open provenance questions in #81) | Review vendor/voice terms before distribution |
 | Overclaiming AI output | Human review and evidence gates | Do not label experimental results as certified |
 
 ## AI and human responsibility

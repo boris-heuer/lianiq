@@ -84,3 +84,68 @@ def test_call_bridge_voice_preflight_requires_both_voice_and_metadata_pairs(tmp_
 
     Path(f"{zh_voice}.json").touch()
     engine.validate_voice_files()
+
+
+# --- WI-09: per-language engine selection ------------------------------------------------
+
+
+def test_build_synthesizer_routes_each_language_to_its_configured_engine(tmp_path) -> None:
+    from lianiq.app import build_synthesizer
+    from lianiq.config import TtsConfig
+    from lianiq.tts.sherpa_onnx_engine import SherpaOnnxEngine
+
+    tts = TtsConfig(device="cpu")  # repository default: de Piper, zh-Hans sherpa-onnx
+    router = build_synthesizer(tts, {DE: tmp_path / "de.onnx", ZH: tmp_path / "zh"})
+
+    assert isinstance(router.engines[DE], PiperEngine)
+    assert router.engines[DE].voices == {DE: tmp_path / "de.onnx"}
+    sherpa = router.engines[ZH]
+    assert isinstance(sherpa, SherpaOnnxEngine)
+    assert sherpa.voices == {ZH: tmp_path / "zh"}
+    assert (sherpa.settings[ZH].speaker_id, sherpa.settings[ZH].length_scale) == (20, 1.15)
+    assert sherpa.num_threads == 4
+    assert router.device == "cpu"
+
+
+def test_language_without_engine_entry_uses_piper(tmp_path) -> None:
+    from lianiq.app import build_synthesizer
+    from lianiq.config import TtsConfig
+
+    router = build_synthesizer(
+        TtsConfig(engines={}, device="cpu"), {DE: tmp_path / "de.onnx", ZH: tmp_path / "zh.onnx"}
+    )
+
+    assert router.engines[DE] is router.engines[ZH]
+    assert isinstance(router.engines[ZH], PiperEngine)
+
+
+def test_engine_without_a_registry_code_for_the_language_is_rejected(tmp_path) -> None:
+    from lianiq.app import build_synthesizer
+    from lianiq.config import TtsConfig, VoiceEngineConfig
+
+    tts = TtsConfig(engines={"de": VoiceEngineConfig("sherpa-onnx")})
+
+    with pytest.raises(ValueError, match="'sherpa-onnx' does not support de"):
+        build_synthesizer(tts, {DE: tmp_path / "de"})
+
+
+def test_router_delegates_per_language_and_names_a_missing_voice(tmp_path, monkeypatch) -> None:
+    from lianiq.tts.voice_router import VoiceRouter
+
+    de_engine = PiperEngine({DE: tmp_path / "de.onnx"}, device="cpu")
+    calls = record_synthesis(de_engine, tmp_path, monkeypatch)
+    router = VoiceRouter({DE: de_engine})
+
+    router.warm_up((DE,))
+    assert router.synthesize("Hallo", DE) == tmp_path / "de.wav"
+    assert calls == [("Deutsch", DE), ("Hallo", DE)]
+    with pytest.raises(FileNotFoundError, match="de.onnx"):
+        router.validate_voice_files()
+    for action in (
+        lambda: router.synthesize("你好", ZH),
+        lambda: router.warm_up((ZH,)),
+        lambda: router.validate_voice_files((ZH,)),
+    ):
+        with pytest.raises(CapabilityMissingError) as raised:
+            action()
+        assert raised.value.requirement.subject == "zh-Hans"

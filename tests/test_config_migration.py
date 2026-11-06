@@ -83,7 +83,15 @@ V1_TO_V2_PATHS: dict[tuple[str, str], tuple[tuple[Any, ...], Any]] = {
         None,
     ),
     ("tts", "de_voice_path"): (("tts", "voices", "de"), None),
-    ("tts", "zh_voice_path"): (("tts", "voices", "zh-Hans"), None),
+    # WI-09: the Mandarin placeholder voice maps to the pinned sherpa-onnx voice directory.
+    ("tts", "zh_voice_path"): (
+        ("tts", "voices", "zh-Hans"),
+        lambda value: (
+            "models/sherpa/vits-icefall-zh-aishell3"
+            if value == "models/piper/zh_CN-user-provided.onnx"
+            else value
+        ),
+    ),
     ("tts", "enabled"): (("languages", "output"), {True: "spoken", False: "text"}),
 }
 LEGACY_UI_MODE_TARGETS = {
@@ -110,7 +118,10 @@ def _assert_every_v1_value_at_its_v2_location(
                     assert migrated["languages"][v2_key] == expected, (section, key)
                 continue
             target, transform = V1_TO_V2_PATHS.get((section, key), ((section, key), None))
-            expected = transform[value] if transform else value
+            if callable(transform):
+                expected = transform(value)
+            else:
+                expected = transform[value] if transform else value
             assert _lookup(migrated, target) == expected, (section, key)
 
 
@@ -319,3 +330,74 @@ def test_app_shows_the_migration_error_and_writes_nothing(
     assert "ui.mode" in shown[0]
     assert local_path.read_text(encoding="utf-8") == '{"ui": {"mode": "en-de"}}'
     assert not (settings_dir / "settings.local.v1.json").exists()
+
+
+# --- WI-09: Mandarin placeholder -> pinned sherpa-onnx voice --------------------------------
+
+SHERPA_VOICE = "models/sherpa/vits-icefall-zh-aishell3"
+SHERPA_ENGINE = {"engine": "sherpa-onnx", "speaker_id": 20, "length_scale": 1.15, "num_threads": 4}
+
+
+def test_v2_overlay_saved_before_engine_selection_maps_the_placeholder_to_sherpa() -> None:
+    saved = {
+        "schema_version": 2,
+        "tts": {
+            "voices": {
+                "de": "models/piper/de_DE-thorsten-medium.onnx",
+                "zh-Hans": "models/piper/zh_CN-user-provided.onnx",
+            },
+            "length_scale": 1.0,
+            "device": "auto",
+        },
+    }
+    original = json.loads(json.dumps(saved))
+
+    migrated = migrate_settings(saved)
+
+    assert saved == original  # not mutated
+    assert migrated["tts"]["voices"]["zh-Hans"] == SHERPA_VOICE
+    assert migrated["tts"]["engines"] == {"de": {"engine": "piper"}, "zh-Hans": SHERPA_ENGINE}
+    assert migrate_settings(migrated) == migrated  # idempotent
+
+
+def test_operator_provided_piper_voice_keeps_piper_after_merging_the_new_default(
+    settings_dir: Path,
+) -> None:
+    (settings_dir / "settings.json").write_text(REPO_DEFAULT.read_text("utf-8"), "utf-8")
+    overlay = {
+        "schema_version": 2,
+        "tts": {"voices": {"zh-Hans": "D:/voices/zh_CN-licensed.onnx"}},
+    }
+    (settings_dir / "settings.local.json").write_text(json.dumps(overlay), "utf-8")
+
+    config = AppConfig.load()
+
+    assert config.tts.voices["zh-Hans"] == "D:/voices/zh_CN-licensed.onnx"
+    assert config.tts.engines["zh-Hans"].engine == "piper"
+    assert config.tts.engines["de"].engine == "piper"
+
+
+def test_old_overlay_with_the_placeholder_loads_the_sherpa_voice(settings_dir: Path) -> None:
+    (settings_dir / "settings.json").write_text(REPO_DEFAULT.read_text("utf-8"), "utf-8")
+    overlay = {
+        "tts": {"zh_voice_path": r"models\piper\zh_CN-user-provided.onnx"}
+    }  # v1, Windows separators
+    (settings_dir / "settings.local.json").write_text(json.dumps(overlay), "utf-8")
+
+    config = AppConfig.load()
+
+    assert config == AppConfig.load(REPO_DEFAULT)
+    assert config.tts.voices["zh-Hans"] == SHERPA_VOICE
+    assert config.tts.engines["zh-Hans"].engine == "sherpa-onnx"
+
+
+def test_file_with_engine_selection_is_left_unchanged() -> None:
+    document = {
+        "schema_version": 2,
+        "tts": {
+            "voices": {"zh-Hans": "models/piper/zh_CN-user-provided.onnx"},
+            "engines": {"zh-Hans": {"engine": "piper"}},
+        },
+    }
+
+    assert migrate_settings(document) == document

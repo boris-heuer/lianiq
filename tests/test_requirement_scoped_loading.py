@@ -112,6 +112,7 @@ def config_without_stt_and_voices(root: Path, *, reverse_edge: bool = True) -> A
         "de": str(root / "models" / "piper" / "de.onnx"),
         "zh-Hans": str(root / "models" / "piper" / "zh.onnx"),
     }
+    config.tts.engines = {}  # both test voices are Piper files
     config.translation.edges = {
         "de>zh-Hans": TranslationEdgeConfig(str(model_dir(root, "opus-mt-de-zh"))),
         # E-08 data D-05: the reverse edge stays configured but its folder is renamed.

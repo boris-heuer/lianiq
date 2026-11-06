@@ -13,7 +13,18 @@ import pytest
 from lianiq.config import AppConfig
 
 DE_VOICE = "models/piper/de_DE-thorsten-medium.onnx"
-ZH_VOICE = "models/piper/zh_CN-user-provided.onnx"
+# WI-09: the Mandarin voice is a sherpa-onnx model directory.
+ZH_VOICE = "models/sherpa/vits-icefall-zh-aishell3"
+ZH_VOICE_FILES = (
+    "model.onnx",
+    "lexicon.txt",
+    "tokens.txt",
+    "phone.fst",
+    "date.fst",
+    "number.fst",
+    "new_heteronym.fst",
+    "rule.far",
+)
 
 
 def load_doctor_module():
@@ -79,12 +90,26 @@ def test_operational_doctor_requires_every_voice_of_the_pair(doctor, tmp_path, c
     assert not all(doctor.check_capabilities(AppConfig(), require_voices=True))
     assert "[MISSING] voice zh-Hans (Mandarin (Simplified)): missing" in capsys.readouterr().out
 
-    provision(tmp_path, ZH_VOICE)  # voice without its metadata file
+    # A voice directory without its rule archive is not usable.
+    provision(tmp_path, *(f"{ZH_VOICE}/{name}" for name in ZH_VOICE_FILES[:-1]))
     assert not all(doctor.check_capabilities(AppConfig(), require_voices=True))
-    assert "zh-Hans (Mandarin (Simplified)): missing metadata file" in capsys.readouterr().out
+    assert "zh-Hans (Mandarin (Simplified)): missing voice files (rule.far)" in (
+        capsys.readouterr().out
+    )
 
-    provision(tmp_path, f"{ZH_VOICE}.json")
+    provision(tmp_path, f"{ZH_VOICE}/rule.far")
     assert all(doctor.check_capabilities(AppConfig(), require_voices=True))
+
+
+def test_a_piper_voice_without_its_metadata_file_fails(doctor, tmp_path, capsys) -> None:
+    provision_models(tmp_path)
+    config = AppConfig()
+    config.tts.voices["zh-Hans"] = "models/piper/zh_CN-other.onnx"
+    config.tts.engines["zh-Hans"].engine = "piper"
+    provision(tmp_path, "models/piper/zh_CN-other.onnx")
+
+    assert not all(doctor.check_capabilities(config, require_voices=True))
+    assert "zh-Hans (Mandarin (Simplified)): missing metadata file" in capsys.readouterr().out
 
 
 def test_a_missing_reverse_edge_fails_and_is_named(doctor, tmp_path, capsys) -> None:
@@ -102,13 +127,13 @@ def test_a_manifest_mismatch_is_invalid_even_for_an_optional_voice(
     doctor, tmp_path, capsys
 ) -> None:
     provision_models(tmp_path)
-    provision(tmp_path, ZH_VOICE, f"{ZH_VOICE}.json")
+    provision(tmp_path, *(f"{ZH_VOICE}/{name}" for name in ZH_VOICE_FILES))
     good = hashlib.sha256(b"fixture").hexdigest()
     manifest = {
         "schema_version": 1,
         "artifacts": [
             {"path": "models/opus-mt-de-zh/config.json", "sha256": good},
-            {"path": ZH_VOICE, "sha256": "0" * 64},
+            {"path": f"{ZH_VOICE}/model.onnx", "sha256": "0" * 64},
         ],
     }
     (tmp_path / "models" / "model-manifest.json").write_text(json.dumps(manifest), "utf-8")

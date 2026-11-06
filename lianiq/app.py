@@ -3,19 +3,67 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from collections.abc import Mapping
+from pathlib import Path
 
 from lianiq.audio.playback import play_wav
-from lianiq.config import PROJECT_ROOT, AppConfig
+from lianiq.config import PROJECT_ROOT, AppConfig, TtsConfig, VoiceEngineConfig
 from lianiq.config_migration import SettingsMigrationError
 from lianiq.conversation.routing import TurnRouter
 from lianiq.languages.capabilities import CapabilityCatalog, ReadinessProbe
-from lianiq.languages.registry import BUILTIN_REGISTRY, LanguageRegistry
+from lianiq.languages.registry import BUILTIN_REGISTRY, LanguageId, LanguageRegistry
 from lianiq.logging_setup import configure_logging
 from lianiq.pipeline import AdapterFactories, TranslationPipeline
 from lianiq.stt.faster_whisper_engine import FasterWhisperEngine
 from lianiq.translation.glossary import Glossary
 from lianiq.translation.marian_engine import MarianTranslator
 from lianiq.tts.piper_engine import PiperEngine
+from lianiq.tts.sherpa_onnx_engine import SherpaOnnxEngine, SherpaVoiceSettings
+from lianiq.tts.voice_router import VoiceEngine, VoiceRouter
+
+
+def build_synthesizer(
+    tts: TtsConfig,
+    voices: Mapping[LanguageId, Path],
+    registry: LanguageRegistry = BUILTIN_REGISTRY,
+) -> VoiceRouter:
+    """Route each configured voice to its engine from ``tts.engines`` (default: Piper).
+
+    No voice is loaded here. A language whose registry entry has no engine code for the
+    selected engine is rejected, because that engine cannot speak it.
+    """
+    selected: dict[LanguageId, VoiceEngineConfig] = {
+        registry.get(language).id: engine for language, engine in tts.engines.items()
+    }
+    piper_voices: dict[LanguageId, Path] = {}
+    sherpa_groups: dict[int, dict[LanguageId, tuple[Path, SherpaVoiceSettings]]] = {}
+    for language, path in voices.items():
+        language_id = registry.get(language).id
+        engine = selected.get(language_id, VoiceEngineConfig())
+        if engine.engine not in registry.get(language_id).engine_codes:
+            raise ValueError(f"tts engine {engine.engine!r} does not support {language_id}")
+        if engine.engine == "sherpa-onnx":
+            settings = SherpaVoiceSettings(engine.speaker_id, engine.length_scale)
+            sherpa_groups.setdefault(engine.num_threads, {})[language_id] = (path, settings)
+        else:
+            piper_voices[language_id] = path
+
+    engines: dict[LanguageId, VoiceEngine] = {}
+    if piper_voices:
+        piper = PiperEngine(
+            piper_voices, length_scale=tts.length_scale, device=tts.device, registry=registry
+        )
+        engines.update(dict.fromkeys(piper_voices, piper))
+    for num_threads, group in sherpa_groups.items():
+        sherpa = SherpaOnnxEngine(
+            {language: path for language, (path, _settings) in group.items()},
+            {language: settings for language, (_path, settings) in group.items()},
+            num_threads=num_threads,
+            device=tts.device,
+            registry=registry,
+        )
+        engines.update(dict.fromkeys(group, sherpa))
+    return VoiceRouter(engines, registry)
 
 
 def build_pipeline(
@@ -45,13 +93,8 @@ def build_pipeline(
             device=config.translation.device,
         )
 
-    def synthesizer() -> PiperEngine:
-        return PiperEngine(
-            catalog.voice_paths(),
-            length_scale=config.tts.length_scale,
-            device=config.tts.device,
-            registry=registry,
-        )
+    def synthesizer() -> VoiceRouter:
+        return build_synthesizer(config.tts, catalog.voice_paths(), registry)
 
     pipeline = TranslationPipeline(
         playback=play_wav,
