@@ -249,12 +249,12 @@ def test_dev02_language_combos_show_the_full_selected_value_at_the_default_width
     spies,  # noqa: F811
     devices,
 ) -> None:
-    import lianiq.ui.main_window as main_window_module
+    import lianiq.ui.workspaces.conversation as conversation_module
 
     window = build_window(tmp_path, monkeypatch)
     request.addfinalizer(window.close)
     if devices is not None:
-        monkeypatch.setattr(main_window_module, "list_audio_devices", lambda: list(devices))
+        monkeypatch.setattr(conversation_module, "list_audio_devices", lambda: list(devices))
         window._load_devices()
 
     for index in range(window.mode_combo.count()):

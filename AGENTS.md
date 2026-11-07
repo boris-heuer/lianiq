@@ -46,7 +46,10 @@ owns the runtime source, tests, user documentation, and app-specific evidence.
 - `lianiq/stt/`, `lianiq/translation/`, `lianiq/tts/`: Faster-Whisper, MarianMT per
   directed edge, and voices per language (Piper, sherpa-onnx, selected by `voice_router`).
 - `lianiq/call_bridge/` and `lianiq/audio/`: the experimental Call Bridge and audio I/O.
-- `lianiq/ui/`: the PySide6 window, held-turn bar, and accessibility names.
+- `lianiq/ui/`: the PySide6 window (`main_window.py`) composing the workspaces in
+  `lianiq/ui/workspaces/` (Conversation, Call Bridge), the result panels and the held-turn
+  bar; each widget sets its own accessible name. `tests/test_ui_module_sizes.py` keeps
+  every file under `lianiq/ui/` at most 32 KiB.
 - `scripts/download_models.py` and `models/model-manifest.json`: pinned model provisioning;
   record model licences in [MODEL_LICENSES.md](MODEL_LICENSES.md).
 
@@ -68,8 +71,8 @@ owns the runtime source, tests, user documentation, and app-specific evidence.
 - Publish branches, commits, pull requests, and merges only through the Factory SCM
   Gateway (squash auto-merge pinned to the reviewed head). Do not use `git push`, the
   `gh` CLI, another GitHub integration, or a direct merge. The Gateway writes at most
-  32 KiB (decoded) per file; a larger file, such as `lianiq/ui/main_window.py`, needs
-  explicit operator approval for that file. On an unknown outcome, read the state back
+  32 KiB (decoded) per file; a larger file needs explicit operator approval for that
+  file. On an unknown outcome, read the state back
   before acting; never retry automatically.
 - Before the first commit, an independent reviewer reviews the frozen staged tree; record
   the review receipt as the PR workflow requires.

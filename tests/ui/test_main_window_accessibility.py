@@ -5,6 +5,10 @@ Native finding (R5 UI Automation Tab cycle with a held turn): the *Original* and
 and after a keyboard resolve focus fell through the focus chain to that combo (DEF-05).
 These offscreen tests read the same Qt accessibility interface Qt's UI Automation bridge
 exposes; they are code evidence, the native Tab cycle is product evidence.
+
+CAP-0168 AC-02: the widgets set their names and the focus return themselves, so a
+``MainWindow`` built directly (as ``scripts/ui_self_test.py`` does) passes without any
+post-construction step; ``ui/accessibility.py`` no longer exists (AC-01).
 """
 
 from __future__ import annotations
@@ -17,17 +21,24 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from lianiq.languages import LanguageId
-from lianiq.ui.accessibility import CONTROL_NAMES, apply_main_window_accessibility
 from tests.test_requirement_scoped_loading import build_window, spies  # noqa: F401
 from tests.ui.test_main_window_languages import press, start, submit, transcript, wait_until
 
 DE = LanguageId("de")
+# Each control's accessible name is the caption shown above it.
+CONTROL_NAMES = {
+    "input_combo": "Microphone",
+    "output_combo": "Speakers",
+    "model_combo": "Model profile",
+    "source_text": "Original",
+    "target_text": "Translation",
+}
 
 
 @pytest.fixture
 def window(tmp_path, spies, monkeypatch):  # noqa: F811
+    # Built directly: no accessibility step runs after construction (AC-02).
     window = build_window(tmp_path, monkeypatch)
-    apply_main_window_accessibility(window)
     window.activateWindow()
     yield window
     window.stop_listening()
@@ -84,12 +95,12 @@ def gate_resolution(spies):  # noqa: F811
     return release
 
 
-def test_def04_controls_are_named_after_their_visible_captions(window) -> None:
+def test_ac02_def04_controls_are_named_after_their_visible_captions(window) -> None:
     for attribute, name in CONTROL_NAMES.items():
         assert accessible_name(getattr(window, attribute)) == name
 
 
-def test_def04_every_tab_stop_has_an_accessible_name_stopped_and_with_a_held_turn(
+def test_ac02_def04_every_tab_stop_has_an_accessible_name_stopped_and_with_a_held_turn(
     window,
     spies,  # noqa: F811
 ) -> None:

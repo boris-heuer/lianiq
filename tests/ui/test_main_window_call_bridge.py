@@ -83,6 +83,8 @@ def build_call_bridge_window(
     from PySide6.QtWidgets import QApplication
 
     import lianiq.ui.main_window as main_window_module
+    import lianiq.ui.workspaces.call_bridge as call_bridge_module
+    import lianiq.ui.workspaces.conversation as conversation_module
     from lianiq.app import build_pipeline
     from lianiq.audio.devices import AudioDevice
     from lianiq.audio.endpoints import EndpointInventory
@@ -92,12 +94,12 @@ def build_call_bridge_window(
     inventory = EndpointInventory(mapping().values())
     # One microphone and one speaker, as in build_window(), so conversation modes are ready.
     devices = [AudioDevice(0, "Test microphone", 1, 0), AudioDevice(1, "Test speakers", 0, 2)]
-    monkeypatch.setattr(main_window_module, "list_audio_devices", lambda: list(devices))
-    monkeypatch.setattr(main_window_module, "list_audio_endpoints", lambda: inventory)
-    monkeypatch.setattr(main_window_module, "EndpointCaptureStream", FakeCaptureStream)
-    monkeypatch.setattr(main_window_module, "EndpointPlaybackStream", FakePlaybackStream)
+    monkeypatch.setattr(conversation_module, "list_audio_devices", lambda: list(devices))
+    monkeypatch.setattr(call_bridge_module, "list_audio_endpoints", lambda: inventory)
+    monkeypatch.setattr(call_bridge_module, "EndpointCaptureStream", FakeCaptureStream)
+    monkeypatch.setattr(call_bridge_module, "EndpointPlaybackStream", FakePlaybackStream)
     # No real microphone: conversation capture is faked as in build_window().
-    capture = main_window_module.MicrophoneCapture
+    capture = conversation_module.MicrophoneCapture
     monkeypatch.setattr(capture, "start", lambda self: setattr(self, "_stream", object()))
     monkeypatch.setattr(capture, "stop", lambda self: setattr(self, "_stream", None))
     FakeCaptureStream.instances = []
@@ -330,12 +332,12 @@ def test_a_call_bridge_setup_error_restores_start_from_the_mode_availability(
     """WI-05/WI-06 hand-off: any other setup error also re-runs ``_refresh_availability``."""
     import shutil
 
-    from lianiq.ui import main_window
+    from lianiq.ui.workspaces import call_bridge
 
     def failing_controller(*args, **kwargs):
         raise RuntimeError("call endpoint stream failed")
 
-    monkeypatch.setattr(main_window, "FullDuplexBridgeController", failing_controller)
+    monkeypatch.setattr(call_bridge, "FullDuplexBridgeController", failing_controller)
     assign(window)
     spies.release_warm_up.clear()  # hold the Call Bridge start while its models load
 

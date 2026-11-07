@@ -11,7 +11,7 @@ registry) and ``config_migration.py`` (the schema v1 mapping) and fails on:
   ``"DE: "``), ``"de-zh"`` and ``"zh-de"``;
 * registered language IDs or directed edge keys as string literals, outside the repository
   default settings in ``config.py`` (they mirror ``config/settings.json``) and the functional
-  route-test phrase table ``ROUTE_TEST_TEXT`` in ``ui/main_window.py``. Phrases are
+  route-test phrase table ``ROUTE_TEST_TEXT`` in ``ui/workspaces/call_bridge.py``. Phrases are
   multilingual functional data keyed by language ID; a language without a phrase gets a
   named error, never another language's phrase.
 
@@ -61,7 +61,7 @@ def allowed_language_id_nodes(tree: ast.Module, relative: Path) -> set[int]:
                         allowed |= _subtree_ids(statement.value)
             elif isinstance(node, ast.FunctionDef) and node.name == DEFAULT_EDGES_FUNCTION:
                 allowed |= _subtree_ids(node)
-    if relative == Path("ui/main_window.py"):
+    if relative == Path("ui/workspaces/call_bridge.py"):
         for node in tree.body:
             targets = (
                 node.targets
@@ -132,6 +132,7 @@ def test_ac18_lianiq_package_has_no_hard_coded_languages() -> None:
 def test_ac18_scan_covers_the_package_and_excludes_only_registry_and_migration() -> None:
     scanned = {path.relative_to(PACKAGE) for path in PACKAGE.rglob("*.py")} - EXCLUDED
     assert Path("ui/main_window.py") in scanned
+    assert Path("ui/workspaces/call_bridge.py") in scanned
     assert Path("config.py") in scanned
     assert Path("languages/registry.py") not in scanned
     assert Path("config_migration.py") not in scanned
@@ -158,7 +159,11 @@ def test_ac18_scan_covers_the_package_and_excludes_only_registry_and_migration()
             "config.py",
             "hard-coded language ID literal 'zh-Hans'",
         ),
-        ('OTHER_TABLE = {LanguageId("de"): "Test."}\n', "ui/main_window.py", "language ID"),
+        (
+            'OTHER_TABLE = {LanguageId("de"): "Test."}\n',
+            "ui/workspaces/call_bridge.py",
+            "language ID",
+        ),
     ],
 )
 def test_ac18_scan_reports_each_forbidden_reference(source, relative, expected) -> None:
@@ -180,7 +185,10 @@ def test_ac18_scan_reports_each_forbidden_reference(source, relative, expected) 
             "config.py",
         ),
         ('def _default_edges():\n    return {"de>zh-Hans": 1}\n', "config.py"),
-        ('ROUTE_TEST_TEXT = {LanguageId("de"): "Kopfhörer-Test."}\n', "ui/main_window.py"),
+        (
+            'ROUTE_TEST_TEXT = {LanguageId("de"): "Kopfhörer-Test."}\n',
+            "ui/workspaces/call_bridge.py",
+        ),
     ],
 )
 def test_ac18_scan_accepts_contract_calls_defaults_and_phrase_data(source, relative) -> None:
@@ -190,7 +198,7 @@ def test_ac18_scan_accepts_contract_calls_defaults_and_phrase_data(source, relat
 def test_route_test_phrases_cover_every_qualified_language() -> None:
     pytest.importorskip("PySide6")
     from lianiq.languages.registry import Availability
-    from lianiq.ui.main_window import ROUTE_TEST_TEXT
+    from lianiq.ui.workspaces.call_bridge import ROUTE_TEST_TEXT
 
     qualified = {
         definition.id

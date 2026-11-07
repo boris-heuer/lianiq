@@ -140,7 +140,6 @@ def main() -> int:
         from PySide6.QtCore import QCoreApplication, Qt
         from PySide6.QtWidgets import QApplication
 
-        from lianiq.ui.accessibility import apply_main_window_accessibility
         from lianiq.ui.main_window import MainWindow
     except ImportError as exc:
         logging.getLogger(__name__).exception("GUI dependency import failed")
@@ -153,6 +152,5 @@ def main() -> int:
     application.setApplicationName("lianiq")
     pipeline = build_pipeline(config)
     window = MainWindow(config, pipeline)
-    apply_main_window_accessibility(window)
     window.show()
     return application.exec()

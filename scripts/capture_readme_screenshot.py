@@ -88,18 +88,20 @@ def main(argv: list[str] | None = None) -> int:
     from PySide6.QtWidgets import QApplication
 
     import lianiq.ui.main_window as main_window_module
+    import lianiq.ui.workspaces.call_bridge as call_bridge_module
+    import lianiq.ui.workspaces.conversation as conversation_module
 
     parser = argparse.ArgumentParser(description="Capture the sanitized README screenshot.")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     output = parser.parse_args(argv).output
 
     patched = {
-        "list_audio_devices": lambda: list(GENERIC_DEVICES),
-        "list_audio_endpoints": lambda: EndpointInventory([]),
+        (conversation_module, "list_audio_devices"): lambda: list(GENERIC_DEVICES),
+        (call_bridge_module, "list_audio_endpoints"): lambda: EndpointInventory([]),
     }
-    original = {name: getattr(main_window_module, name) for name in patched}
-    for name, replacement in patched.items():
-        setattr(main_window_module, name, replacement)
+    original = {target: getattr(*target) for target in patched}
+    for (module, name), replacement in patched.items():
+        setattr(module, name, replacement)
     try:
         application = QApplication.instance()
         if application is None:
@@ -124,8 +126,8 @@ def main(argv: list[str] | None = None) -> int:
         window.close()
         application.processEvents()
     finally:
-        for name, value in original.items():
-            setattr(main_window_module, name, value)
+        for (module, name), value in original.items():
+            setattr(module, name, value)
     if not saved:
         print(f"Could not save screenshot to {output}", file=sys.stderr)
         return 1
