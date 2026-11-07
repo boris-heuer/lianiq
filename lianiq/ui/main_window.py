@@ -1,9 +1,15 @@
-"""The main window: composes the Conversation and Call Bridge workspaces (CAP-0168 WI-01).
+"""The main window: the desktop shell over the workspaces (CAP-0168 WI-01, WI-02).
 
 The workspaces own their controls and logic (``ui/workspaces/``). The window keeps what they
 share: the signal hand-off from worker threads (``UiBridge``), the status bar, the session
 lock, the model warm-up generation and saving on close. Accessor properties keep the
 established ``MainWindow`` attribute paths for scripts and tests.
+
+WI-02 shell (spec §2.3.1-§2.3.2): the navigation sidebar on the left, the workspace pages in
+a ``QStackedWidget`` and the session strip with **Stop (F9)** below them. The one
+``ActiveSessionOwner`` allows one session across modes; F9 stops the active session from
+every workspace; Ctrl+1…Ctrl+6 select the enabled sidebar entries. Showing a page never
+starts or stops capture or playback.
 """
 
 from __future__ import annotations
@@ -13,16 +19,31 @@ import threading
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QTimer, Signal, Slot
-from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QMainWindow, QStatusBar, QVBoxLayout, QWidget
+from PySide6.QtGui import QCloseEvent, QKeySequence, QResizeEvent, QShortcut
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QMainWindow,
+    QStackedWidget,
+    QStatusBar,
+    QVBoxLayout,
+    QWidget,
+)
 
 from lianiq.config import AppConfig
 from lianiq.languages.modes import SessionPair
 from lianiq.languages.requirements import ModeAvailability, describe
 from lianiq.pipeline import TranslationPipeline
 from lianiq.ui import strings
+from lianiq.ui.shell.navigation import NavigationSidebar
+from lianiq.ui.shell.session_owner import ActiveSessionOwner, SessionState
+from lianiq.ui.shell.session_strip import SessionStrip
+from lianiq.ui.shell.workspaces import DEFAULT_ENTRIES, WorkspaceId
 from lianiq.ui.workspaces.call_bridge import CallBridgeWorkspace
 from lianiq.ui.workspaces.conversation import ConversationWorkspace
+from lianiq.ui.workspaces.settings import SettingsWorkspace
+
+DEFAULT_SIZE = (1280, 720)
+MINIMUM_SIZE = (850, 560)
 
 
 class UiBridge(QObject):
@@ -58,11 +79,12 @@ class MainWindow(QMainWindow):
     mode_combo = _forward("conversation", "mode_combo")
     input_combo = _forward("conversation", "input_combo")
     output_combo = _forward("conversation", "output_combo")
-    model_combo = _forward("conversation", "model_combo")
     tts_checkbox = _forward("conversation", "tts_checkbox")
-    gpu_checkbox = _forward("conversation", "gpu_checkbox")
     start_button = _forward("conversation", "start_button")
-    stop_button = _forward("conversation", "stop_button")
+    source_panel = _forward("conversation", "source_panel")
+    target_panel = _forward("conversation", "target_panel")
+    # Session strip: **Stop (F9)** stops the active session from every workspace.
+    stop_button = _forward("session_strip", "stop_button")
     swap_button = _forward("conversation", "swap_button")
     held_turn_bar = _forward("conversation", "held_turn_bar")
     source_text = _forward("conversation", "source_text")
@@ -73,6 +95,9 @@ class MainWindow(QMainWindow):
     # Call Bridge workspace.
     call_bridge_panel = _forward("call_bridge", "panel")
     call_bridge_controller = _forward("call_bridge", "controller")
+    # Settings workspace: model profile and compute device moved here (AC-12).
+    model_profile_field = _forward("settings", "model_profile_field")
+    compute_device_field = _forward("settings", "compute_device_field")
 
     def __init__(
         self,
@@ -88,12 +113,14 @@ class MainWindow(QMainWindow):
         self.bridge.error.connect(self.show_error)
         # Each Start gets a generation; a ready signal of a cancelled Start is ignored.
         self.start_generation = 0
+        self.session_owner = ActiveSessionOwner()
         self.conversation = ConversationWorkspace(self)
         self.call_bridge = CallBridgeWorkspace(self)
+        self.settings = SettingsWorkspace(self)
 
         self.setWindowTitle("lianiq")
-        self.resize(1120, 720)
-        self.setMinimumSize(850, 560)
+        self.setMinimumSize(*MINIMUM_SIZE)
+        self.resize(*DEFAULT_SIZE)
         self._build_ui()
         self._load_devices()
         self._apply_style()
@@ -114,25 +141,49 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(0, self.start_listening)
 
         QShortcut(QKeySequence("F8"), self, activated=self.start_listening)
-        QShortcut(QKeySequence("F9"), self, activated=self.stop_listening)
+        # F9 always targets the active session, whichever workspace is shown.
+        QShortcut(QKeySequence("F9"), self, activated=self.stop_active_session)
+        for index in range(len(DEFAULT_ENTRIES)):
+            QShortcut(
+                QKeySequence(f"Ctrl+{index + 1}"),
+                self,
+                activated=lambda index=index: self.navigation.select_index(index),
+            )
 
     def _build_ui(self) -> None:
         root = QWidget()
-        layout = QVBoxLayout(root)
-        layout.setContentsMargins(24, 20, 24, 20)
-        layout.setSpacing(16)
+        row = QHBoxLayout(root)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(0)
+        self.navigation = NavigationSidebar(DEFAULT_ENTRIES)
+        row.addWidget(self.navigation)
+        column = QVBoxLayout()
+        column.setContentsMargins(20, 16, 20, 12)
+        column.setSpacing(10)
+        row.addLayout(column, 1)
 
-        title_row = QHBoxLayout()
-        title = QLabel("lianiq")
-        title.setObjectName("title")
-        subtitle = QLabel("Local · Private · Optimized for Ryzen AI 7 350")
-        subtitle.setObjectName("subtitle")
-        title_row.addWidget(title)
-        title_row.addStretch()
-        title_row.addWidget(subtitle)
-        layout.addLayout(title_row)
-
-        self.conversation.build(layout, self.call_bridge.build_panel())
+        # The strip exists first: the held-turn bar returns focus to its **Stop**.
+        self.session_strip = SessionStrip()
+        self.session_strip.stop_button.clicked.connect(self.stop_active_session)
+        self.pages = QStackedWidget()
+        conversation_page = QWidget()
+        conversation_page.setObjectName("conversationPage")
+        conversation_layout = QVBoxLayout(conversation_page)
+        conversation_layout.setContentsMargins(0, 0, 0, 0)
+        conversation_layout.setSpacing(10)
+        self.conversation.build(conversation_layout)
+        self.workspace_pages = {
+            WorkspaceId.CONVERSATION: conversation_page,
+            WorkspaceId.CALL_BRIDGE: self.call_bridge.build_page(),
+            WorkspaceId.SETTINGS: self.settings.build_page(),
+        }
+        for page in self.workspace_pages.values():
+            self.pages.addWidget(page)
+        column.addWidget(self.pages, 1)
+        column.addWidget(self.session_strip)
+        self.navigation.workspace_selected.connect(self.show_workspace)
+        self.navigation.select(WorkspaceId.CONVERSATION, notify=False)
+        self.session_owner.subscribe(self._session_changed)
 
         self.setCentralWidget(root)
         self.setStatusBar(QStatusBar())
@@ -147,8 +198,15 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(
             """
             QMainWindow, QWidget { background: #111827; color: #e5e7eb; font-size: 14px; }
-            QLabel#title { font-size: 28px; font-weight: 700; color: #f9fafb; }
-            QLabel#subtitle { color: #94a3b8; }
+            QFrame#navigationSidebar { background: #0b1220; border-right: 1px solid #334155; }
+            QFrame#navigationSidebar QToolButton { padding: 8px; border-radius: 7px;
+                                                   text-align: left; }
+            QFrame#navigationSidebar QToolButton:checked { background: #1e293b;
+                                                           border-left: 3px solid #60a5fa;
+                                                           font-weight: 700; }
+            QFrame#navigationSidebar QToolButton:disabled { color: #64748b; }
+            QFrame#sessionStrip { background: #1e293b; border: 1px solid #475569;
+                                  border-radius: 7px; }
             QLabel#panelTitle { font-size: 17px; font-weight: 600; color: #cbd5e1; }
             QPlainTextEdit { background: #0b1220; border: 1px solid #334155; border-radius: 10px;
                              padding: 14px; font-size: 20px; selection-background-color: #2563eb; }
@@ -163,7 +221,43 @@ class MainWindow(QMainWindow):
             """
         )
 
-    # Shared by both workspaces.
+    # The shell.
+
+    @Slot(object)
+    def show_workspace(self, workspace: WorkspaceId) -> bool:
+        """Show ``workspace``'s page; ``False`` for a planned entry (no page)."""
+        page = self.workspace_pages.get(workspace)
+        if page is None:
+            return False
+        if self.navigation.current() is not workspace:
+            self.navigation.select(workspace, notify=False)
+        if workspace is WorkspaceId.SETTINGS:
+            self.settings.refresh()
+        self.pages.setCurrentWidget(page)
+        return True
+
+    def current_workspace(self) -> WorkspaceId:
+        current = self.pages.currentWidget()
+        return next(key for key, page in self.workspace_pages.items() if page is current)
+
+    @Slot()
+    def stop_active_session(self) -> None:
+        """**Stop (F9)**: stop whichever mode holds the session; idle, stop the conversation."""
+        if self.session_owner.state is SessionState.IDLE:
+            self.stop_listening()  # as before the shell: F9 also clears a stopped conversation
+        else:
+            self.session_owner.stop()
+
+    def _session_changed(self, state: SessionState, active: WorkspaceId | None) -> None:
+        self.session_strip.show_state(state, active)
+        self.navigation.set_session_owner(None if state is SessionState.IDLE else active)
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        # Below 1000 logical px the sidebar collapses to the icon rail (spec §2.3.1).
+        self.navigation.fit_window_width(event.size().width())
+        super().resizeEvent(event)
+
+    # Shared by the workspaces.
 
     def session_locked(self) -> bool:
         conversation = self.conversation

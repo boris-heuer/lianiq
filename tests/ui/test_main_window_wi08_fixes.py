@@ -4,7 +4,8 @@
   not a language pair is ready.
 - DEV-01: at the default window width the held-turn buttons show their full labels.
 - DEV-02: at the default window width the closed *Language pair* and *Conversation
-  direction* combos show their full selected value.
+  direction* combos show their full selected value. (CAP-0168 WI-02 moved the *Model
+  profile* combo and the *CUDA GPU* box out of the Conversation layout, AC-03/AC-12.)
 
 The layout checks compare each control's width with its size hint. The offscreen platform has
 no font database, so they load the Windows UI font (Segoe UI) to measure real text widths.
@@ -260,13 +261,13 @@ def test_dev02_language_combos_show_the_full_selected_value_at_the_default_width
     for index in range(window.mode_combo.count()):
         window.mode_combo.setCurrentIndex(index)
         show_at_default_width(window)
-        controls = (window.pair_combo, window.mode_combo, window.tts_checkbox, window.gpu_checkbox)
+        controls = (window.pair_combo, window.mode_combo, window.tts_checkbox)
         assert [
             f"{control.accessibleName() or control.objectName()}: {control.width()}"
             for control in controls
             if control.width() < control.sizeHint().width()
             or control.mapTo(window, control.rect().topRight()).x() > window.width()
         ] == []
-        # The device and model combos may shorten their text, but stay readable.
-        for combo in (window.input_combo, window.output_combo, window.model_combo):
+        # The device combos may shorten their text, but stay readable.
+        for combo in (window.input_combo, window.output_combo):
             assert combo.width() >= combo.minimumSizeHint().width() > 0

@@ -1,3 +1,10 @@
+"""Real-model UI self-test: one German turn through the window, then the shell (CAP-0168).
+
+After the turn it navigates to every enabled workspace, stops the session with the session
+strip's **Stop (F9)** from Settings and returns to Conversation; the transcript and the pair
+must be unchanged (spec VoR-01, E2E C-03). Needs the provisioned models (D-01).
+"""
+
 from __future__ import annotations
 
 import os
@@ -23,6 +30,8 @@ def main() -> int:
     from PySide6.QtWidgets import QApplication
 
     from lianiq.ui.main_window import MainWindow
+    from lianiq.ui.shell.session_owner import SessionState
+    from lianiq.ui.shell.workspaces import WorkspaceId
 
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -58,13 +67,42 @@ def main() -> int:
         print("Models for the selected mode ready; UI pipeline is listening", flush=True)
         threading.Thread(target=submit_probe, name="ui-self-test-input", daemon=True).start()
 
+    def check_navigation() -> None:
+        """Visit every enabled workspace, Stop from Settings, return to Conversation."""
+        transcript = window.source_text.toPlainText()
+        pair = window.pair_combo.currentText()
+        for workspace in (WorkspaceId.CALL_BRIDGE, WorkspaceId.SETTINGS):
+            window.navigation.buttons[workspace].click()
+            application.processEvents()
+            if window.current_workspace() is not workspace or not window.stop_button.isVisible():
+                print(f"FAIL navigation: {workspace.value} without the session strip", flush=True)
+                application.exit(5)
+                return
+        window.stop_button.click()  # Stop (F9) in the session strip, from Settings
+        application.processEvents()
+        if window.capture.running or window.session_owner.state is not SessionState.IDLE:
+            print("FAIL navigation: Stop from Settings did not stop the session", flush=True)
+            application.exit(6)
+            return
+        window.navigation.buttons[WorkspaceId.CONVERSATION].click()
+        application.processEvents()
+        if (
+            window.source_text.toPlainText() != transcript
+            or window.pair_combo.currentText() != pair
+        ):
+            print("FAIL navigation: transcript or pair changed", flush=True)
+            application.exit(7)
+            return
+        print("PASS navigation: Stop from Settings; transcript and pair unchanged", flush=True)
+        outcome["code"] = 0
+        QTimer.singleShot(500, application.quit)
+
     def on_result(result: TranslationResult) -> None:
         print(
             f"PASS UI pipeline: {result.total_seconds:.3f} s, translated={result.translated_text}",
             flush=True,
         )
-        outcome["code"] = 0
-        QTimer.singleShot(500, application.quit)
+        QTimer.singleShot(0, check_navigation)
 
     def on_error(message: str) -> None:
         print(f"FAIL UI pipeline: {message}", flush=True)

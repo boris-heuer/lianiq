@@ -3,6 +3,12 @@
 Moved behaviour-neutrally out of ``ui/main_window.py``. The workspace owns the
 ``CallBridgePanel`` and the running ``FullDuplexBridgeController``; ``MainWindow`` provides
 the shared status bar, session lock and model warm-up.
+
+CAP-0168 WI-02: the panel is the workspace's own page (sidebar entry *Call Bridge*,
+"Experimental") with its explicit endpoint selectors only. A start goes through
+``ActiveSessionOwner.request_start``: while the conversation holds the session it is refused
+with ``SESSION_BUSY`` and opens no stream, and the panel's **Start** is disabled with that
+tooltip. A running conversation is never stopped by a Call Bridge start any more.
 """
 
 from __future__ import annotations
@@ -11,6 +17,7 @@ import threading
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QObject, QTimer, Slot
+from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from lianiq.audio.capture_stream import EndpointCaptureStream
 from lianiq.audio.endpoints import list_audio_endpoints
@@ -30,6 +37,8 @@ from lianiq.languages.errors import ModeUnavailableError
 from lianiq.languages.modes import CALL_BRIDGE_MODE, SessionPair
 from lianiq.languages.registry import LanguageId
 from lianiq.ui.call_bridge_panel import CallBridgePanel
+from lianiq.ui.shell.session_owner import SessionBusy, SessionState
+from lianiq.ui.shell.workspaces import WorkspaceId, session_busy_message
 
 if TYPE_CHECKING:
     from lianiq.ui.main_window import MainWindow
@@ -57,6 +66,20 @@ class CallBridgeWorkspace(QObject):
         self._endpoint_monitor = QTimer(self)
         self._endpoint_monitor.setInterval(2_000)
         self._endpoint_monitor.timeout.connect(self._reconcile_call_bridge_endpoints)
+        self.owner = host.session_owner
+        self._generation = 0  # the owner generation of this workspace's latest start
+        self.owner.register(WorkspaceId.CALL_BRIDGE, self.stop_call_bridge)
+        self.owner.subscribe(self._session_changed)
+
+    def build_page(self) -> QWidget:
+        """The Call Bridge page: the panel with its explicit endpoint selectors."""
+        page = QWidget()
+        page.setObjectName("callBridgePage")
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.build_panel())
+        layout.addStretch(1)
+        return page
 
     def build_panel(self) -> CallBridgePanel:
         local_name, remote_name = self._language_names()
@@ -123,9 +146,12 @@ class CallBridgeWorkspace(QObject):
         except Exception as exc:  # noqa: BLE001 - GUI boundary reports setup failures.
             host.show_error(str(exc))
             return
+        try:
+            self._generation = self.owner.request_start(WorkspaceId.CALL_BRIDGE)
+        except SessionBusy as busy:
+            host.show_error(str(busy))  # nothing was opened; the running session continues
+            return
         conversation = host.conversation
-        if conversation.capture.running or conversation.starting:
-            conversation.stop_listening()
         self.starting = True
         self._pending_assignments = assignments
         self._pending_session = session
@@ -143,6 +169,7 @@ class CallBridgeWorkspace(QObject):
         session, self._pending_session = self._pending_session, None
         self.panel.set_models_ready(True)
         if not ready or assignments is None or session is None:
+            self.owner.mark_idle(self._generation)
             # Start follows the selected mode's availability
             self.host.conversation.refresh_availability()
             self.host.show_error(message or "Call bridge setup was cancelled")
@@ -231,14 +258,17 @@ class CallBridgeWorkspace(QObject):
             controller.start()
         except ModeUnavailableError as exc:
             self.controller = None
+            self.owner.mark_idle(self._generation)
             conversation.refresh_availability()
             self.host.show_unavailable(exc.missing)
             return
         except Exception as exc:  # noqa: BLE001 - GUI boundary reports setup failures.
             self.controller = None
+            self.owner.mark_idle(self._generation)
             conversation.refresh_availability()
             self.host.show_error(str(exc))
             return
+        self.owner.mark_running(self._generation)
         self.panel.apply_to_config()
         self.panel.set_running(True)
         self._endpoint_monitor.start()
@@ -256,6 +286,8 @@ class CallBridgeWorkspace(QObject):
         self.starting = False
         self._pending_assignments = None
         self._pending_session = None
+        if self.owner.active is WorkspaceId.CALL_BRIDGE:
+            self.owner.mark_idle(self._generation)
         self.panel.set_running(False)
         self.panel.set_models_ready(True)
         conversation = self.host.conversation
@@ -267,6 +299,13 @@ class CallBridgeWorkspace(QObject):
             self.panel.set_level(role, 0.0)
         self.host.statusBar().showMessage(
             "Call bridge stopped; all explicit endpoints were released"
+        )
+
+    def _session_changed(self, state: SessionState, active: WorkspaceId | None) -> None:
+        """While another mode holds the session, the panel's **Start** says why it is off."""
+        busy = state is not SessionState.IDLE and active is not WorkspaceId.CALL_BRIDGE
+        self.panel.set_session_busy(
+            session_busy_message(active) if busy and active is not None else None
         )
 
     @Slot()

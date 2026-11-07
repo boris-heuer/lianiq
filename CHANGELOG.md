@@ -13,6 +13,14 @@ All notable user-visible changes are documented here.
 
 ### Changed
 
+- The window has a left sidebar with Conversation, Call Bridge (Experimental) and Settings, plus
+  the planned Text translation, Listen & translate and Language packs entries (Ctrl+1…Ctrl+6;
+  an icon rail below 1000 px). A session strip with **Stop (F9)** stays visible in every
+  workspace, and only one session (Conversation or Call Bridge) runs at a time. Conversation
+  gives the transcript most of the window; a panel you scroll up stays put until you scroll back
+  to the end. Model profile and compute device moved to Settings › Diagnostics, and Voice output
+  is also in Settings.
+
 - Mandarin spoken output uses the sherpa-onnx voice `vits-icefall-zh-aishell3` (speaker 20,
   8 kHz, CPU), downloaded by `scripts/download_models.py` from a pinned archive verified by size
   and SHA-256 into `models/sherpa/vits-icefall-zh-aishell3/`; German stays on Piper. Settings

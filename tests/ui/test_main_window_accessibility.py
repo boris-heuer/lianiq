@@ -9,6 +9,9 @@ exposes; they are code evidence, the native Tab cycle is product evidence.
 CAP-0168 AC-02: the widgets set their names and the focus return themselves, so a
 ``MainWindow`` built directly (as ``scripts/ui_self_test.py`` does) passes without any
 post-construction step; ``ui/accessibility.py`` no longer exists (AC-01).
+
+CAP-0168 WI-02: the model profile left the Conversation layout and is the read-only
+*Model profile* value in Settings › Diagnostics (AC-12); it is still a named Tab stop there.
 """
 
 from __future__ import annotations
@@ -29,7 +32,7 @@ DE = LanguageId("de")
 CONTROL_NAMES = {
     "input_combo": "Microphone",
     "output_combo": "Speakers",
-    "model_combo": "Model profile",
+    "model_profile_field": "Model profile",
     "source_text": "Original",
     "target_text": "Translation",
 }
@@ -112,8 +115,15 @@ def test_ac02_def04_every_tab_stop_has_an_accessible_name_stopped_and_with_a_hel
     assert wait_until(window.held_turn_bar.isVisible)
     stops = tab_stops(window)
     assert window.held_turn_bar.translate_buttons[DE] in stops
-    assert window.model_combo in stops and window.source_text in stops
+    assert window.source_text in stops
     assert unnamed(window) == []
+    # The model profile is a named Tab stop on the Settings page (CAP-0168 AC-12).
+    from lianiq.ui.shell.workspaces import WorkspaceId
+
+    window.show_workspace(WorkspaceId.SETTINGS)
+    assert window.model_profile_field in tab_stops(window)
+    assert unnamed(window) == []
+    window.show_workspace(WorkspaceId.CONVERSATION)
 
 
 def test_def05_focus_stays_in_the_bar_while_resolving_then_moves_to_the_next_turn_and_stop(
@@ -147,7 +157,7 @@ def test_def05_focus_stays_in_the_bar_while_resolving_then_moves_to_the_next_tur
     press(german, Qt.Key.Key_Space)
     assert wait_until(lambda: len(window.history) == 2 and not bar.isVisible())
     assert wait_until(lambda: focused() is window.stop_button)
-    assert focused() is not window.model_combo
+    assert focused() is not window.model_profile_field
 
 
 def test_def05_stop_with_focus_in_the_bar_moves_focus_to_start(window, spies) -> None:  # noqa: F811

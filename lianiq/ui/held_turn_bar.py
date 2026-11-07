@@ -6,7 +6,10 @@ button per pair member, **Discard** and the counter "1 of n" when several turns 
 Nothing is translated until the user clicks a button; ``Esc`` is deliberately not bound.
 
 The excerpt yields the bar's width: it is elided to the space the other controls leave,
-so the buttons always show their full labels (WI-08 DEV-01).
+so the buttons always show their full labels (WI-08 DEV-01). It keeps a minimum width of the
+first ``EXCERPT_MIN_CHARS`` characters, so even at the 850 px minimum window it shows them
+(CAP-0168 RES-06, AC-11). For that the bar has two rows: the title, detected language and
+counter above; the excerpt and the buttons below.
 
 Keyboard focus never falls through to an unrelated control (WI-10 DEF-05): while a resolve
 runs the bar itself keeps focus and the next held turn's first button receives it afterwards;
@@ -26,6 +29,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QStyle,
+    QVBoxLayout,
     QWidget,
 )
 
@@ -35,6 +39,8 @@ from lianiq.languages.registry import LanguageId, LanguagePair, LanguageRegistry
 from lianiq.ui import strings
 
 EXCERPT_LENGTH = 120
+# The excerpt never shrinks below this many characters (plus quote and ellipsis).
+EXCERPT_MIN_CHARS = 20
 
 
 def excerpt(text: str, limit: int = EXCERPT_LENGTH) -> str:
@@ -57,8 +63,13 @@ class HeldTurnBar(QFrame):
         self.setFrameShape(QFrame.Shape.StyledPanel)
         self._turn: HeldTurn | None = None
         self._resolving = False
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(10, 6, 10, 6)
+        rows = QVBoxLayout(self)
+        rows.setContentsMargins(10, 6, 10, 6)
+        rows.setSpacing(4)
+        header = QHBoxLayout()
+        layout = QHBoxLayout()
+        rows.addLayout(header)
+        rows.addLayout(layout)
         icon = QLabel()
         icon.setPixmap(
             self.style().standardIcon(QStyle.StandardPixmap.SP_MessageBoxWarning).pixmap(18, 18)
@@ -76,11 +87,12 @@ class HeldTurnBar(QFrame):
         self._excerpt = ""
         self.detected_label = QLabel()
         self.counter_label = QLabel()
-        layout.addWidget(icon)
-        layout.addWidget(self.title_label)
+        header.addWidget(icon)
+        header.addWidget(self.title_label)
+        header.addStretch(1)
+        header.addWidget(self.detected_label)
+        header.addWidget(self.counter_label)
         layout.addWidget(self.transcript_label, 1)
-        layout.addWidget(self.detected_label)
-        layout.addWidget(self.counter_label)
         self._button_layout = QHBoxLayout()
         layout.addLayout(self._button_layout)
         self.translate_buttons: dict[LanguageId, QPushButton] = {}
@@ -118,6 +130,11 @@ class HeldTurnBar(QFrame):
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         if watched is self.transcript_label and event.type() == QEvent.Type.Resize:
             self._fit_excerpt()
+        elif watched is self.transcript_label and event.type() in (
+            QEvent.Type.FontChange,
+            QEvent.Type.StyleChange,
+        ):
+            self._fit_minimum_width()
         return super().eventFilter(watched, event)
 
     def set_held(self, turns: Sequence[HeldTurn], pair: LanguagePair | None) -> None:
@@ -130,6 +147,7 @@ class HeldTurnBar(QFrame):
         self._turn = turn
         text = turn.transcript.text
         self._excerpt = f"“{excerpt(text)}”"
+        self._fit_minimum_width()
         self._fit_excerpt()
         self.transcript_label.setToolTip(text)
         self.transcript_label.setAccessibleName(text)
@@ -173,6 +191,15 @@ class HeldTurnBar(QFrame):
                 widget.setFocus(Qt.FocusReason.OtherFocusReason)
                 return widget
         return None
+
+    def _fit_minimum_width(self) -> None:
+        """Room for the opening quote, ``EXCERPT_MIN_CHARS`` characters and the ellipsis."""
+        label = self.transcript_label
+        label.ensurePolished()
+        shortest = self._excerpt[: EXCERPT_MIN_CHARS + 1] + "…"
+        margins = label.contentsMargins()
+        width = label.fontMetrics().horizontalAdvance(shortest) + margins.left() + margins.right()
+        label.setMinimumWidth(width + 2 * label.margin() + 4 if self._excerpt else 0)
 
     def _fit_excerpt(self) -> None:
         label = self.transcript_label
