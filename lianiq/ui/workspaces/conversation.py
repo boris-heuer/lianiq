@@ -2,9 +2,15 @@
 
 Moved behaviour-neutrally out of ``ui/main_window.py``. The workspace owns its controls and
 the conversation session (capture, runner, ``SessionController``); ``MainWindow`` composes it
-with the Call Bridge workspace and provides the shared status bar, session lock and model
-warm-up. Accessible names and the held-turn focus return are set on the widgets here
-(CAP-0169 WI-08 DEF-04/DEF-05, formerly ``ui/accessibility.py``).
+with the Call Bridge and Settings workspaces and provides the shared status bar, session lock,
+model warm-up and the active-session owner. Accessible names and the held-turn focus return
+are set on the widgets here (CAP-0169 WI-08 DEF-04/DEF-05, formerly ``ui/accessibility.py``).
+
+CAP-0168 WI-02 (RES-06): one compact row of controls, then the held-turn bar and the
+*Original*/*Translation* splitter filling the rest. Model profile, compute device and the
+hardware subtitle moved to Settings › Diagnostics; **Stop (F9)** is in the session strip. A
+start goes through ``ActiveSessionOwner.request_start``, so it is refused while the Call
+Bridge holds the session; then **Start** is disabled with the ``SESSION_BUSY`` tooltip.
 """
 
 from __future__ import annotations
@@ -14,7 +20,7 @@ import threading
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import QObject, Qt, Slot
+from PySide6.QtCore import QObject, Qt, Signal, Slot
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -27,7 +33,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSplitter,
     QVBoxLayout,
-    QWidget,
 )
 
 from lianiq.audio.capture import MicrophoneCapture
@@ -45,6 +50,8 @@ from lianiq.pipeline import PipelineRunner
 from lianiq.ui import strings
 from lianiq.ui.held_turn_bar import HeldTurnBar
 from lianiq.ui.result_panel import ResultPanel
+from lianiq.ui.shell.session_owner import SessionBusy, SessionState
+from lianiq.ui.shell.workspaces import WorkspaceId, session_busy_message
 from lianiq.ui.workspaces.pair_selection import PairSelection, conversation_session
 
 if TYPE_CHECKING:
@@ -52,6 +59,9 @@ if TYPE_CHECKING:
 
 
 class ConversationWorkspace(QObject):
+    # *Voice output* changed its checked, enabled or tooltip state (Settings mirrors it).
+    voice_output_changed = Signal()
+
     def __init__(self, host: MainWindow) -> None:
         super().__init__(host)
         self.host = host
@@ -71,18 +81,22 @@ class ConversationWorkspace(QObject):
         self.starting = False
         self._pending_session: SessionPair | None = None
         self.diagnostic_wav: Path | None = None
+        self.owner = host.session_owner
+        self._generation = 0  # the owner generation of this workspace's latest start
+        self.owner.register(WorkspaceId.CONVERSATION, self.stop_listening)
+        self.owner.subscribe(self._session_changed)
         self.pairs = PairSelection(
             self.config, self.pipeline.registry, lambda: self.session_controller.catalog
         )
 
-    def build(self, layout: QVBoxLayout, call_bridge_panel: QWidget) -> None:
-        """Add the conversation rows to ``layout``, with the Call Bridge panel in its place."""
+    def build(self, layout: QVBoxLayout) -> None:
+        """Add the compact control row, the held-turn bar and the result panels to ``layout``."""
         controls = QGridLayout()
         controls.setHorizontalSpacing(10)
         self.pairs.build(controls)
         self.pair_combo, self.mode_combo = self.pairs.pair_combo, self.pairs.mode_combo
 
-        # Each device and profile combo is named after the caption shown above it.
+        # Each device combo is named after the caption shown above it.
         controls.addWidget(QLabel("Microphone"), 0, 2)
         self.input_combo = QComboBox()
         self.input_combo.setAccessibleName("Microphone")
@@ -91,62 +105,39 @@ class ConversationWorkspace(QObject):
         self.output_combo = QComboBox()
         self.output_combo.setAccessibleName("Speakers")
         controls.addWidget(self.output_combo, 1, 3)
-
-        controls.addWidget(QLabel("Model profile"), 0, 4)
-        self.model_combo = QComboBox()
-        self.model_combo.setAccessibleName("Model profile")
-        self.model_combo.addItem("Balanced · Whisper small + MarianMT", "balanced")
-        self.model_combo.setToolTip("The installed profile is optimized for this EliteBook.")
-        controls.addWidget(self.model_combo, 1, 4)
-        # The pair and routing combos keep the width of their longest entry; the device and
-        # model combos share the remaining width and may shorten their text. *Voice output*
-        # and *CUDA GPU* sit in the action row, so the grid fits the default window width
-        # in one row (WI-08 DEV-02).
-        for combo in (self.input_combo, self.output_combo, self.model_combo):
+        # The pair and routing combos keep the width of their longest entry; the device
+        # combos share the remaining width and may shorten their text (WI-08 DEV-02).
+        for combo in (self.input_combo, self.output_combo):
             combo.setSizeAdjustPolicy(
                 QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
             )
             combo.setMinimumContentsLength(10)
 
-        self.tts_checkbox = QCheckBox("Voice output")
-        self.tts_checkbox.setAccessibleName("Voice output")
+        self.tts_checkbox = QCheckBox(strings.VOICE_OUTPUT)
+        self.tts_checkbox.setAccessibleName(strings.VOICE_OUTPUT)
         # Checked = the saved preference while spoken output is available (see
         # ``refresh_availability``); the output is bound to the session at Start.
         self.tts_checkbox.setChecked(self.config.voice_output)
         self.tts_checkbox.toggled.connect(self._toggle_tts)
-        self.gpu_checkbox = QCheckBox("CUDA GPU")
-        recognition_device = self._recognition_device()
-        self.gpu_checkbox.setChecked(recognition_device == "cuda")
-        self.gpu_checkbox.setEnabled(False)
-        runtime_device = recognition_device.upper()
-        self.gpu_checkbox.setToolTip(f"Active inference device: {runtime_device}")
-        controls.setColumnStretch(2, 2)
-        controls.setColumnStretch(3, 2)
-        controls.setColumnStretch(4, 1)
+        controls.setColumnStretch(2, 1)
+        controls.setColumnStretch(3, 1)
         layout.addLayout(controls)
 
         action_row = QHBoxLayout()
         self.start_button = QPushButton("▶  Start  (F8)")
         self.start_button.setObjectName("primaryButton")
         self.start_button.clicked.connect(self.start_listening)
-        self.stop_button = QPushButton("■  Stop  (F9)")
-        self.stop_button.clicked.connect(self.stop_listening)
-        self.stop_button.setEnabled(False)
         self.swap_button = QPushButton("⇄  Switch direction")
         self.swap_button.clicked.connect(self._swap_direction)
         export_button = QPushButton("Export transcript")
         export_button.clicked.connect(self._export_history)
         action_row.addWidget(self.start_button)
-        action_row.addWidget(self.stop_button)
         action_row.addWidget(self.swap_button)
         action_row.addSpacing(12)
         action_row.addWidget(self.tts_checkbox)
-        action_row.addWidget(self.gpu_checkbox)
         action_row.addStretch()
         action_row.addWidget(export_button)
         layout.addLayout(action_row)
-
-        layout.addWidget(call_bridge_panel)
 
         self.held_turn_bar = HeldTurnBar(self.pipeline.registry)
         self.held_turn_bar.translate_requested.connect(self._resolve_held)
@@ -156,7 +147,7 @@ class ConversationWorkspace(QObject):
         layout.addWidget(self.held_turn_bar)
 
         splitter = QSplitter(Qt.Horizontal)
-        self.source_panel = ResultPanel("Original", "Speak …")
+        self.source_panel = ResultPanel("Original", strings.TRANSCRIPT_EMPTY)
         self.target_panel = ResultPanel("Translation", "The translation appears here …")
         splitter.addWidget(self.source_panel)
         splitter.addWidget(self.target_panel)
@@ -176,6 +167,11 @@ class ConversationWorkspace(QObject):
         activity_row.addStretch()
         activity_row.addWidget(self.latency_label)
         layout.addLayout(activity_row)
+
+    @property
+    def stop_button(self) -> QPushButton:
+        """**Stop (F9)** of the session strip, which stops the active session."""
+        return self.host.session_strip.stop_button
 
     @property
     def source_text(self):
@@ -262,6 +258,8 @@ class ConversationWorkspace(QObject):
             control.setToolTip("" if enabled else strings.LOCKED_TOOLTIP)
         if enabled:
             self.refresh_availability()
+        else:
+            self.voice_output_changed.emit()
 
     def set_devices_enabled(self, enabled: bool) -> None:
         self.input_combo.setEnabled(enabled)
@@ -284,6 +282,12 @@ class ConversationWorkspace(QObject):
         """Drive the routing entries, *Voice output* and **Start** from ``check()``."""
         if self.host.session_locked():
             return
+        try:
+            self._refresh_availability()
+        finally:
+            self.voice_output_changed.emit()
+
+    def _refresh_availability(self) -> None:
         status = self.host.statusBar()
         pair = self.current_pair()
         for control in (self.mode_combo, self.swap_button):
@@ -367,6 +371,19 @@ class ConversationWorkspace(QObject):
             return
         self.refresh_availability()
 
+    def recognition_device(self) -> str:
+        """The compute device speech recognition runs (or will run) on."""
+        return self._recognition_device()
+
+    def translation_device(self) -> str:
+        """The compute device translation runs (or will run) on."""
+        device = getattr(self.pipeline.translator, "device", None)
+        if device is None:
+            device = resolve_compute_device(
+                self.config.translation.device, ctranslate2_cuda_available()
+            )
+        return device
+
     def _recognition_device(self) -> str:
         device = getattr(self.pipeline.recognizer, "device", None)
         if device is None:
@@ -393,6 +410,7 @@ class ConversationWorkspace(QObject):
         # Voice output is bound at Start: ``prepare`` applied the session's output mode.
         if not ready or session is None:
             self.diagnostic_wav = None
+            self.owner.mark_idle(self._generation)
             self.start_button.setEnabled(True)
             self.set_session_controls_enabled(True)
             self.state_label.setText("Model error")
@@ -417,10 +435,11 @@ class ConversationWorkspace(QObject):
 
     @Slot()
     def start_listening(self) -> None:
-        if self.host.call_bridge.active():
-            self.host.show_error("Stop call bridge mode before starting conversation capture")
-            return
         if self.starting or self.capture.running:
+            return
+        busy = self.owner.busy_for(WorkspaceId.CONVERSATION)
+        if busy is not None:
+            self.host.show_error(session_busy_message(busy))
             return
         try:
             session = self.session_pair()
@@ -431,6 +450,11 @@ class ConversationWorkspace(QObject):
         if not availability.available:
             self.diagnostic_wav = None
             self.host.show_unavailable(availability.missing)
+            return
+        try:
+            self._generation = self.owner.request_start(WorkspaceId.CONVERSATION)
+        except SessionBusy as busy:
+            self.host.show_error(str(busy))
             return
         self.starting = True
         self._pending_session = session
@@ -447,17 +471,19 @@ class ConversationWorkspace(QObject):
             self.pipeline.output_device = self.config.audio.output_device
             self.session_controller.start(session)
         except ModeUnavailableError as exc:
+            self.owner.mark_idle(self._generation)
             self.start_button.setEnabled(True)
             self.set_session_controls_enabled(True)
             self.host.show_unavailable(exc.missing)
             return
         except Exception as exc:  # noqa: BLE001 - GUI boundary reports dependency/device failures.
+            self.owner.mark_idle(self._generation)
             self.start_button.setEnabled(True)
             self.set_session_controls_enabled(True)
             self.host.show_error(str(exc))
             return
+        self.owner.mark_running(self._generation)
         self.start_button.setEnabled(False)
-        self.stop_button.setEnabled(True)
         self.set_devices_enabled(False)
         self.state_label.setText("Listening …")
         self.host.statusBar().showMessage("Offline capture is active")
@@ -470,9 +496,10 @@ class ConversationWorkspace(QObject):
         # Queued turns finish with their bound pair; unresolved held turns are discarded.
         report = self.session_controller.stop()
         self.held_turn_bar.clear()
+        if self.owner.active is WorkspaceId.CONVERSATION:
+            self.owner.mark_idle(self._generation)
         call_bridge = self.host.call_bridge
-        self.start_button.setEnabled(not call_bridge.starting)
-        self.stop_button.setEnabled(False)
+        self.start_button.setEnabled(not call_bridge.active())
         self.set_devices_enabled(True)
         self.set_session_controls_enabled(call_bridge.controller is None)
         self.level_bar.setValue(0)
@@ -535,6 +562,15 @@ class ConversationWorkspace(QObject):
     @Slot(float)
     def _show_level(self, level: float) -> None:
         self.level_bar.setValue(round(level * 100))
+
+    def _session_changed(self, state: SessionState, active: WorkspaceId | None) -> None:
+        """While another mode holds the session, **Start** says why it is disabled."""
+        busy = state is not SessionState.IDLE and active is not WorkspaceId.CONVERSATION
+        if busy and active is not None:
+            self.start_button.setEnabled(False)
+            self.start_button.setToolTip(session_busy_message(active))
+        else:
+            self.start_button.setToolTip("")
 
     @Slot(bool)
     def _toggle_tts(self, enabled: bool) -> None:
