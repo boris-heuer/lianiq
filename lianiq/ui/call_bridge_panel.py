@@ -1,3 +1,9 @@
+"""The Call Bridge panel: four explicit endpoint selectors, levels, route tests, Start/Stop.
+
+CAP-0168 WI-02: while another mode holds the active session, **Start** is disabled and its
+tooltip names that session (``set_session_busy``).
+"""
+
 from __future__ import annotations
 
 from collections.abc import Iterable
@@ -56,6 +62,7 @@ class CallBridgePanel(QWidget):
         self.level_bars: dict[EndpointRole, QProgressBar] = {}
         self._endpoints: dict[str, AudioEndpointRef] = {}
         self._models_ready = False
+        self._busy_reason: str | None = None
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -188,11 +195,20 @@ class CallBridgePanel(QWidget):
         for combo in self.endpoint_combos.values():
             combo.setEnabled(not running)
         ready = not running and self.enabled_checkbox.isChecked() and self._models_ready
-        self.start_button.setEnabled(ready)
+        self.start_button.setEnabled(ready and self._busy_reason is None)
         self.stop_button.setEnabled(running)
         self.outbound_test_button.setEnabled(ready)
         self.inbound_test_button.setEnabled(ready)
         self.state_label.setText("Running" if running else "Ready")
+
+    def set_session_busy(self, reason: str | None) -> None:
+        """``reason`` (``SESSION_BUSY``) while another session runs; ``None`` when idle."""
+        self._busy_reason = reason
+        self.start_button.setToolTip(reason or "")
+        if reason is not None:
+            self.start_button.setEnabled(False)
+        elif not self.stop_button.isEnabled():
+            self._refresh_enabled_state()
 
     def set_state(self, state: BridgeState | str, message: str = "") -> None:
         value = state.value if isinstance(state, BridgeState) else state
@@ -207,7 +223,7 @@ class CallBridgePanel(QWidget):
         enabled = self.enabled_checkbox.isChecked()
         for combo in self.endpoint_combos.values():
             combo.setEnabled(enabled)
-        self.start_button.setEnabled(enabled and self._models_ready)
+        self.start_button.setEnabled(enabled and self._models_ready and self._busy_reason is None)
         self.outbound_test_button.setEnabled(enabled and self._models_ready)
         self.inbound_test_button.setEnabled(enabled and self._models_ready)
         if not enabled:
