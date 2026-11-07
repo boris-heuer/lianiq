@@ -282,8 +282,11 @@ def test_ac09_a_refused_call_bridge_start_leaves_a_running_conversation_alone(
     click(window.start_button)
     assert wait_until(lambda: window.capture.running)
     assign(window, skip=EndpointRole.CALL_SPEAKER_CAPTURE)
+    # CAP-0168 AC-07: while the conversation runs, the panel's Start is disabled; the
+    # programmatic request is still refused and names the missing endpoint first.
+    assert not window.call_bridge_panel.start_button.isEnabled()
 
-    click(window.call_bridge_panel.start_button)
+    window.start_call_bridge()
 
     assert window.statusBar().currentMessage() == "Not available: missing call speaker endpoint"
     assert window.capture.running and window.session_controller.running
