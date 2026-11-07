@@ -130,7 +130,9 @@ lianiq/
     piper_engine.py
   pipeline.py           # Ordered conversation coordinator through protocols
   ui/
-    main_window.py
+    main_window.py      # Composes the workspaces; shared status bar and session lock
+    workspaces/         # Conversation (with pair_selection.py) and Call Bridge pages
+    result_panel.py     # Original / Translation panels that follow the latest result
     held_turn_bar.py
 tests/
   languages/            # Registry, capabilities, requirements, session (synthetic qaa/qab)
