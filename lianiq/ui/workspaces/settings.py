@@ -1,4 +1,4 @@
-"""The Settings workspace: Voice output and Diagnostics (CAP-0168 spec §2.3.6, WI-02).
+"""The Settings workspace: Audio devices, Voice output, Diagnostics (CAP-0168 spec §2.3.6).
 
 - **Voice output** mirrors the *Voice output* checkbox of Conversation: both show the same
   checked, enabled and tooltip state, and toggling either changes the saved preference.
@@ -9,8 +9,11 @@
 - **Notice history** (WI-03): the redacted diagnostics log with **Copy** and **Export…**
   (``DiagnosticsView``, spec §2.2.6).
 
-Audio devices (WI-04) are added by a later work item. Each value is a keyboard-selectable label, so it is a named Tab stop that is
-never shortened: a label without word wrap always gets its full text width.
+- **Audio devices** (WI-04): Microphone and Speakers by endpoint identity, **Refresh** and
+  the device tests (``DeviceSetup``, spec §2.3.5).
+
+Each value is a keyboard-selectable label, so it is a named Tab stop that is never
+shortened: a label without word wrap always gets its full text width.
 """
 
 from __future__ import annotations
@@ -58,6 +61,8 @@ class SettingsWorkspace(QObject):
         heading = QLabel(strings.NAV_SETTINGS)
         heading.setObjectName("panelTitle")
         layout.addWidget(heading)
+
+        layout.addWidget(self.host.device_setup.build_group())  # Audio devices (WI-04)
 
         voice = QGroupBox(strings.VOICE_OUTPUT)
         voice_layout = QVBoxLayout(voice)
