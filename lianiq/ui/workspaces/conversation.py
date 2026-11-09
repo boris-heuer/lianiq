@@ -25,7 +25,6 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import QObject, Signal, Slot
 
 from lianiq.audio.capture import MicrophoneCapture
-from lianiq.audio.devices import AudioDevice, list_audio_devices
 from lianiq.conversation.routing import HeldTurn
 from lianiq.domain import TranslationResult
 from lianiq.languages.modes import SessionPair
@@ -36,8 +35,9 @@ from lianiq.ui import strings
 from lianiq.ui.shell.workspaces import WorkspaceId
 
 # CAP-0168 file-size split: the controls, the pair and availability logic and Start/Stop
-# moved to these bases. Device enumeration and the capture and runner construction stay
-# here, so the names tests and scripts patch on this module are still looked up here.
+# moved to these bases. The capture and runner construction stay here, so the names tests
+# and scripts patch on this module are still looked up here. The device selectors moved
+# to Settings › Audio devices (``ui/device_setup.py``, WI-04).
 from lianiq.ui.workspaces.conversation_availability import ConversationAvailability
 from lianiq.ui.workspaces.conversation_flow import ConversationFlow
 from lianiq.ui.workspaces.conversation_layout import ConversationLayout
@@ -70,7 +70,6 @@ class ConversationWorkspace(
         bridge.pipeline_event.connect(self.notices.pipeline_event)
         # Completed turns, in memory only; exported as transcript v2 by capture time.
         self.history: list[TranslationResult] = []
-        self.devices: list[AudioDevice] = []
         # Models are constructed and warmed on Start, for the started mode only.
         self.starting = False
         self._pending_session: SessionPair | None = None
@@ -82,24 +81,6 @@ class ConversationWorkspace(
         self.pairs = PairSelection(
             self.config, self.pipeline.registry, lambda: self.session_controller.catalog
         )
-
-    def load_devices(self) -> bool:
-        """Fill the device combos; ``False`` (error reported) if enumeration failed."""
-        try:
-            self.devices = list_audio_devices()
-        except RuntimeError as exc:
-            self.host.bridge.error.emit(str(exc))
-            return False
-        self.input_combo.addItem("Windows default", None)
-        self.output_combo.addItem("Windows default", None)
-        for device in self.devices:
-            if device.inputs:
-                self.input_combo.addItem(device.name, device.index)
-            if device.outputs:
-                self.output_combo.addItem(device.name, device.index)
-        self._select_device(self.input_combo, self.config.audio.input_device)
-        self._select_device(self.output_combo, self.config.audio.output_device)
-        return True
 
     def start_session_services(self) -> None:
         """Capture, runner and the session gate, after the controls exist."""
@@ -126,7 +107,7 @@ class ConversationWorkspace(
             on_held=bridge.held.emit,
             on_event=emit_event,
         )
-        # The session gate checks the mode's models and the enumerated audio devices.
+        # The session gate checks the mode's models and the resolved audio devices.
         self.session_controller = SessionController(
             self.pipeline,
             self.runner,
