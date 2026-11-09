@@ -66,6 +66,8 @@ from lianiq.ui.notice_catalog_devices import (
     bridge_dropped,  # noqa: F401 - re-export
     bridge_failed,  # noqa: F401 - re-export
     bridge_recovery_failed,  # noqa: F401 - re-export
+    default_changed,  # noqa: F401 - re-export
+    device_migrated,  # noqa: F401 - re-export
     device_unavailable,  # noqa: F401 - re-export
     devices_changed,  # noqa: F401 - re-export
     export_failed,  # noqa: F401 - re-export

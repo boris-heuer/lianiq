@@ -26,12 +26,12 @@ def test_screenshot_window_is_ready_with_the_default_pair_and_generic_devices(tm
     pytest.importorskip("PySide6")
     from PySide6.QtWidgets import QApplication
 
+    import lianiq.ui.device_setup as device_setup_module
     import lianiq.ui.workspaces.call_bridge as call_bridge_module
-    import lianiq.ui.workspaces.conversation as conversation_module
 
     QApplication.instance() or QApplication([])
     capture = load_capture_module()
-    original_devices = conversation_module.list_audio_devices
+    original_devices = device_setup_module.read_inventory
     original_endpoints = call_bridge_module.list_audio_endpoints
     output = tmp_path / "application-ui.png"
 
@@ -39,7 +39,7 @@ def test_screenshot_window_is_ready_with_the_default_pair_and_generic_devices(tm
 
     assert output.stat().st_size > 0
     # The patches are restored.
-    assert conversation_module.list_audio_devices is original_devices
+    assert device_setup_module.read_inventory is original_devices
     assert call_bridge_module.list_audio_endpoints is original_endpoints
 
 
@@ -49,15 +49,14 @@ def test_screenshot_pipeline_reports_the_default_pair_ready_without_loading_mode
     pytest.importorskip("PySide6")
     from PySide6.QtWidgets import QApplication
 
+    import lianiq.ui.device_setup as device_setup_module
     import lianiq.ui.main_window as main_window_module
-    import lianiq.ui.workspaces.conversation as conversation_module
     from lianiq.config import AppConfig
 
     QApplication.instance() or QApplication([])
     capture = load_capture_module()
-    monkeypatch.setattr(
-        conversation_module, "list_audio_devices", lambda: list(capture.GENERIC_DEVICES)
-    )
+    monkeypatch.setattr(device_setup_module, "read_inventory", lambda: capture.GENERIC_INVENTORY)
+    monkeypatch.setattr(device_setup_module, "read_native_ids", dict)
     config = AppConfig()
     pipeline = capture.build_screenshot_pipeline(config)
 

@@ -5,7 +5,6 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
-    QComboBox,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -30,31 +29,14 @@ class ConversationLayout:
         self.pairs.build(controls)
         self.pair_combo, self.mode_combo = self.pairs.pair_combo, self.pairs.mode_combo
 
-        # Each device combo is named after the caption shown above it.
-        controls.addWidget(QLabel("Microphone"), 0, 2)
-        self.input_combo = QComboBox()
-        self.input_combo.setAccessibleName("Microphone")
-        controls.addWidget(self.input_combo, 1, 2)
-        controls.addWidget(QLabel("Speakers"), 0, 3)
-        self.output_combo = QComboBox()
-        self.output_combo.setAccessibleName("Speakers")
-        controls.addWidget(self.output_combo, 1, 3)
-        # The pair and routing combos keep the width of their longest entry; the device
-        # combos share the remaining width and may shorten their text (WI-08 DEV-02).
-        for combo in (self.input_combo, self.output_combo):
-            combo.setSizeAdjustPolicy(
-                QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
-            )
-            combo.setMinimumContentsLength(10)
-
         self.tts_checkbox = QCheckBox(strings.VOICE_OUTPUT)
         self.tts_checkbox.setAccessibleName(strings.VOICE_OUTPUT)
         # Checked = the saved preference while spoken output is available (see
         # ``refresh_availability``); the output is bound to the session at Start.
         self.tts_checkbox.setChecked(self.config.voice_output)
         self.tts_checkbox.toggled.connect(self._toggle_tts)
+        # Microphone and Speakers are in Settings › Audio devices (CAP-0168 WI-04).
         controls.setColumnStretch(2, 1)
-        controls.setColumnStretch(3, 1)
         layout.addLayout(controls)
 
         action_row = QHBoxLayout()
@@ -115,11 +97,6 @@ class ConversationLayout:
     def target_text(self):
         return self.target_panel.text
 
-    @staticmethod
-    def _select_device(combo: QComboBox, index: int | None) -> None:
-        found = combo.findData(index)
-        combo.setCurrentIndex(max(found, 0))
-
     def set_session_controls_enabled(self, enabled: bool) -> None:
         # Pair, routing and output are bound at Start (AC-13, PO decision Q2): changing
         # them needs Stop. While locked, the tooltip says why they are disabled.
@@ -132,5 +109,4 @@ class ConversationLayout:
             self.voice_output_changed.emit()
 
     def set_devices_enabled(self, enabled: bool) -> None:
-        self.input_combo.setEnabled(enabled)
-        self.output_combo.setEnabled(enabled)
+        self.host.device_setup.set_enabled(enabled)

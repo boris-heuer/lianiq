@@ -7,6 +7,7 @@ from pathlib import Path
 from PySide6.QtCore import Slot
 
 from lianiq.audio.wav import read_pcm16_mono
+from lianiq.call_bridge.contracts import EndpointFlow
 from lianiq.languages.errors import ModeUnavailableError
 from lianiq.languages.modes import SessionPair
 from lianiq.languages.session import format_transcript_v2
@@ -38,6 +39,11 @@ class ConversationFlow:
         except Exception as exc:  # noqa: BLE001 - GUI boundary reports invalid selections.
             self.host.show_error(str(exc))
             return
+        # A saved device that is missing or unusable refuses Start; no other device is
+        # chosen instead (spec §2.2.4).
+        if self.host.device_setup.refuse_start(self.tts_checkbox.isChecked()):
+            self.diagnostic_wav = None
+            return
         if not availability.available:
             self.diagnostic_wav = None
             self.host.show_unavailable(availability.missing)
@@ -57,9 +63,12 @@ class ConversationFlow:
 
     def _begin_listening(self, session: SessionPair) -> None:
         try:
-            self.config.audio.input_device = self.input_combo.currentData()
-            self.config.audio.output_device = self.output_combo.currentData()
-            self.pipeline.output_device = self.config.audio.output_device
+            # Open the resolved endpoints by runtime index (contract §4 "Opening").
+            setup = self.host.device_setup
+            microphone = setup.resolved(EndpointFlow.CAPTURE).endpoint
+            speakers = setup.resolved(EndpointFlow.RENDER).endpoint
+            self.capture.device = None if microphone is None else microphone.runtime_index
+            self.pipeline.output_device = None if speakers is None else speakers.runtime_index
             self.session_controller.start(session)
         except ModeUnavailableError as exc:
             self.owner.mark_idle(self._generation)
@@ -73,6 +82,7 @@ class ConversationFlow:
             self.set_session_controls_enabled(True)
             self.notices.start_failed(str(exc))
             return
+        self.host.device_setup.session_started()
         self.owner.mark_running(self._generation)
         self.notices.running()
         self.start_button.setEnabled(False)

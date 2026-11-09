@@ -87,6 +87,30 @@ DIAG_EXPORT = "Export…"
 DIAG_EMPTY = "Nothing recorded yet."
 EXPORT_FAILED = "Export failed: {reason}. Nothing was lost; try another folder."
 
+# CAP-0168 contract.md §6: device setup and migration (WI-04).
+DEVICE_FOLLOW_DEFAULT = "Follow Windows default (now: {name})"
+DEVICE_REFRESH = "Refresh"
+DEVICE_TEST_MIC = "Test microphone"
+DEVICE_TEST_SPEAKERS = "Test speakers"
+DEVICE_SPEAKER_TEST_DONE = "Did you hear the tone from '{name}'?"
+DEVICE_MIGRATED = "{flow} set to '{name}' from your previous settings"
+# Composed device texts (contract §4 reasons and change summaries; never an endpoint ID).
+AUDIO_DEVICES = "Audio devices"
+DEVICE_NO_DEFAULT = "no device"
+DEVICE_SAVED = "Saved device"
+DEVICE_NO_INPUT = "This device has no usable input channels"
+DEVICE_NO_OUTPUT = "This device has no usable output channels"
+DEVICE_DETAILS = "{name} · {host_api} · {channels} channel(s)"
+DEVICE_ADDED = "added '{name}'"
+DEVICE_REMOVED = "removed '{name}'"
+DEVICE_REORDERED = "order changed"
+DEVICE_DEFAULT_MOVED = "Windows default changed"
+DEVICE_DEFAULT_NOW = "Windows default {flow} is now '{name}'"
+DEVICE_SIGNAL_OK = "Signal received from '{name}'."
+DEVICE_TESTING = "Listening to '{name}' …"
+DEVICE_YES = "Yes"
+DEVICE_NO = "No"
+
 # Not in the §6 table: composed notice texts that follow the same conventions.
 NOTICE_REGION = "Notices"
 NOTICE_INFO = "Information"
@@ -146,6 +170,7 @@ DIAG_COPIED = "Diagnostics copied to the clipboard."
 TRANSCRIPT_EXPORT = "Transcript export"
 
 __all__ = [
+    "AUDIO_DEVICES",
     "CONTINUES_LANE",
     "CONTINUES_MIC_LOST",
     "CONTINUES_NOTHING",
@@ -169,15 +194,35 @@ __all__ = [
     "DETAIL_RETRY",
     "DETAIL_START_RETRY",
     "DETAIL_VOICE",
+    "DEVICE_ADDED",
     "DEVICE_CHANGED",
     "DEVICE_CHOOSE",
+    "DEVICE_DEFAULT_MOVED",
+    "DEVICE_DEFAULT_NOW",
+    "DEVICE_DETAILS",
+    "DEVICE_FOLLOW_DEFAULT",
     "DEVICE_MIC_LOST",
+    "DEVICE_MIGRATED",
+    "DEVICE_NO",
+    "DEVICE_NO_DEFAULT",
+    "DEVICE_NO_INPUT",
+    "DEVICE_NO_OUTPUT",
     "DEVICE_NO_SIGNAL",
     "DEVICE_RECONNECT",
     "DEVICE_RECONNECT_AFTER_STOP",
+    "DEVICE_REFRESH",
+    "DEVICE_REMOVED",
+    "DEVICE_REORDERED",
+    "DEVICE_SAVED",
+    "DEVICE_SIGNAL_OK",
     "DEVICE_SPEAKER_LOST",
+    "DEVICE_SPEAKER_TEST_DONE",
+    "DEVICE_TESTING",
+    "DEVICE_TEST_MIC",
+    "DEVICE_TEST_SPEAKERS",
     "DEVICE_UNAVAILABLE",
     "DEVICE_UNUSABLE",
+    "DEVICE_YES",
     "DIAG_COMPUTE_DEVICE",
     "DIAG_COMPUTE_VALUE",
     "DIAG_COPIED",

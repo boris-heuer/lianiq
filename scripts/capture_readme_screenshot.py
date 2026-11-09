@@ -11,8 +11,9 @@ os.environ.setdefault("QT_OPENGL", "software")
 os.environ.setdefault("QT_QUICK_BACKEND", "software")
 os.environ.setdefault("QT_SCALE_FACTOR", "1")
 
-from lianiq.audio.devices import AudioDevice
+from lianiq.audio.device_inventory import ConversationInventory
 from lianiq.audio.endpoints import EndpointInventory
+from lianiq.call_bridge.contracts import AudioEndpointRef, EndpointFlow
 from lianiq.config import AppConfig
 from lianiq.conversation.routing import HeldTurn
 from lianiq.domain import Transcript
@@ -28,7 +29,19 @@ from lianiq.pipeline import TranslationPipeline
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUTPUT = ROOT / "docs" / "assets" / "application-ui.png"
 # Generic, host-independent devices; the public screenshot never enumerates real hardware.
-GENERIC_DEVICES = (AudioDevice(0, "Microphone", 1, 0), AudioDevice(1, "Speakers", 0, 2))
+GENERIC_DEVICES = (
+    AudioEndpointRef(
+        "audio-endpoint:v1:capture:generic", "Microphone", EndpointFlow.CAPTURE, "WASAPI", 0
+    ),
+    AudioEndpointRef(
+        "audio-endpoint:v1:render:generic", "Speakers", EndpointFlow.RENDER, "WASAPI", 1, 2
+    ),
+)
+GENERIC_INVENTORY = ConversationInventory(
+    GENERIC_DEVICES,
+    {endpoint.flow: endpoint.endpoint_id for endpoint in GENERIC_DEVICES},
+    {endpoint.runtime_index: endpoint.display_name for endpoint in GENERIC_DEVICES},
+)
 CAPTURE_HEIGHT = 800
 # A synthetic held turn (spoken language outside the pair) so the held-turn bar is shown.
 SAMPLE_HELD_TURN = HeldTurn(
@@ -87,16 +100,18 @@ def main(argv: list[str] | None = None) -> int:
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication
 
+    import lianiq.ui.device_setup as device_setup_module
     import lianiq.ui.main_window as main_window_module
     import lianiq.ui.workspaces.call_bridge as call_bridge_module
-    import lianiq.ui.workspaces.conversation as conversation_module
 
     parser = argparse.ArgumentParser(description="Capture the sanitized README screenshot.")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     output = parser.parse_args(argv).output
 
     patched = {
-        (conversation_module, "list_audio_devices"): lambda: list(GENERIC_DEVICES),
+        (device_setup_module, "read_inventory"): lambda: GENERIC_INVENTORY,
+        (device_setup_module, "read_native_ids"): dict,
+        (device_setup_module, "reinitialize_portaudio"): lambda: None,
         (call_bridge_module, "list_audio_endpoints"): lambda: EndpointInventory([]),
     }
     original = {target: getattr(*target) for target in patched}

@@ -132,10 +132,10 @@ def test_ac25_retry_is_refused_while_the_call_bridge_holds_the_session(window, s
 
 
 def test_ac25_mode_unavailable_retry_is_refused_while_the_call_bridge_runs(window) -> None:
-    from lianiq.audio.devices import AudioDevice
+    from tests._fake_devices import SPEAKERS
 
     devices = list(window.devices)
-    window.devices = [AudioDevice(1, "Test speakers", 0, 2)]  # no microphone
+    window.devices = [SPEAKERS]  # no microphone
     window.start_listening()  # the mode-unavailable notice built by show_unavailable
     notice = window.notices.get(catalog.unavailable_key(CONVERSATION))
     assert notice is not None and [a.label for a in notice.actions] == ["Retry"]

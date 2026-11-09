@@ -140,13 +140,12 @@ def build_window(tmp_path: Path, monkeypatch, *, provisioned: bool = True, confi
     import lianiq.ui.main_window as main_window_module
     import lianiq.ui.workspaces.call_bridge as call_bridge_module
     import lianiq.ui.workspaces.conversation as conversation_module
-    from lianiq.audio.devices import AudioDevice
     from lianiq.audio.endpoints import EndpointInventory
+    from tests._fake_devices import MICROPHONE, SPEAKERS, FakeDevices
 
     QApplication.instance() or QApplication([])
     # One microphone and one speaker, so the device requirements of every mode are met.
-    devices = [AudioDevice(0, "Test microphone", 1, 0), AudioDevice(1, "Test speakers", 0, 2)]
-    monkeypatch.setattr(conversation_module, "list_audio_devices", lambda: list(devices))
+    fake_devices = FakeDevices(MICROPHONE, SPEAKERS).install(monkeypatch)
     monkeypatch.setattr(call_bridge_module, "list_audio_endpoints", lambda: EndpointInventory([]))
     capture = conversation_module.MicrophoneCapture
     monkeypatch.setattr(capture, "start", lambda self: setattr(self, "_stream", object()))
@@ -158,5 +157,6 @@ def build_window(tmp_path: Path, monkeypatch, *, provisioned: bool = True, confi
         configure(config, tmp_path)
     pipeline = build_pipeline(config, probe=ReadinessProbe(tmp_path))
     window = main_window_module.MainWindow(config, pipeline, persist_settings=False)
+    window.fake_devices = fake_devices  # the D-07 fake the device tests drive
     window.show()
     return window

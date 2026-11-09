@@ -58,8 +58,21 @@ class AudioConfig:
     pre_roll_ms: int = 180
     min_speech_ms: int = 240
     max_speech_seconds: float = 12.0
+    # Legacy PortAudio indices: read once for migration, saved as ``null`` (CAP-0168 §7).
     input_device: int | None = None
     output_device: int | None = None
+    # Device choice by identity: policy ``null`` = not yet migrated (CAP-0168 contract §7).
+    input_policy: str | None = None
+    output_policy: str | None = None
+    input_endpoint_id: str | None = None
+    output_endpoint_id: str | None = None
+    input_device_name: str | None = None
+    output_device_name: str | None = None
+
+    def __post_init__(self) -> None:
+        for policy in (self.input_policy, self.output_policy):
+            if policy not in (None, "explicit", "follow_default"):
+                raise ValueError(f"Unsupported audio device policy: {policy!r}")
 
 
 @dataclass(slots=True)

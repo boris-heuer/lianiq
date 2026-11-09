@@ -24,9 +24,9 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import lianiq.config as config_module
-from lianiq.audio.devices import AudioDevice
 from lianiq.config import AppConfig
 from lianiq.languages import LanguageId
+from tests._fake_devices import mic, speakers
 from tests._spy_window import build_window, spies  # noqa: F401
 from tests.ui._language_helpers import start, submit, transcript, wait_until
 
@@ -38,10 +38,8 @@ LEGACY_LOCAL_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "settings" / "legacy-v
 DEFAULT_WIDTH, DEFAULT_HEIGHT = 1120, 720
 # Device names as long as real Windows endpoint names.
 LONG_DEVICES = [
-    AudioDevice(
-        0, "Microphone Array (Intel® Smart Sound Technology for Digital Microphones)", 1, 0
-    ),
-    AudioDevice(1, "Speakers (Realtek(R) Audio) — Headphones and Line Out Combined Jack", 0, 2),
+    mic("Microphone Array (Intel® Smart Sound Technology for Digital Microphones)", 0),
+    speakers("Speakers (Realtek(R) Audio) — Headphones and Line Out Combined Jack", 1),
 ]
 
 
@@ -250,13 +248,11 @@ def test_dev02_language_combos_show_the_full_selected_value_at_the_default_width
     spies,  # noqa: F811
     devices,
 ) -> None:
-    import lianiq.ui.workspaces.conversation as conversation_module
-
     window = build_window(tmp_path, monkeypatch)
     request.addfinalizer(window.close)
     if devices is not None:
-        monkeypatch.setattr(conversation_module, "list_audio_devices", lambda: list(devices))
-        window._load_devices()
+        window.fake_devices.set(*devices)
+        assert window.device_setup.refresh()  # the long names are listed
 
     for index in range(window.mode_combo.count()):
         window.mode_combo.setCurrentIndex(index)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from lianiq.call_bridge.contracts import EndpointFlow
@@ -75,3 +76,25 @@ def _read_string(winreg, key, property_name: str) -> str | None:
     except OSError:
         return None
     return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def wasapi_default_indices(
+    host_apis: Sequence[Mapping[str, object]],
+) -> dict[EndpointFlow, int | None]:
+    """The runtime indices of PortAudio's WASAPI default capture and render endpoints.
+
+    PortAudio reads the Windows default endpoint of each flow when it initialises, so a full
+    refresh (``device_inventory.reinitialize_portaudio``) updates it (CAP-0168 contract §4).
+    """
+    for api in host_apis:
+        if "wasapi" in str(api["name"]).casefold():
+            return {
+                EndpointFlow.CAPTURE: _device_index(api.get("default_input_device")),
+                EndpointFlow.RENDER: _device_index(api.get("default_output_device")),
+            }
+    return {EndpointFlow.CAPTURE: None, EndpointFlow.RENDER: None}
+
+
+def _device_index(value: object) -> int | None:
+    index = int(value) if isinstance(value, int) else -1
+    return index if index >= 0 else None

@@ -1,7 +1,7 @@
 """Device-loss, export-failure and "+N more" notices in the shell (CAP-0168 WI-03; AC-24 UI).
 
 Split from ``test_shell_notices.py``: device loss uses the ``DEVICE_*`` notices fed by fake
-device producers (WI-04 wires the real detection); the shared helpers are in
+device producers over the D-07 fake devices (WI-04); the shared helpers are in
 ``_notice_helpers.py``.
 """
 
@@ -41,7 +41,7 @@ def test_ac24_playback_failure_is_speakers_lost_and_capture_continues(window, sp
 
     assert wait_until(lambda: banner(window).isVisible())
     title, detail, labels = shown(window)
-    assert title.startswith("Action needed: Speakers 'Windows default' disconnected.")
+    assert title.startswith("Action needed: Speakers 'Test speakers' disconnected.")
     assert "Recording continues. Spoken output stopped." in detail
     assert labels == ["Reconnect", "Choose device"]
     assert window.capture.running and window.target_text.toPlainText().strip()
@@ -81,7 +81,8 @@ def test_ac24_microphone_lost_stops_the_session_and_reconnect_restores_start(
 
     plug(monkeypatch, MICROPHONE, SPEAKERS)  # replugged
     click(action(window, "Reconnect"))
-    assert window.notices.live() == ()
+    # Only the Settings info that the Windows default microphone is back stays (AC-16).
+    assert window.notices.live(CONVERSATION) == ()
     assert window.start_button.isEnabled()
     start(window)  # the user's Start works again
     assert len(window.history) == 1
@@ -92,7 +93,8 @@ def test_ac24_choose_device_focuses_the_device_selector(window) -> None:
     window.conversation.notices.speakers_lost("Desk speakers")
     window.show_workspace(CONVERSATION)
     click(action(window, "Choose device"))
-    assert window.current_workspace() is CONVERSATION
+    # The selectors are in Settings › Audio devices (spec §2.3.5, WI-04).
+    assert window.current_workspace() is WorkspaceId.SETTINGS
     assert wait_until(lambda: focused() is window.output_combo)
 
 

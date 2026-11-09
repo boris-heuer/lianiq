@@ -17,8 +17,24 @@ def enumerate_endpoint_refs(
     native_identities: Sequence[NativeEndpointIdentity] = (),
     *,
     require_native_identity: bool = False,
+    ambiguous: str = "raise",
 ) -> list[AudioEndpointRef]:
+    """One reference per device and flow with channels.
+
+    ``ambiguous="raise"`` (Call Bridge, fail-closed) raises when several native identities
+    match one display name. ``ambiguous="positional"`` (Conversation, CAP-0168 contract §4)
+    assigns no native ID to such entries but the positional ID
+    ``audio-endpoint:v1:<flow>:<digest>#<n>`` in enumeration order; the digest includes the
+    number of same-named entries, so a positional ID resolves only while that number is
+    unchanged. With ``require_native_identity`` an entry without any native match (stale
+    after unplug) is then dropped instead of raising.
+    """
+    if ambiguous not in ("raise", "positional"):
+        raise ValueError(f"Unsupported ambiguous policy: {ambiguous!r}")
+    positional = ambiguous == "positional"
     endpoints: list[AudioEndpointRef] = []
+    duplicates = _duplicate_counts(devices) if positional else {}
+    seen: dict[str, int] = {}
     for position, raw in enumerate(devices):
         runtime_index = int(raw.get("index", position))
         host_api_index = int(raw["hostapi"])
@@ -32,8 +48,16 @@ def enumerate_endpoint_refs(
             channels = int(raw[channel_key])
             if channels <= 0:
                 continue
-            native = _match_native_identity(display_name, flow, native_identities)
-            if require_native_identity and native is None:
+            ambiguous_name = False
+            try:
+                native = _match_native_identity(display_name, flow, native_identities)
+            except ValueError:
+                if not positional:
+                    raise
+                native, ambiguous_name = None, True
+            if require_native_identity and native is None and not ambiguous_name:
+                if positional:
+                    continue  # a stale PortAudio entry: dropped, never an error
                 raise ValueError(
                     "Windows audio endpoint could not be mapped to one unambiguous MMDevice ID: "
                     f"{display_name!r} ({flow.value})"
@@ -45,16 +69,20 @@ def enumerate_endpoint_refs(
                 "channels": channels,
                 "sample_rate": sample_rate,
             }
+            if ambiguous_name:
+                signature["duplicates"] = duplicates[(_normalize_name(display_name), flow.value)]
             digest = hashlib.sha256(
                 json.dumps(signature, sort_keys=True, separators=(",", ":")).encode("utf-8")
             ).hexdigest()[:20]
+            endpoint_id = f"audio-endpoint:v1:{flow.value}:{digest}"
+            if native is not None:
+                endpoint_id = native.endpoint_id
+            elif ambiguous_name:
+                count = seen[endpoint_id] = seen.get(endpoint_id, 0) + 1
+                endpoint_id = f"{endpoint_id}#{count}"
             endpoints.append(
                 AudioEndpointRef(
-                    endpoint_id=(
-                        native.endpoint_id
-                        if native is not None
-                        else f"audio-endpoint:v1:{flow.value}:{digest}"
-                    ),
+                    endpoint_id=endpoint_id,
                     display_name=display_name,
                     flow=flow,
                     host_api=host_api,
@@ -64,6 +92,20 @@ def enumerate_endpoint_refs(
                 )
             )
     return endpoints
+
+
+def _duplicate_counts(devices: Sequence[Mapping[str, object]]) -> dict[tuple[str, str], int]:
+    """How many PortAudio entries share each (normalized name, flow)."""
+    counts: dict[tuple[str, str], int] = {}
+    for raw in devices:
+        for flow, channel_key in (
+            (EndpointFlow.CAPTURE, "max_input_channels"),
+            (EndpointFlow.RENDER, "max_output_channels"),
+        ):
+            if int(raw[channel_key]) > 0:
+                key = (_normalize_name(str(raw["name"])), flow.value)
+                counts[key] = counts.get(key, 0) + 1
+    return counts
 
 
 def _match_native_identity(

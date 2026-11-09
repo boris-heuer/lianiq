@@ -72,7 +72,7 @@ class MainWindowLayout:
 
     def _load_devices(self) -> None:
         # A failed device enumeration is reported once; the endpoints are then not listed.
-        if self.conversation.load_devices():
+        if self.device_setup.load():
             self.call_bridge.load_endpoints()
 
     def _apply_style(self) -> None:

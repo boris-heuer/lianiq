@@ -107,6 +107,32 @@ def no_signal(name: str, where: str, on_choose) -> Notice:
     )
 
 
+def device_migrated(flow: str, name: str, where: str) -> Notice:
+    """A legacy device index became this choice (contract §7 step 3); reported once."""
+    return _notice(
+        f"device.{flow.lower()}-migrated",
+        Severity.INFO,
+        strings.DEVICE_MIGRATED.format(flow=flow, name=name),
+        strings.DETAIL_NONE,
+        where,
+        strings.CONTINUES_NOTHING,
+        CONVERSATION,
+    )
+
+
+def default_changed(flow: str, name: str, where: str, workspace=WorkspaceId.SETTINGS) -> Notice:
+    """**Refresh** found a new Windows default for a flow that follows it (AC-16)."""
+    return _notice(
+        f"device.{flow.lower()}-default",
+        Severity.INFO,
+        strings.DEVICE_DEFAULT_NOW.format(flow=flow.lower(), name=name),
+        strings.DETAIL_NONE,
+        where,
+        strings.CONTINUES_NOTHING,
+        workspace,
+    )
+
+
 def devices_changed(summary: str, where: str) -> Notice:
     return _notice(
         DEVICES_CHANGED,

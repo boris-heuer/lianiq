@@ -30,6 +30,18 @@ All notable user-visible changes are documented here.
   **Export…** the history as local text with endpoint IDs, paths and your user name removed and
   no transcript text.
 
+- Microphone and Speakers moved to Settings › Audio devices and are remembered by device
+  identity instead of a list position, so a reordered or replugged device stays selected; *Follow
+  Windows default* names the current default. **Refresh** lists a headset plugged in after start
+  without restarting Lianiq (while a session runs, changes are reported and the lists refresh
+  after Stop), and **Test microphone** / **Test speakers** check a device before a session. A
+  missing saved device shows as "— unavailable" and Start asks you to choose a device instead of
+  using another one. If the microphone is unplugged during a conversation, recording stops and
+  the transcript is kept; if the speakers fail, translations continue as text. **Reconnect**
+  reselects the same device. A device chosen by number in older settings is matched by name once
+  and reported in a notice. Settings store the new `audio.*_policy`, `audio.*_endpoint_id` and
+  `audio.*_device_name` keys; delete these six keys before downgrading to an older Lianiq.
+
 - Mandarin spoken output uses the sherpa-onnx voice `vits-icefall-zh-aishell3` (speaker 20,
   8 kHz, CPU), downloaded by `scripts/download_models.py` from a pinned archive verified by size
   and SHA-256 into `models/sherpa/vits-icefall-zh-aishell3/`; German stays on Piper. Settings

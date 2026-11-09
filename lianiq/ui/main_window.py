@@ -30,6 +30,7 @@ from lianiq.diagnostics import DiagnosticsLog
 from lianiq.languages.modes import SessionPair
 from lianiq.pipeline import TranslationPipeline
 from lianiq.ui import notice_catalog as catalog
+from lianiq.ui.device_setup import DeviceSetup
 from lianiq.ui.main_window_layout import MainWindowLayout
 from lianiq.ui.main_window_services import MainWindowServices
 from lianiq.ui.notices import NoticeCenter
@@ -69,14 +70,11 @@ def _forward(workspace: str, name: str) -> property:
 class MainWindow(MainWindowLayout, MainWindowServices, QMainWindow):
     # Conversation workspace.
     history = _forward("conversation", "history")
-    devices = _forward("conversation", "devices")
     capture = _forward("conversation", "capture")
     runner = _forward("conversation", "runner")
     session_controller = _forward("conversation", "session_controller")
     pair_combo = _forward("conversation", "pair_combo")
     mode_combo = _forward("conversation", "mode_combo")
-    input_combo = _forward("conversation", "input_combo")
-    output_combo = _forward("conversation", "output_combo")
     tts_checkbox = _forward("conversation", "tts_checkbox")
     start_button = _forward("conversation", "start_button")
     source_panel = _forward("conversation", "source_panel")
@@ -95,6 +93,10 @@ class MainWindow(MainWindowLayout, MainWindowServices, QMainWindow):
     call_bridge_controller = _forward("call_bridge", "controller")
     # Settings workspace: model profile and compute device moved here (AC-12).
     model_profile_field = _forward("settings", "model_profile_field")
+    # Settings › Audio devices: the Conversation devices by endpoint identity (WI-04).
+    devices = _forward("device_setup", "devices")
+    input_combo = _forward("device_setup", "input_combo")
+    output_combo = _forward("device_setup", "output_combo")
     compute_device_field = _forward("settings", "compute_device_field")
 
     def __init__(
@@ -118,6 +120,7 @@ class MainWindow(MainWindowLayout, MainWindowServices, QMainWindow):
         self.conversation = ConversationWorkspace(self)
         self.call_bridge = CallBridgeWorkspace(self)
         self.settings = SettingsWorkspace(self)
+        self.device_setup = DeviceSetup(self)
 
         self.setWindowTitle("lianiq")
         self.setMinimumSize(*MINIMUM_SIZE)
