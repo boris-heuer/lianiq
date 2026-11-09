@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 from collections.abc import Mapping
+from functools import partial
 from pathlib import Path
 
 from lianiq.audio.playback import play_wav
@@ -97,9 +98,10 @@ def build_pipeline(
         return build_synthesizer(config.tts, catalog.voice_paths(), registry)
 
     pipeline = TranslationPipeline(
-        playback=play_wav,
+        # The speakers are opened by the resolved endpoint index set at Start, with WASAPI
+        # auto-convert (CAP-0168 contract §4 "Opening"); no legacy index is used.
+        playback=partial(play_wav, auto_convert=True),
         context_sentences=config.translation.context_sentences,
-        output_device=config.audio.output_device,
         turn_router=TurnRouter(config.languages.detection_min_probability),
         factories=AdapterFactories(recognizer, translator, synthesizer),
         registry=registry,
