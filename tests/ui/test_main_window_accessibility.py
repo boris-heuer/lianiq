@@ -24,8 +24,8 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from lianiq.languages import LanguageId
-from tests.test_requirement_scoped_loading import build_window, spies  # noqa: F401
-from tests.ui.test_main_window_languages import press, start, submit, transcript, wait_until
+from tests._spy_window import build_window, spies  # noqa: F401
+from tests.ui._language_helpers import press, start, submit, transcript, wait_until
 
 DE = LanguageId("de")
 # Each control's accessible name is the caption shown above it.
