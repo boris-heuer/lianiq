@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Slot
 
+from lianiq.call_bridge.contracts import EndpointFlow
 from lianiq.hardware import ctranslate2_cuda_available, resolve_compute_device
 from lianiq.languages.errors import PairLockedError
 from lianiq.languages.modes import OutputKind, SessionPair
@@ -31,10 +32,11 @@ class ConversationAvailability:
         return self.pairs.current_pair()
 
     def device_readiness(self) -> DeviceReadiness:
-        """Microphone and playback availability from the enumerated audio devices."""
+        """Whether the selected microphone and speakers resolve to usable endpoints."""
+        setup = self.host.device_setup
         return DeviceReadiness(
-            microphone=any(device.inputs for device in self.devices),
-            playback=any(device.outputs for device in self.devices),
+            microphone=setup.resolved(EndpointFlow.CAPTURE).ready,
+            playback=setup.resolved(EndpointFlow.RENDER).ready,
         )
 
     conversation_session = staticmethod(conversation_session)
