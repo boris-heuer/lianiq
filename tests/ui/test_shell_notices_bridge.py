@@ -19,9 +19,9 @@ from lianiq.ui import notice_catalog as catalog
 from lianiq.ui.notices import Severity
 from lianiq.ui.shell.session_owner import SessionState
 from lianiq.ui.shell.workspaces import WorkspaceId
-from tests.test_requirement_scoped_loading import spies  # noqa: F401
-from tests.ui.test_main_window_call_bridge import assign, build_call_bridge_window
-from tests.ui.test_main_window_languages import wait_until
+from tests._spy_window import spies  # noqa: F401
+from tests.ui._call_bridge_window import assign, build_call_bridge_window
+from tests.ui._language_helpers import wait_until
 from tests.ui.test_main_window_session import click
 
 CONVERSATION, CALL_BRIDGE = WorkspaceId.CONVERSATION, WorkspaceId.CALL_BRIDGE
