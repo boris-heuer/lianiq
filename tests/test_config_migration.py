@@ -1,4 +1,9 @@
-"""Settings schema v1 -> v2 migration (CAP-0169 contract.md §4.2, spec §4.3, AC-16)."""
+"""Settings schema v1 -> v2 migration (CAP-0169 contract.md §4.2, spec §4.3, AC-16).
+
+The shared v1 data and the ``settings_dir`` fixture are in
+``tests/_config_migration_helpers.py``; the backup, save and WI-09 voice tests are in
+``test_config_migration_files.py``.
+"""
 
 from __future__ import annotations
 
@@ -8,128 +13,16 @@ from typing import Any
 
 import pytest
 
-import lianiq.config as config_module
 from lianiq.config import AppConfig
-from lianiq.config_migration import (
-    SettingsMigrationError,
-    backup_legacy_settings,
-    legacy_backup_path,
-    migrate_settings,
+from lianiq.config_migration import SettingsMigrationError, migrate_settings
+from tests._config_migration_helpers import (
+    LEGACY_LOCAL_FIXTURE,
+    LEGACY_UI_MODE_TARGETS,
+    REPO_DEFAULT,
+    TODAYS_V1_DEFAULT,
+    _assert_every_v1_value_at_its_v2_location,
+    settings_dir_fixture,  # noqa: F401
 )
-
-REPO_ROOT = Path(__file__).resolve().parent.parent
-REPO_DEFAULT = REPO_ROOT / "config" / "settings.json"
-LEGACY_LOCAL_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "settings" / "legacy-v1.local.json"
-
-# Byte-for-byte content of config/settings.json before schema v2 (lianiq a2eb139).
-TODAYS_V1_DEFAULT = """{
-  "audio": {
-    "sample_rate": 16000,
-    "chunk_ms": 30,
-    "start_rms": 0.018,
-    "end_silence_ms": 600,
-    "pre_roll_ms": 180,
-    "min_speech_ms": 240,
-    "max_speech_seconds": 12.0,
-    "input_device": null,
-    "output_device": null
-  },
-  "speech_to_text": {
-    "model_path": "models/faster-whisper-small",
-    "device": "auto",
-    "compute_type": "int8",
-    "cpu_threads": 8,
-    "beam_size": 1
-  },
-  "translation": {
-    "de_zh_model_path": "models/opus-mt-de-zh",
-    "zh_de_model_path": "models/opus-mt-zh-de",
-    "cpu_threads": 8,
-    "device": "auto",
-    "context_sentences": 5,
-    "glossary_path": "config/glossary.json"
-  },
-  "tts": {
-    "enabled": false,
-    "de_voice_path": "models/piper/de_DE-thorsten-medium.onnx",
-    "zh_voice_path": "models/piper/zh_CN-user-provided.onnx",
-    "length_scale": 1.0,
-    "device": "auto"
-  },
-  "ui": {
-    "mode": "auto",
-    "log_level": "INFO"
-  },
-  "call_bridge": {
-    "enabled": false,
-    "local_microphone_endpoint_id": null,
-    "call_microphone_render_endpoint_id": null,
-    "call_speaker_capture_endpoint_id": null,
-    "local_headphones_endpoint_id": null,
-    "failure_policy": "mute",
-    "max_pending_age_ms": 4000
-  }
-}
-"""
-
-# Independent oracle of contract.md §4.2: v1 location -> (v2 location, value transform).
-V1_TO_V2_PATHS: dict[tuple[str, str], tuple[tuple[Any, ...], Any]] = {
-    ("translation", "de_zh_model_path"): (
-        ("translation", "edges", "de>zh-Hans", "model_path"),
-        None,
-    ),
-    ("translation", "zh_de_model_path"): (
-        ("translation", "edges", "zh-Hans>de", "model_path"),
-        None,
-    ),
-    ("tts", "de_voice_path"): (("tts", "voices", "de"), None),
-    # WI-09: the Mandarin placeholder voice maps to the pinned sherpa-onnx voice directory.
-    ("tts", "zh_voice_path"): (
-        ("tts", "voices", "zh-Hans"),
-        lambda value: (
-            "models/sherpa/vits-icefall-zh-aishell3"
-            if value == "models/piper/zh_CN-user-provided.onnx"
-            else value
-        ),
-    ),
-    ("tts", "enabled"): (("languages", "output"), {True: "spoken", False: "text"}),
-}
-LEGACY_UI_MODE_TARGETS = {
-    "auto": {"routing": "bidirectional", "fixed_source": None},
-    "de-zh": {"routing": "fixed", "fixed_source": "de"},
-    "zh-de": {"routing": "fixed", "fixed_source": "zh-Hans"},
-}
-
-
-def _lookup(document: dict[str, Any], path: tuple[Any, ...]) -> Any:
-    value: Any = document
-    for key in path:
-        value = value[key]
-    return value
-
-
-def _assert_every_v1_value_at_its_v2_location(
-    legacy: dict[str, Any], migrated: dict[str, Any]
-) -> None:
-    for section, values in legacy.items():
-        for key, value in values.items():
-            if (section, key) == ("ui", "mode"):
-                for v2_key, expected in LEGACY_UI_MODE_TARGETS[value].items():
-                    assert migrated["languages"][v2_key] == expected, (section, key)
-                continue
-            target, transform = V1_TO_V2_PATHS.get((section, key), ((section, key), None))
-            if callable(transform):
-                expected = transform(value)
-            else:
-                expected = transform[value] if transform else value
-            assert _lookup(migrated, target) == expected, (section, key)
-
-
-@pytest.fixture
-def settings_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    monkeypatch.setattr(config_module, "DEFAULT_CONFIG_PATH", tmp_path / "settings.json")
-    monkeypatch.setattr(config_module, "LOCAL_CONFIG_PATH", tmp_path / "settings.local.json")
-    return tmp_path
 
 
 def test_ac16_todays_v1_default_migrates_to_the_shipped_v2_default() -> None:
@@ -257,147 +150,3 @@ def test_partial_legacy_overlay_adds_no_v2_defaults() -> None:
     overlay = {"call_bridge": {"enabled": True, "local_microphone_endpoint_id": "id"}}
 
     assert migrate_settings(overlay) == {"schema_version": 2, **overlay}
-
-
-def test_legacy_use_cuda_maps_to_device_unless_the_same_file_sets_device() -> None:
-    assert migrate_settings({"tts": {"use_cuda": True}})["tts"] == {"device": "cuda"}
-    assert migrate_settings({"tts": {"use_cuda": False}})["tts"] == {"device": "cpu"}
-    assert migrate_settings({"tts": {"use_cuda": True, "device": "auto"}})["tts"] == {
-        "device": "auto"
-    }
-
-
-def test_v2_document_is_returned_unchanged_and_not_mutated() -> None:
-    document = json.loads(REPO_DEFAULT.read_text(encoding="utf-8"))
-    snapshot = json.loads(json.dumps(document))
-
-    migrated = migrate_settings(document)
-
-    assert migrated == snapshot
-    assert migrated is not document
-    assert document == snapshot
-
-
-def test_existing_backup_is_never_overwritten(tmp_path: Path) -> None:
-    local_path = tmp_path / "settings.local.json"
-    local_path.write_text('{"ui": {"mode": "de-zh"}}', encoding="utf-8")
-    backup = legacy_backup_path(local_path)
-    assert backup == tmp_path / "settings.local.v1.json"
-    backup.write_text("first original", encoding="utf-8")
-
-    assert backup_legacy_settings(local_path) is None
-    assert backup.read_text(encoding="utf-8") == "first original"
-
-
-def test_v2_file_is_not_backed_up(tmp_path: Path) -> None:
-    local_path = tmp_path / "settings.local.json"
-    AppConfig().save(local_path)
-
-    assert backup_legacy_settings(local_path) is None
-    assert not legacy_backup_path(local_path).exists()
-
-
-def test_save_never_writes_the_repository_default(settings_dir: Path) -> None:
-    default_path = settings_dir / "settings.json"
-    default_path.write_bytes(REPO_DEFAULT.read_bytes())
-
-    with pytest.raises(ValueError, match="repository default"):
-        AppConfig().save(default_path)
-
-    assert default_path.read_bytes() == REPO_DEFAULT.read_bytes()
-
-
-def test_app_shows_the_migration_error_and_writes_nothing(
-    settings_dir: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from PySide6.QtWidgets import QApplication, QMessageBox
-
-    import lianiq.app as app_module
-
-    application = QApplication.instance() or QApplication([])
-    assert application is not None
-
-    local_path = settings_dir / "settings.local.json"
-    local_path.write_text('{"ui": {"mode": "en-de"}}', encoding="utf-8")
-    shown: list[str] = []
-    monkeypatch.setattr(
-        QMessageBox, "critical", staticmethod(lambda _parent, _title, text: shown.append(text))
-    )
-
-    assert app_module.main() == 2
-
-    assert len(shown) == 1
-    assert "ui.mode" in shown[0]
-    assert local_path.read_text(encoding="utf-8") == '{"ui": {"mode": "en-de"}}'
-    assert not (settings_dir / "settings.local.v1.json").exists()
-
-
-# --- WI-09: Mandarin placeholder -> pinned sherpa-onnx voice --------------------------------
-
-SHERPA_VOICE = "models/sherpa/vits-icefall-zh-aishell3"
-SHERPA_ENGINE = {"engine": "sherpa-onnx", "speaker_id": 20, "length_scale": 1.15, "num_threads": 4}
-
-
-def test_v2_overlay_saved_before_engine_selection_maps_the_placeholder_to_sherpa() -> None:
-    saved = {
-        "schema_version": 2,
-        "tts": {
-            "voices": {
-                "de": "models/piper/de_DE-thorsten-medium.onnx",
-                "zh-Hans": "models/piper/zh_CN-user-provided.onnx",
-            },
-            "length_scale": 1.0,
-            "device": "auto",
-        },
-    }
-    original = json.loads(json.dumps(saved))
-
-    migrated = migrate_settings(saved)
-
-    assert saved == original  # not mutated
-    assert migrated["tts"]["voices"]["zh-Hans"] == SHERPA_VOICE
-    assert migrated["tts"]["engines"] == {"de": {"engine": "piper"}, "zh-Hans": SHERPA_ENGINE}
-    assert migrate_settings(migrated) == migrated  # idempotent
-
-
-def test_operator_provided_piper_voice_keeps_piper_after_merging_the_new_default(
-    settings_dir: Path,
-) -> None:
-    (settings_dir / "settings.json").write_text(REPO_DEFAULT.read_text("utf-8"), "utf-8")
-    overlay = {
-        "schema_version": 2,
-        "tts": {"voices": {"zh-Hans": "D:/voices/zh_CN-licensed.onnx"}},
-    }
-    (settings_dir / "settings.local.json").write_text(json.dumps(overlay), "utf-8")
-
-    config = AppConfig.load()
-
-    assert config.tts.voices["zh-Hans"] == "D:/voices/zh_CN-licensed.onnx"
-    assert config.tts.engines["zh-Hans"].engine == "piper"
-    assert config.tts.engines["de"].engine == "piper"
-
-
-def test_old_overlay_with_the_placeholder_loads_the_sherpa_voice(settings_dir: Path) -> None:
-    (settings_dir / "settings.json").write_text(REPO_DEFAULT.read_text("utf-8"), "utf-8")
-    overlay = {
-        "tts": {"zh_voice_path": r"models\piper\zh_CN-user-provided.onnx"}
-    }  # v1, Windows separators
-    (settings_dir / "settings.local.json").write_text(json.dumps(overlay), "utf-8")
-
-    config = AppConfig.load()
-
-    assert config == AppConfig.load(REPO_DEFAULT)
-    assert config.tts.voices["zh-Hans"] == SHERPA_VOICE
-    assert config.tts.engines["zh-Hans"].engine == "sherpa-onnx"
-
-
-def test_file_with_engine_selection_is_left_unchanged() -> None:
-    document = {
-        "schema_version": 2,
-        "tts": {
-            "voices": {"zh-Hans": "models/piper/zh_CN-user-provided.onnx"},
-            "engines": {"zh-Hans": {"engine": "piper"}},
-        },
-    }
-
-    assert migrate_settings(document) == document

@@ -15,13 +15,13 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from lianiq.ui.shell.workspaces import WorkspaceId
-from tests.test_requirement_scoped_loading import build_window, spies  # noqa: F401
-from tests.ui.test_main_window_languages import start, without_mandarin_voice
+from tests._spy_window import build_window, spies  # noqa: F401
+from tests.ui._language_helpers import start, without_mandarin_voice
+from tests.ui._navigation_helpers import resize
 from tests.ui.test_main_window_wi08_fixes import (  # noqa: F401 - autouse Segoe UI fixture
     _load_windows_ui_font,
     use_windows_ui_font,
 )
-from tests.ui.test_shell_navigation import resize
 
 
 @pytest.fixture

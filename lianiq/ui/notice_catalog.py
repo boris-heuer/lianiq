@@ -25,89 +25,57 @@ that no action is needed. Keys are stable: a repeat of the same failure updates 
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 
 from lianiq.ui import strings
-from lianiq.ui.notices import Notice, NoticeAction, Severity
+
+# CAP-0168 file-size split: keys, shared builders and the device, export and Call Bridge
+# notices moved; re-exported, so every ``notice_catalog.<name>`` keeps working.
+from lianiq.ui.notice_catalog_base import (
+    BRIDGE_CAPTURE,
+    BRIDGE_DROPPED,
+    BRIDGE_RECOVERY,
+    CALL_BRIDGE,  # noqa: F401 - re-export
+    CONVERSATION,
+    DEVICES_CHANGED,  # noqa: F401 - re-export
+    DIRECTION_UNAVAILABLE,
+    HELD_DISCARDED,
+    MICROPHONE_LOST,
+    NO_SIGNAL,  # noqa: F401 - re-export
+    PAIR_LOCKED,
+    QUEUE_OVERFLOW,
+    SPEAKERS_LOST,  # noqa: F401 - re-export
+    TURNS_DROPPED,
+    VOICE_MISSING,
+    _notice,
+    bridge_failed_key,
+    busy_key,
+    device_unavailable_key,
+    error_key,
+    export_failed_key,  # noqa: F401 - re-export
+    export_result_key,  # noqa: F401 - re-export
+    model_failed_key,
+    retry,
+    source,
+    start_failed_key,
+    unavailable_key,
+)
+from lianiq.ui.notice_catalog_devices import (
+    _device_actions,  # noqa: F401 - re-export
+    bridge_capture_muted,  # noqa: F401 - re-export
+    bridge_dropped,  # noqa: F401 - re-export
+    bridge_failed,  # noqa: F401 - re-export
+    bridge_recovery_failed,  # noqa: F401 - re-export
+    device_unavailable,  # noqa: F401 - re-export
+    devices_changed,  # noqa: F401 - re-export
+    export_failed,  # noqa: F401 - re-export
+    export_result,  # noqa: F401 - re-export
+    microphone_lost,  # noqa: F401 - re-export
+    no_signal,  # noqa: F401 - re-export
+    speakers_lost,  # noqa: F401 - re-export
+)
+from lianiq.ui.notices import Notice, Severity
 from lianiq.ui.shell.workspaces import WorkspaceId, label
-
-CONVERSATION = WorkspaceId.CONVERSATION
-CALL_BRIDGE = WorkspaceId.CALL_BRIDGE
-
-PAIR_LOCKED = "conversation.pair-locked"
-DIRECTION_UNAVAILABLE = "conversation.direction-unavailable"
-HELD_DISCARDED = "conversation.held-discarded"
-QUEUE_OVERFLOW = "conversation.queue-overflow"
-TURNS_DROPPED = "conversation.turns-dropped"
-VOICE_MISSING = "conversation.voice-missing"
-MICROPHONE_LOST = "device.microphone-lost"
-SPEAKERS_LOST = "device.speakers-lost"
-NO_SIGNAL = "device.no-signal"
-DEVICES_CHANGED = "device.changed"
-BRIDGE_DROPPED = "call-bridge.dropped"
-BRIDGE_CAPTURE = "call-bridge.capture-muted"
-BRIDGE_RECOVERY = "call-bridge.recovery-failed"
-
-
-def unavailable_key(mode: WorkspaceId) -> str:
-    return f"{mode.value}.unavailable"
-
-
-def model_failed_key(mode: WorkspaceId) -> str:
-    return f"{mode.value}.model-failed"
-
-
-def start_failed_key(mode: WorkspaceId) -> str:
-    return f"{mode.value}.start-failed"
-
-
-def busy_key(mode: WorkspaceId) -> str:
-    return f"{mode.value}.busy"
-
-
-def error_key(workspace: WorkspaceId) -> str:
-    return f"{workspace.value}.error"
-
-
-def export_failed_key(workspace: WorkspaceId) -> str:
-    return f"{workspace.value}.export-failed"
-
-
-def export_result_key(workspace: WorkspaceId) -> str:
-    return f"{workspace.value}.export-result"
-
-
-def device_unavailable_key(flow: str) -> str:
-    return f"device.{flow.lower()}-unavailable"
-
-
-def bridge_failed_key(lane: str | None) -> str:
-    return f"call-bridge.{lane or 'bridge'}-failed"
-
-
-def source(mode: WorkspaceId, *parts: str | None) -> str:
-    """The mode, then the known parts: "Conversation · German ↔ Mandarin (Simplified)"."""
-    return strings.NOTICE_SOURCE_PART.join([label(mode), *(part for part in parts if part)])
-
-
-def retry(callback: Callable[[], None]) -> NoticeAction:
-    """**Retry** runs the same gate as **Start** (AC-25)."""
-    return NoticeAction(strings.NOTICE_RETRY, callback)
-
-
-def _notice(key, severity, title, detail, where, continues, workspace, actions=(), generation=None):
-    return Notice(
-        key=key,
-        severity=severity,
-        title=title,
-        detail=detail,
-        source=where,
-        continues=continues,
-        workspace=workspace,
-        actions=tuple(actions),
-        generation=generation,
-    )
-
 
 # Session start and model preparation -------------------------------------------------------
 
@@ -254,183 +222,6 @@ def voice_missing(title: str, where: str) -> Notice:
         where,
         strings.CONTINUES_TEXT_ONLY,
         CONVERSATION,
-    )
-
-
-# Devices (``DEVICE_*``; WI-04 wires the real detection) ------------------------------------
-
-
-def _device_actions(on_reconnect, can_reconnect, on_choose) -> tuple[NoticeAction, ...]:
-    actions = []
-    if on_reconnect is not None:
-        actions.append(
-            NoticeAction(
-                strings.DEVICE_RECONNECT,
-                on_reconnect,
-                enabled=can_reconnect,
-                disabled_hint=strings.DEVICE_RECONNECT_AFTER_STOP,
-            )
-        )
-    actions.append(NoticeAction(strings.DEVICE_CHOOSE, on_choose))
-    return tuple(actions)
-
-
-def microphone_lost(
-    name: str, where: str, on_reconnect, can_reconnect, on_choose, generation=None
-) -> Notice:
-    return _notice(
-        MICROPHONE_LOST,
-        Severity.BLOCKING,
-        strings.DEVICE_MIC_LOST.format(name=name),
-        strings.DETAIL_DEVICE,
-        where,
-        strings.CONTINUES_MIC_LOST,
-        CONVERSATION,
-        _device_actions(on_reconnect, can_reconnect, on_choose),
-        generation,
-    )
-
-
-def speakers_lost(
-    name: str, where: str, on_reconnect, can_reconnect, on_choose, generation=None
-) -> Notice:
-    return _notice(
-        SPEAKERS_LOST,
-        Severity.BLOCKING,
-        strings.DEVICE_SPEAKER_LOST.format(name=name),
-        strings.DETAIL_DEVICE,
-        where,
-        strings.CONTINUES_SPEAKERS_LOST,
-        CONVERSATION,
-        _device_actions(on_reconnect, can_reconnect, on_choose),
-        generation,
-    )
-
-
-def device_unavailable(
-    flow: str, name: str, where: str, on_choose, reason: str | None = None
-) -> Notice:
-    """A saved device that is missing (``reason`` ``None``) or present but unusable."""
-    title = (
-        strings.DEVICE_UNAVAILABLE.format(name=name)
-        if reason is None
-        else strings.DEVICE_UNUSABLE.format(name=name, reason=reason)
-    )
-    return _notice(
-        device_unavailable_key(flow),
-        Severity.BLOCKING,
-        title,
-        strings.DETAIL_DEVICE,
-        where,
-        strings.CONTINUES_NOT_STARTED,
-        CONVERSATION,
-        _device_actions(None, None, on_choose),
-    )
-
-
-def no_signal(name: str, where: str, on_choose) -> Notice:
-    return _notice(
-        NO_SIGNAL,
-        Severity.WARNING,
-        strings.DEVICE_NO_SIGNAL.format(name=name),
-        strings.DETAIL_DEVICE,
-        where,
-        strings.CONTINUES_RECORDING,
-        CONVERSATION,
-        _device_actions(None, None, on_choose),
-    )
-
-
-def devices_changed(summary: str, where: str) -> Notice:
-    return _notice(
-        DEVICES_CHANGED,
-        Severity.INFO,
-        strings.DEVICE_CHANGED.format(summary=summary),
-        strings.DETAIL_NONE,
-        where,
-        strings.CONTINUES_RECORDING,
-        CONVERSATION,
-    )
-
-
-# Exports -----------------------------------------------------------------------------------
-
-
-def export_failed(workspace: WorkspaceId, reason: str, where: str, on_retry) -> Notice:
-    """``reason`` must already be redacted (contract §6 ``EXPORT_FAILED``)."""
-    return _notice(
-        export_failed_key(workspace),
-        Severity.WARNING,
-        strings.EXPORT_FAILED.format(reason=reason),
-        strings.DETAIL_EXPORT,
-        where,
-        strings.CONTINUES_NOTHING,
-        workspace,
-        (retry(on_retry),),
-    )
-
-
-def export_result(workspace: WorkspaceId, title: str, where: str) -> Notice:
-    """Info after Copy, a saved export or a cancelled dialog."""
-    return _notice(
-        export_result_key(workspace),
-        Severity.INFO,
-        title,
-        strings.DETAIL_NONE,
-        where,
-        strings.CONTINUES_NOTHING,
-        workspace,
-    )
-
-
-# Call Bridge (``BridgeEvent``; event content owned by CAP-0166) ---------------------------
-
-
-def bridge_failed(lane: str | None, category: str, where: str) -> Notice:
-    return _notice(
-        bridge_failed_key(lane),
-        Severity.WARNING,
-        strings.NOTICE_BRIDGE_FAILED.format(lane=lane or "", category=category).replace("  ", " "),
-        strings.DETAIL_BRIDGE,
-        where,
-        strings.CONTINUES_LANE,
-        CALL_BRIDGE,
-    )
-
-
-def bridge_dropped(category: str, where: str) -> Notice:
-    return _notice(
-        BRIDGE_DROPPED,
-        Severity.INFO,
-        strings.NOTICE_BRIDGE_DROPPED.format(category=category),
-        strings.DETAIL_NONE,
-        where,
-        strings.CONTINUES_RECORDING,
-        CALL_BRIDGE,
-    )
-
-
-def bridge_capture_muted(reason: str, where: str) -> Notice:
-    return _notice(
-        BRIDGE_CAPTURE,
-        Severity.WARNING,
-        strings.NOTICE_BRIDGE_CAPTURE.format(reason=reason),
-        strings.DETAIL_BRIDGE,
-        where,
-        strings.CONTINUES_LANE,
-        CALL_BRIDGE,
-    )
-
-
-def bridge_recovery_failed(reason: str, where: str) -> Notice:
-    return _notice(
-        BRIDGE_RECOVERY,
-        Severity.WARNING,
-        strings.NOTICE_BRIDGE_RECOVERY.format(reason=reason),
-        strings.DETAIL_BRIDGE,
-        where,
-        strings.CONTINUES_RECORDING,
-        CALL_BRIDGE,
     )
 
 

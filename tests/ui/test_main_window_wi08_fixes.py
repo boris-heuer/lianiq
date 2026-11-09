@@ -27,8 +27,8 @@ import lianiq.config as config_module
 from lianiq.audio.devices import AudioDevice
 from lianiq.config import AppConfig
 from lianiq.languages import LanguageId
-from tests.test_requirement_scoped_loading import build_window, spies  # noqa: F401
-from tests.ui.test_main_window_languages import start, submit, transcript, wait_until
+from tests._spy_window import build_window, spies  # noqa: F401
+from tests.ui._language_helpers import start, submit, transcript, wait_until
 
 DE = LanguageId("de")
 ZH = LanguageId("zh-Hans")

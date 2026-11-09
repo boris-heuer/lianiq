@@ -18,8 +18,8 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from tests.test_requirement_scoped_loading import build_window, spies  # noqa: F401
-from tests.ui.test_main_window_languages import start, submit, transcript, wait_until
+from tests._spy_window import build_window, spies  # noqa: F401
+from tests.ui._language_helpers import start, submit, transcript, wait_until
 
 
 @pytest.fixture

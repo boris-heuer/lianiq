@@ -16,13 +16,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from lianiq.ui.shell.session_owner import SessionBusy, SessionState
 from lianiq.ui.shell.workspaces import WorkspaceId
-from tests.test_requirement_scoped_loading import build_window, spies  # noqa: F401
-from tests.ui.test_main_window_call_bridge import (
+from tests._spy_window import build_window, spies  # noqa: F401
+from tests.ui._call_bridge_window import (
     FakeCaptureStream,
     assign,
     build_call_bridge_window,
 )
-from tests.ui.test_main_window_languages import start, submit, transcript, wait_until
+from tests.ui._language_helpers import start, submit, transcript, wait_until
 from tests.ui.test_main_window_session import click
 
 ENABLED = (WorkspaceId.CONVERSATION, WorkspaceId.CALL_BRIDGE, WorkspaceId.SETTINGS)

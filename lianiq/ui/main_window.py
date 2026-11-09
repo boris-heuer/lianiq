@@ -19,32 +19,21 @@ notice change is recorded in the local ``DiagnosticsLog`` (Settings › Diagnost
 from __future__ import annotations
 
 import sys
-import threading
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QTimer, Signal, Slot
 from PySide6.QtGui import QCloseEvent, QKeySequence, QResizeEvent, QShortcut
-from PySide6.QtWidgets import (
-    QHBoxLayout,
-    QMainWindow,
-    QStackedWidget,
-    QStatusBar,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtWidgets import QMainWindow
 
 from lianiq.config import AppConfig
 from lianiq.diagnostics import DiagnosticsLog
 from lianiq.languages.modes import SessionPair
-from lianiq.languages.requirements import ModeAvailability, describe
 from lianiq.pipeline import TranslationPipeline
 from lianiq.ui import notice_catalog as catalog
-from lianiq.ui import strings
-from lianiq.ui.notice_banner import NoticeBanner
-from lianiq.ui.notices import Notice, NoticeCenter
-from lianiq.ui.shell.navigation import NavigationSidebar
+from lianiq.ui.main_window_layout import MainWindowLayout
+from lianiq.ui.main_window_services import MainWindowServices
+from lianiq.ui.notices import NoticeCenter
 from lianiq.ui.shell.session_owner import ActiveSessionOwner, SessionState
-from lianiq.ui.shell.session_strip import SessionStrip
 from lianiq.ui.shell.workspaces import DEFAULT_ENTRIES, WorkspaceId
 from lianiq.ui.workspaces.call_bridge import CallBridgeWorkspace
 from lianiq.ui.workspaces.conversation import ConversationWorkspace
@@ -77,7 +66,7 @@ def _forward(workspace: str, name: str) -> property:
     )
 
 
-class MainWindow(QMainWindow):
+class MainWindow(MainWindowLayout, MainWindowServices, QMainWindow):
     # Conversation workspace.
     history = _forward("conversation", "history")
     devices = _forward("conversation", "devices")
@@ -162,96 +151,6 @@ class MainWindow(QMainWindow):
                 activated=lambda index=index: self.navigation.select_index(index),
             )
 
-    def _build_ui(self) -> None:
-        root = QWidget()
-        row = QHBoxLayout(root)
-        row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(0)
-        self.navigation = NavigationSidebar(DEFAULT_ENTRIES)
-        row.addWidget(self.navigation)
-        column = QVBoxLayout()
-        column.setContentsMargins(20, 16, 20, 12)
-        column.setSpacing(10)
-        row.addLayout(column, 1)
-
-        # The strip exists first: the held-turn bar returns focus to its **Stop**.
-        self.session_strip = SessionStrip()
-        self.session_strip.stop_button.clicked.connect(self.stop_active_session)
-        self.pages = QStackedWidget()
-        conversation_page = QWidget()
-        conversation_page.setObjectName("conversationPage")
-        conversation_layout = QVBoxLayout(conversation_page)
-        conversation_layout.setContentsMargins(0, 0, 0, 0)
-        conversation_layout.setSpacing(10)
-        self.conversation.build(conversation_layout)
-        self.workspace_pages = {
-            WorkspaceId.CONVERSATION: conversation_page,
-            WorkspaceId.CALL_BRIDGE: self.call_bridge.build_page(),
-            WorkspaceId.SETTINGS: self.settings.build_page(),
-        }
-        for page in self.workspace_pages.values():
-            self.pages.addWidget(page)
-        column.addWidget(self.pages, 1)
-        column.addWidget(self.session_strip)
-        # A notice banner at the top of each workspace page.
-        self.banners: dict[WorkspaceId, NoticeBanner] = {}
-        for workspace, page in self.workspace_pages.items():
-            banner = NoticeBanner(self.notices, workspace)
-            # Focus inside a banner that hides goes to that workspace's sidebar entry.
-            banner.focus_fallback = lambda workspace=workspace: self.navigation.buttons[workspace]
-            banner.more_requested.connect(self.show_diagnostics)
-            page.layout().insertWidget(0, banner)
-            self.banners[workspace] = banner
-        self.navigation.workspace_selected.connect(self.show_workspace)
-        self.navigation.select(WorkspaceId.CONVERSATION, notify=False)
-        self.session_owner.subscribe(self._session_changed)
-        self.diagnostics.record(
-            "models", f"Speech recognition model: {self.config.speech_to_text.model_path}"
-        )
-
-        self.setCentralWidget(root)
-        self.setStatusBar(QStatusBar())
-        self.statusBar().showMessage("Models load when the first speech segment is processed.")
-
-    def _load_devices(self) -> None:
-        # A failed device enumeration is reported once; the endpoints are then not listed.
-        if self.conversation.load_devices():
-            self.call_bridge.load_endpoints()
-
-    def _apply_style(self) -> None:
-        self.setStyleSheet(
-            """
-            QMainWindow, QWidget { background: #111827; color: #e5e7eb; font-size: 14px; }
-            QFrame#navigationSidebar { background: #0b1220; border-right: 1px solid #334155; }
-            QFrame#navigationSidebar QToolButton { padding: 8px; border-radius: 7px;
-                                                   text-align: left; }
-            QFrame#navigationSidebar QToolButton:checked { background: #1e293b;
-                                                           border-left: 3px solid #60a5fa;
-                                                           font-weight: 700; }
-            QFrame#navigationSidebar QToolButton:disabled { color: #64748b; }
-            QFrame#sessionStrip { background: #1e293b; border: 1px solid #475569;
-                                  border-radius: 7px; }
-            QLabel#panelTitle { font-size: 17px; font-weight: 600; color: #cbd5e1; }
-            QPlainTextEdit { background: #0b1220; border: 1px solid #334155; border-radius: 10px;
-                             padding: 14px; font-size: 20px; selection-background-color: #2563eb; }
-            QComboBox, QPushButton { background: #1e293b; border: 1px solid #475569;
-                                    border-radius: 7px; padding: 8px 12px; }
-            QComboBox:hover, QPushButton:hover { border-color: #60a5fa; }
-            QPushButton#primaryButton { background: #2563eb; border-color: #3b82f6; font-weight: 600; }
-            QPushButton:disabled { color: #64748b; background: #172033; }
-            QProgressBar { background: #0b1220; border: 1px solid #334155; border-radius: 5px; }
-            QProgressBar::chunk { background: #22c55e; border-radius: 4px; }
-            QStatusBar { color: #94a3b8; }
-            QFrame#noticeBanner { border-radius: 7px; border: 1px solid #475569;
-                                  background: #1e293b; }
-            QFrame#noticeBanner[severity="warning"] { border: 2px solid #f59e0b;
-                                                      background: #2a2214; }
-            QFrame#noticeBanner[severity="blocking"] { border: 2px solid #f87171;
-                                                       background: #2a1517; }
-            QLabel#noticeTitle { font-weight: 600; }
-            """
-        )
-
     # The shell.
 
     @Slot(object)
@@ -279,42 +178,6 @@ class MainWindow(QMainWindow):
         else:
             self.session_owner.stop()
 
-    def _session_changed(self, state: SessionState, active: WorkspaceId | None) -> None:
-        self.session_strip.show_state(state, active)
-        self.navigation.set_session_owner(None if state is SessionState.IDLE else active)
-        self.diagnostics.record("session", f"{active.value if active else '-'} {state.value}")
-        if state is SessionState.IDLE:
-            # A refused start may be retried now; the pair is no longer locked.
-            for workspace in self.workspace_pages:
-                self.notices.resolve(catalog.busy_key(workspace))
-            self.notices.resolve(catalog.PAIR_LOCKED)
-        for banner in self.banners.values():  # e.g. Reconnect is available after Stop
-            banner.update_action_states()
-
-    # Notices.
-
-    def post_notice(self, notice: Notice) -> bool:
-        """Post ``notice``; one of an older session generation than the current is dropped."""
-        current = self.session_owner.generation if notice.generation is not None else None
-        return self.notices.post(notice, current)
-
-    def conversation_notice(self) -> Notice | None:
-        """The Conversation workspace's top notice (scripts and tests)."""
-        return self.notices.top(WorkspaceId.CONVERSATION)
-
-    def resolve_notices(self, keys) -> None:
-        for key in keys:
-            self.notices.resolve(key)
-
-    def _notice_changed(self, change: str, notice: Notice) -> None:
-        if change == "posted":
-            severity = notice.severity.name.lower()
-            self.diagnostics.record("notice", f"{severity} {notice.key}: {notice.title}")
-        else:
-            self.diagnostics.record("notice", f"resolved {notice.key}")
-        if self.current_workspace() is WorkspaceId.SETTINGS:
-            self.settings.diagnostics_view.refresh()
-
     @Slot()
     def show_diagnostics(self) -> None:
         """Open Settings › Diagnostics with the notice history ("+N more")."""
@@ -325,48 +188,6 @@ class MainWindow(QMainWindow):
         # Below 1000 logical px the sidebar collapses to the icon rail (spec §2.3.1).
         self.navigation.fit_window_width(event.size().width())
         super().resizeEvent(event)
-
-    # Shared by the workspaces.
-
-    def session_locked(self) -> bool:
-        conversation = self.conversation
-        return conversation.starting or conversation.capture.running or self.call_bridge.active()
-
-    def prepare_in_background(self, session: SessionPair, ready: Signal) -> None:
-        self.start_generation += 1
-        generation = self.start_generation
-
-        def prepare() -> None:
-            try:
-                self.pipeline.prepare(session)
-            except Exception as exc:  # noqa: BLE001 - background boundary reports model failures.
-                ready.emit(generation, False, str(exc))
-            else:
-                ready.emit(generation, True, "")
-
-        threading.Thread(target=prepare, name="model-warmup", daemon=True).start()
-
-    def describe_missing(self, availability: ModeAvailability) -> str:
-        items = ", ".join(describe(item, self.pipeline.registry) for item in availability.missing)
-        return strings.MODE_UNAVAILABLE.format(items=items)
-
-    def show_unavailable(self, missing, mode: WorkspaceId = WorkspaceId.CONVERSATION) -> None:
-        """A blocking notice naming every missing item; **Retry** runs ``mode``'s Start gate."""
-        title = self.describe_missing(ModeAvailability(False, tuple(missing)))
-        retry = self.start_listening if mode is WorkspaceId.CONVERSATION else self.start_call_bridge
-        self.post_notice(catalog.mode_unavailable(mode, title, self.notice_source(mode), retry))
-
-    def show_busy(self, mode: WorkspaceId, active: WorkspaceId) -> None:
-        """A refused start of ``mode`` while ``active`` holds the session: an info notice."""
-        self.post_notice(catalog.session_busy(mode, active))
-
-    def notice_source(self, mode: WorkspaceId) -> str:
-        """The ``source`` of a mode's notices: "<Mode> · <languages>"."""
-        if mode is WorkspaceId.CONVERSATION:
-            return self.conversation.notices.where()
-        if mode is WorkspaceId.CALL_BRIDGE:
-            return catalog.source(mode, self.call_bridge.lanes_name())
-        return catalog.source(mode)
 
     @Slot(str)
     def show_error(self, message: str, workspace: WorkspaceId = WorkspaceId.CONVERSATION) -> None:
