@@ -21,6 +21,15 @@ All notable user-visible changes are documented here.
   to the end. Model profile and compute device moved to Settings › Diagnostics, and Voice output
   is also in Settings.
 
+- Errors no longer flash in the status bar: each failure is a persistent notice at the top of
+  its workspace that says what failed, for which mode, lane and language, whether recording and
+  playback continue, and what to do (**Retry**, **Reconnect**, **Choose device**). A blocking
+  notice stays until its cause is resolved; repeats update one notice, and "+N more" opens the
+  notice history in Settings › Diagnostics. A failed speaker playback keeps the translation as
+  text and turns spoken output off for the session. Settings › Diagnostics can **Copy** or
+  **Export…** the history as local text with endpoint IDs, paths and your user name removed and
+  no transcript text.
+
 - Mandarin spoken output uses the sherpa-onnx voice `vits-icefall-zh-aishell3` (speaker 20,
   8 kHz, CPU), downloaded by `scripts/download_models.py` from a pinned archive verified by size
   and SHA-256 into `models/sherpa/vits-icefall-zh-aishell3/`; German stays on Piper. Settings
