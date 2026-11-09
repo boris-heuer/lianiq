@@ -215,7 +215,9 @@ def test_ac03_vor02_missing_reverse_edge_blocks_automatic_and_the_fixed_directio
     assert window.start_button.isEnabled()
     click(window.swap_button)  # the reverse direction is unavailable: no change
     assert window.mode_combo.currentText() == DE_TO_ZH
-    assert window.statusBar().currentMessage() == missing
+    # CAP-0168 WI-03: the refusal is an info notice naming the missing item.
+    notice = window.conversation_notice()
+    assert notice.title == missing and notice.severity.name == "INFO"
 
     start(window)
     assert spies.recognizer.warmed_languages == ["de"]
@@ -516,8 +518,10 @@ def test_ac22_later_turns_flow_while_held_and_stop_discards_the_unresolved_turn(
     assert not window.held_turn_bar.isVisible()
     assert window.pipeline.held_turns() == ()  # its retained audio is released
     assert len(window.history) == 3
-    assert window.statusBar().currentMessage() == (
-        "Capture stopped; 1 turn(s) with an unclear language were discarded"
+    # CAP-0168 WI-03: the discarded turn is a warning notice; the status bar shows progress.
+    assert window.statusBar().currentMessage() == "Capture stopped"
+    assert window.conversation_notice().title == (
+        "1 turn(s) with an unclear language were discarded"
     )
     second = tmp_path / "second-run.txt"
     window.write_transcript(second)

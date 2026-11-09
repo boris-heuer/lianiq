@@ -27,6 +27,14 @@ from tests.test_requirement_scoped_loading import (  # noqa: F401
 AUDIO = AudioUtterance(np.zeros(1_600, dtype=np.float32), 16_000)
 
 
+def bridge_notice(window) -> str:
+    """The title of the Call Bridge workspace's top notice (CAP-0168 WI-03)."""
+    from lianiq.ui.shell.workspaces import WorkspaceId
+
+    notice = window.notices.top(WorkspaceId.CALL_BRIDGE)
+    return "" if notice is None else notice.title
+
+
 def wait_until(condition, timeout_ms: int = 3_000) -> bool:
     from PySide6.QtTest import QTest
 
@@ -145,7 +153,7 @@ def test_ac09_click_start_with_a_missing_voice_and_endpoint_starts_nothing_and_n
 
     click(window.call_bridge_panel.start_button)
 
-    assert window.statusBar().currentMessage() == (
+    assert bridge_notice(window) == (
         "Not available: missing voice Mandarin (Simplified), call microphone endpoint"
     )
     assert spies.constructed == []  # refused before any model loads
@@ -163,9 +171,7 @@ def test_ac09_click_start_with_only_an_endpoint_missing_names_that_endpoint(
 
     click(window.call_bridge_panel.start_button)
 
-    assert window.statusBar().currentMessage() == (
-        "Not available: missing local headphones endpoint"
-    )
+    assert bridge_notice(window) == "Not available: missing local headphones endpoint"
     assert spies.constructed == []
     assert window.call_bridge_controller is None
 
@@ -229,9 +235,7 @@ def test_ac09_voice_lost_while_models_load_fails_closed_at_controller_start(
     remove_voice(window, DE)
     spies.release_warm_up.set()
 
-    assert wait_until(
-        lambda: window.statusBar().currentMessage() == "Not available: missing voice German"
-    )
+    assert wait_until(lambda: bridge_notice(window) == "Not available: missing voice German")
     assert window.call_bridge_controller is None
     assert not any(capture.running for capture in FakeCaptureStream.instances)
     assert FakePlaybackStream.played == []
@@ -288,7 +292,7 @@ def test_ac09_a_refused_call_bridge_start_leaves_a_running_conversation_alone(
 
     window.start_call_bridge()
 
-    assert window.statusBar().currentMessage() == "Not available: missing call speaker endpoint"
+    assert bridge_notice(window) == "Not available: missing call speaker endpoint"
     assert window.capture.running and window.session_controller.running
     assert window.call_bridge_controller is None
     window.stop_listening()
@@ -316,12 +320,12 @@ def test_a_failed_call_bridge_start_restores_start_from_the_mode_availability(
     spies.release_warm_up.set()
 
     expected = (
-        "warm-up 1 failed"
+        "Models could not be prepared: warm-up 1 failed"
         if prepare_fails
         else "Not available: missing speech recognition German, "
         "speech recognition Mandarin (Simplified)"
     )
-    assert wait_until(lambda: window.statusBar().currentMessage() == expected)
+    assert wait_until(lambda: bridge_notice(window) == expected)
     assert window.call_bridge_controller is None
     assert not window.start_button.isEnabled()  # not blindly re-enabled
     assert window.pair_combo.isEnabled()
@@ -349,7 +353,9 @@ def test_a_call_bridge_setup_error_restores_start_from_the_mode_availability(
     shutil.rmtree(window.config.speech_to_text.model_path)
     spies.release_warm_up.set()
 
-    assert wait_until(lambda: window.statusBar().currentMessage() == "call endpoint stream failed")
+    assert wait_until(
+        lambda: bridge_notice(window) == "Call Bridge could not start: call endpoint stream failed"
+    )
     assert window.call_bridge_controller is None
     assert not window.start_button.isEnabled()  # not blindly re-enabled
     assert window.pair_combo.isEnabled()

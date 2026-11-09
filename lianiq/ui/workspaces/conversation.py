@@ -11,11 +11,13 @@ CAP-0168 WI-02 (RES-06): one compact row of controls, then the held-turn bar and
 hardware subtitle moved to Settings › Diagnostics; **Stop (F9)** is in the session strip. A
 start goes through ``ActiveSessionOwner.request_start``, so it is refused while the Call
 Bridge holds the session; then **Start** is disabled with the ``SESSION_BUSY`` tooltip.
+
+CAP-0168 WI-03: failures are notices (``ConversationNotices``), not status-bar text; the
+status bar keeps the readiness and progress lines.
 """
 
 from __future__ import annotations
 
-import datetime as dt
 import threading
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -24,11 +26,9 @@ from PySide6.QtCore import QObject, Qt, Signal, Slot
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
-    QFileDialog,
     QGridLayout,
     QHBoxLayout,
     QLabel,
-    QMessageBox,
     QProgressBar,
     QPushButton,
     QSplitter,
@@ -52,6 +52,7 @@ from lianiq.ui.held_turn_bar import HeldTurnBar
 from lianiq.ui.result_panel import ResultPanel
 from lianiq.ui.shell.session_owner import SessionBusy, SessionState
 from lianiq.ui.shell.workspaces import WorkspaceId, session_busy_message
+from lianiq.ui.workspaces.conversation_notices import ConversationNotices
 from lianiq.ui.workspaces.pair_selection import PairSelection, conversation_session
 
 if TYPE_CHECKING:
@@ -74,6 +75,8 @@ class ConversationWorkspace(QObject):
         bridge.busy.connect(self._show_busy)
         bridge.level.connect(self._show_level)
         bridge.session_ready.connect(self._session_ready)
+        self.notices = ConversationNotices(self)
+        bridge.pipeline_event.connect(self.notices.pipeline_event)
         # Completed turns, in memory only; exported as transcript v2 by capture time.
         self.history: list[TranslationResult] = []
         self.devices: list[AudioDevice] = []
@@ -130,7 +133,7 @@ class ConversationWorkspace(QObject):
         self.swap_button = QPushButton("⇄  Switch direction")
         self.swap_button.clicked.connect(self._swap_direction)
         export_button = QPushButton("Export transcript")
-        export_button.clicked.connect(self._export_history)
+        export_button.clicked.connect(self.notices.export_transcript)
         action_row.addWidget(self.start_button)
         action_row.addWidget(self.swap_button)
         action_row.addSpacing(12)
@@ -214,12 +217,20 @@ class ConversationWorkspace(QObject):
             on_error=bridge.error.emit,
         )
         self.pipeline.on_playback_state = self.capture.set_muted
+
+        # Overflow, dropped turns and playback failure become notices; each event carries
+        # the generation of the session it was emitted in.
+        def emit_event(event) -> None:
+            bridge.pipeline_event.emit(event, self._generation)
+
+        self.pipeline.on_event = emit_event
         self.runner = PipelineRunner(
             self.pipeline,
             on_result=bridge.result.emit,
             on_error=bridge.error.emit,
             on_busy=bridge.busy.emit,
             on_held=bridge.held.emit,
+            on_event=emit_event,
         )
         # The session gate checks the mode's models and the enumerated audio devices.
         self.session_controller = SessionController(
@@ -321,17 +332,20 @@ class ConversationWorkspace(QObject):
         )
         # Voice readiness never makes text output unavailable (IS §7).
         voice_missing = tuple(item for item in spoken.missing if item not in text.missing)
-        self.tts_checkbox.setEnabled(not voice_missing)
-        self.tts_checkbox.setToolTip(
+        voice_text = (
             self.host.describe_missing(ModeAvailability(False, voice_missing))
             if voice_missing
             else ""
         )
+        self.tts_checkbox.setEnabled(not voice_missing)
+        self.tts_checkbox.setToolTip(voice_text)
+        self.notices.voice(voice_text)
         self.tts_checkbox.blockSignals(True)
         self.tts_checkbox.setChecked(self.config.voice_output and not voice_missing)
         self.tts_checkbox.blockSignals(False)
         availability = self.session_controller.availability(self.session_pair())
         self.start_button.setEnabled(availability.available)
+        self.notices.availability(availability.available)
         if availability.available:
             if self.state_label.text() == "Not available":
                 self.state_label.setText("Ready")
@@ -367,7 +381,7 @@ class ConversationWorkspace(QObject):
         try:
             self.session_controller.change(self.session_pair())
         except PairLockedError:
-            self.host.statusBar().showMessage(strings.LOCKED_TOOLTIP, 10_000)
+            self.notices.pair_locked()
             return
         self.refresh_availability()
 
@@ -414,7 +428,7 @@ class ConversationWorkspace(QObject):
             self.start_button.setEnabled(True)
             self.set_session_controls_enabled(True)
             self.state_label.setText("Model error")
-            self.host.statusBar().showMessage(message)
+            self.notices.model_failed(message)
             return
         self._begin_listening(session)
         path, self.diagnostic_wav = self.diagnostic_wav, None
@@ -439,7 +453,7 @@ class ConversationWorkspace(QObject):
             return
         busy = self.owner.busy_for(WorkspaceId.CONVERSATION)
         if busy is not None:
-            self.host.show_error(session_busy_message(busy))
+            self.host.show_busy(WorkspaceId.CONVERSATION, busy)
             return
         try:
             session = self.session_pair()
@@ -454,7 +468,7 @@ class ConversationWorkspace(QObject):
         try:
             self._generation = self.owner.request_start(WorkspaceId.CONVERSATION)
         except SessionBusy as busy:
-            self.host.show_error(str(busy))
+            self.host.show_busy(WorkspaceId.CONVERSATION, busy.active)
             return
         self.starting = True
         self._pending_session = session
@@ -480,9 +494,10 @@ class ConversationWorkspace(QObject):
             self.owner.mark_idle(self._generation)
             self.start_button.setEnabled(True)
             self.set_session_controls_enabled(True)
-            self.host.show_error(str(exc))
+            self.notices.start_failed(str(exc))
             return
         self.owner.mark_running(self._generation)
+        self.notices.running()
         self.start_button.setEnabled(False)
         self.set_devices_enabled(False)
         self.state_label.setText("Listening …")
@@ -504,10 +519,8 @@ class ConversationWorkspace(QObject):
         self.set_session_controls_enabled(call_bridge.controller is None)
         self.level_bar.setValue(0)
         self.state_label.setText("Ready")
-        message = "Capture stopped"
-        if report.discarded:
-            message += f"; {len(report.discarded)} turn(s) with an unclear language were discarded"
-        self.host.statusBar().showMessage(message)
+        self.host.statusBar().showMessage("Capture stopped")
+        self.notices.stopped(len(report.discarded))
 
     def _submit_audio(self, utterance) -> None:
         self.runner.submit(utterance)
@@ -521,6 +534,7 @@ class ConversationWorkspace(QObject):
         direction = strings.ROUTING_FIXED.format(source=source, target=target)
         self.latency_label.setText(f"{direction} · Processing: {result.total_seconds:.2f} s")
         self.history.append(result)
+        self.notices.record_result(result)
 
     @Slot(object)
     def _show_held(self, _held: HeldTurn) -> None:
@@ -591,9 +605,10 @@ class ConversationWorkspace(QObject):
             index = self.mode_combo.findData(source)
             if model.item(index).isEnabled():
                 self.mode_combo.setCurrentIndex(index)
+                self.notices.direction(None)
                 return
-        unavailable = model.item(self.mode_combo.findData(candidates[0])).toolTip()
-        self.host.statusBar().showMessage(unavailable, 10_000)
+        # Spec §2.3.4 "mode unavailable": an info notice; the direction stays unchanged.
+        self.notices.direction(model.item(self.mode_combo.findData(candidates[0])).toolTip())
 
     def write_transcript(self, path: Path) -> None:
         """Write the in-memory history as transcript v2 (UTF-8), ordered by capture time."""
@@ -602,22 +617,6 @@ class ConversationWorkspace(QObject):
         if pair is None:
             pair = self.pipeline.registry.pair(*self.config.languages.pair)
         Path(path).write_text(format_transcript_v2(pair, self.history), encoding="utf-8")
-
-    @Slot()
-    def _export_history(self) -> None:
-        if not self.history:
-            QMessageBox.information(
-                self.host, "Transcript", "There is no conversation history yet."
-            )
-            return
-        default = str(
-            Path.home() / f"conversation-{dt.datetime.now().astimezone().date().isoformat()}.txt"
-        )
-        path, _ = QFileDialog.getSaveFileName(self.host, "Save transcript", default, "Text (*.txt)")
-        if not path:
-            return
-        self.write_transcript(Path(path))
-        self.host.statusBar().showMessage(f"Transcript saved: {path}", 10_000)
 
     def save_routing(self) -> None:
         """Keep the selected routing in the settings when the window closes."""
