@@ -91,15 +91,15 @@ def build_call_bridge_window(
     import lianiq.ui.workspaces.call_bridge as call_bridge_module
     import lianiq.ui.workspaces.conversation as conversation_module
     from lianiq.app import build_pipeline
-    from lianiq.audio.devices import AudioDevice
     from lianiq.audio.endpoints import EndpointInventory
     from lianiq.languages import BUILTIN_REGISTRY, ReadinessProbe
 
     QApplication.instance() or QApplication([])
     inventory = EndpointInventory(mapping().values())
     # One microphone and one speaker, as in build_window(), so conversation modes are ready.
-    devices = [AudioDevice(0, "Test microphone", 1, 0), AudioDevice(1, "Test speakers", 0, 2)]
-    monkeypatch.setattr(conversation_module, "list_audio_devices", lambda: list(devices))
+    from tests._fake_devices import MICROPHONE, SPEAKERS, FakeDevices
+
+    FakeDevices(MICROPHONE, SPEAKERS).install(monkeypatch)
     monkeypatch.setattr(call_bridge_module, "list_audio_endpoints", lambda: inventory)
     monkeypatch.setattr(call_bridge_module, "EndpointCaptureStream", FakeCaptureStream)
     monkeypatch.setattr(call_bridge_module, "EndpointPlaybackStream", FakePlaybackStream)
