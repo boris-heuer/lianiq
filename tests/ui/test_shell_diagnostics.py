@@ -21,9 +21,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from lianiq.call_bridge.contracts import AudioEndpointRef, EndpointFlow, EndpointRole
 from lianiq.ui.shell.workspaces import WorkspaceId
-from tests.test_requirement_scoped_loading import spies  # noqa: F401
-from tests.ui import test_main_window_call_bridge as bridge_tests
-from tests.ui.test_main_window_languages import start, submit, transcript, wait_until
+from tests._spy_window import spies  # noqa: F401
+from tests.ui import _call_bridge_window as bridge_tests
+from tests.ui._language_helpers import start, submit, transcript, wait_until
 from tests.ui.test_main_window_session import click
 
 SETTINGS = WorkspaceId.SETTINGS
