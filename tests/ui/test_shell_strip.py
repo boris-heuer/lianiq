@@ -130,7 +130,8 @@ def test_ac07_call_bridge_start_is_refused_while_the_conversation_runs(window) -
     click(panel.start_button)  # disabled: nothing happens
     window.start_call_bridge()  # a programmatic request is refused with the same text
 
-    assert window.statusBar().currentMessage() == CONVERSATION_BUSY
+    notice = window.notices.top(WorkspaceId.CALL_BRIDGE)  # an info notice (CAP-0168 WI-03)
+    assert notice.title == CONVERSATION_BUSY and notice.severity.name == "INFO"
     assert FakeCaptureStream.instances == []  # no stream opened
     assert window.call_bridge_controller is None and not window.call_bridge.starting
     assert window.capture.running and window.session_controller.running
@@ -156,7 +157,8 @@ def test_ac07_conversation_start_is_refused_while_the_call_bridge_runs(window) -
     window.start_listening()  # F8 / programmatic
     QTest.keyClick(window, Qt.Key.Key_F8)
 
-    assert window.statusBar().currentMessage() == CALL_BRIDGE_BUSY
+    notice = window.conversation_notice()
+    assert notice.title == CALL_BRIDGE_BUSY and notice.severity.name == "INFO"
     assert not window.capture.running and not window.conversation.starting
     assert FakeCaptureStream.instances == streams
     assert window.call_bridge_controller is not None

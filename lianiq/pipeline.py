@@ -7,6 +7,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 from uuid import UUID, uuid4
@@ -68,6 +69,24 @@ def bind_utterance(utterance: AudioUtterance, session: SessionPair) -> BoundUtte
     return BoundUtterance(utterance, session, uuid4(), datetime.now().astimezone())
 
 
+class PipelineEventKind(StrEnum):
+    """Turn-level failures the shell shows as notices (CAP-0168 spec §2.3.4)."""
+
+    QUEUE_OVERFLOW = "queue_overflow"  # the oldest pending segment was dropped
+    TURNS_DROPPED = "turns_dropped"  # queued segments not translated before Stop
+    PLAYBACK_FAILED = "playback_failed"  # spoken output failed; the turn stays as text
+
+
+@dataclass(frozen=True, slots=True)
+class PipelineEvent:
+    """A notice event; ``message`` is technical detail for the local diagnostics log only."""
+
+    kind: PipelineEventKind
+    count: int = 1
+    language: LanguageId | None = None
+    message: str = ""
+
+
 @dataclass(frozen=True, slots=True)
 class _RetainedTurn:
     held: HeldTurn
@@ -110,6 +129,9 @@ class TranslationPipeline:
         self.factories = factories or AdapterFactories()
         self.registry = registry
         self.catalog = catalog
+        # Notice events (``PipelineEvent``). Without a listener a playback failure raises as
+        # before; with one, the turn's result is kept and spoken output stops (text-only).
+        self.on_event: Callable[[PipelineEvent], None] | None = None
         # Serializes adapter construction and warm-up across Start requests.
         self._adapter_lock = threading.RLock()
         # Spoken output follows the started mode (``prepare``) or ``set_voice_output``.
@@ -386,8 +408,7 @@ class TranslationPipeline:
                 wav_path = synthesizer.synthesize(translated, target)
                 tts_seconds = time.perf_counter() - tts_started
                 LOGGER.info("Speech synthesis completed in %.3f seconds", tts_seconds)
-                self.playback(wav_path, self.output_device)
-                LOGGER.info("Audio playback completed")
+                self._play(wav_path, target)
             finally:
                 if wav_path:
                     wav_path.unlink(missing_ok=True)
@@ -406,6 +427,28 @@ class TranslationPipeline:
         )
         LOGGER.info("Pipeline completed in %.3f seconds", result.total_seconds)
         return result
+
+    def _play(self, wav_path: Path, language: LanguageId) -> None:
+        """Play one synthesized turn; a failure is a notice event when someone listens."""
+        assert self.playback is not None
+        try:
+            self.playback(wav_path, self.output_device)
+        except Exception as exc:
+            on_event = self.on_event
+            if on_event is None:
+                raise
+            LOGGER.exception("Audio playback failed; spoken output stops for this session")
+            # The speakers failed: the session continues text-only (spec §2.2.3 step 2).
+            self.voice_output = False
+            on_event(
+                PipelineEvent(
+                    PipelineEventKind.PLAYBACK_FAILED,
+                    language=language,
+                    message=f"{type(exc).__name__}: {exc}",
+                )
+            )
+        else:
+            LOGGER.info("Audio playback completed")
 
 
 def _captured_at(held: HeldTurn) -> datetime:
@@ -429,12 +472,16 @@ class PipelineRunner:
         on_busy: Callable[[bool], None] | None = None,
         on_held: Callable[[HeldTurn], None] | None = None,
         max_pending: int = 2,
+        on_event: Callable[[PipelineEvent], None] | None = None,
     ) -> None:
         self.pipeline = pipeline
         self.on_result = on_result
         self.on_error = on_error
         self.on_busy = on_busy
         self.on_held = on_held
+        # Overflow and dropped turns are notice events; without a listener they are
+        # reported through ``on_error`` as text, as before.
+        self.on_event = on_event
         self.max_pending = max_pending
         self._queue: queue.Queue[BoundUtterance | None] = queue.Queue(maxsize=max_pending)
         self._thread: threading.Thread | None = None
@@ -474,7 +521,10 @@ class PipelineRunner:
                 self._queue.put_nowait(item)
             except queue.Empty:
                 pass
-            self.on_error("The audio queue was full; the oldest pending segment was dropped.")
+            if self.on_event is not None:
+                self.on_event(PipelineEvent(PipelineEventKind.QUEUE_OVERFLOW))
+            else:
+                self.on_error("The audio queue was full; the oldest pending segment was dropped.")
 
     def resolve(
         self,
@@ -541,6 +591,9 @@ class PipelineRunner:
         return 0
 
     def _report_dropped(self, dropped: int) -> None:
+        if self.on_event is not None:
+            self.on_event(PipelineEvent(PipelineEventKind.TURNS_DROPPED, count=dropped))
+            return
         self.on_error(
             f"{dropped} queued speech segment(s) were not translated before the "
             "session stopped and were dropped."

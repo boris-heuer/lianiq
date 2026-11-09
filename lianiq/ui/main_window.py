@@ -10,6 +10,10 @@ a ``QStackedWidget`` and the session strip with **Stop (F9)** below them. The on
 ``ActiveSessionOwner`` allows one session across modes; F9 stops the active session from
 every workspace; Ctrl+1…Ctrl+6 select the enabled sidebar entries. Showing a page never
 starts or stops capture or playback.
+
+WI-03 notices (spec §2.3.4): failures are persistent notices in the ``NoticeCenter``, shown
+by a ``NoticeBanner`` at the top of each workspace; the status bar only shows progress. Every
+notice change is recorded in the local ``DiagnosticsLog`` (Settings › Diagnostics).
 """
 
 from __future__ import annotations
@@ -30,10 +34,14 @@ from PySide6.QtWidgets import (
 )
 
 from lianiq.config import AppConfig
+from lianiq.diagnostics import DiagnosticsLog
 from lianiq.languages.modes import SessionPair
 from lianiq.languages.requirements import ModeAvailability, describe
 from lianiq.pipeline import TranslationPipeline
+from lianiq.ui import notice_catalog as catalog
 from lianiq.ui import strings
+from lianiq.ui.notice_banner import NoticeBanner
+from lianiq.ui.notices import Notice, NoticeCenter
 from lianiq.ui.shell.navigation import NavigationSidebar
 from lianiq.ui.shell.session_owner import ActiveSessionOwner, SessionState
 from lianiq.ui.shell.session_strip import SessionStrip
@@ -58,6 +66,7 @@ class UiBridge(QObject):
     call_bridge_event = Signal(object)
     call_bridge_level = Signal(object, float)
     call_bridge_capture_fault = Signal(object, str)
+    pipeline_event = Signal(object, int)  # PipelineEvent, session generation
 
 
 def _forward(workspace: str, name: str) -> property:
@@ -111,6 +120,9 @@ class MainWindow(QMainWindow):
         self.persist_settings = persist_settings
         self.bridge = UiBridge()
         self.bridge.error.connect(self.show_error)
+        self.notices = NoticeCenter()
+        self.diagnostics = DiagnosticsLog()
+        self.notices.subscribe(self._notice_changed)
         # Each Start gets a generation; a ready signal of a cancelled Start is ignored.
         self.start_generation = 0
         self.session_owner = ActiveSessionOwner()
@@ -181,9 +193,21 @@ class MainWindow(QMainWindow):
             self.pages.addWidget(page)
         column.addWidget(self.pages, 1)
         column.addWidget(self.session_strip)
+        # A notice banner at the top of each workspace page.
+        self.banners: dict[WorkspaceId, NoticeBanner] = {}
+        for workspace, page in self.workspace_pages.items():
+            banner = NoticeBanner(self.notices, workspace)
+            # Focus inside a banner that hides goes to that workspace's sidebar entry.
+            banner.focus_fallback = lambda workspace=workspace: self.navigation.buttons[workspace]
+            banner.more_requested.connect(self.show_diagnostics)
+            page.layout().insertWidget(0, banner)
+            self.banners[workspace] = banner
         self.navigation.workspace_selected.connect(self.show_workspace)
         self.navigation.select(WorkspaceId.CONVERSATION, notify=False)
         self.session_owner.subscribe(self._session_changed)
+        self.diagnostics.record(
+            "models", f"Speech recognition model: {self.config.speech_to_text.model_path}"
+        )
 
         self.setCentralWidget(root)
         self.setStatusBar(QStatusBar())
@@ -218,6 +242,13 @@ class MainWindow(QMainWindow):
             QProgressBar { background: #0b1220; border: 1px solid #334155; border-radius: 5px; }
             QProgressBar::chunk { background: #22c55e; border-radius: 4px; }
             QStatusBar { color: #94a3b8; }
+            QFrame#noticeBanner { border-radius: 7px; border: 1px solid #475569;
+                                  background: #1e293b; }
+            QFrame#noticeBanner[severity="warning"] { border: 2px solid #f59e0b;
+                                                      background: #2a2214; }
+            QFrame#noticeBanner[severity="blocking"] { border: 2px solid #f87171;
+                                                       background: #2a1517; }
+            QLabel#noticeTitle { font-weight: 600; }
             """
         )
 
@@ -251,6 +282,44 @@ class MainWindow(QMainWindow):
     def _session_changed(self, state: SessionState, active: WorkspaceId | None) -> None:
         self.session_strip.show_state(state, active)
         self.navigation.set_session_owner(None if state is SessionState.IDLE else active)
+        self.diagnostics.record("session", f"{active.value if active else '-'} {state.value}")
+        if state is SessionState.IDLE:
+            # A refused start may be retried now; the pair is no longer locked.
+            for workspace in self.workspace_pages:
+                self.notices.resolve(catalog.busy_key(workspace))
+            self.notices.resolve(catalog.PAIR_LOCKED)
+        for banner in self.banners.values():  # e.g. Reconnect is available after Stop
+            banner.update_action_states()
+
+    # Notices.
+
+    def post_notice(self, notice: Notice) -> bool:
+        """Post ``notice``; one of an older session generation than the current is dropped."""
+        current = self.session_owner.generation if notice.generation is not None else None
+        return self.notices.post(notice, current)
+
+    def conversation_notice(self) -> Notice | None:
+        """The Conversation workspace's top notice (scripts and tests)."""
+        return self.notices.top(WorkspaceId.CONVERSATION)
+
+    def resolve_notices(self, keys) -> None:
+        for key in keys:
+            self.notices.resolve(key)
+
+    def _notice_changed(self, change: str, notice: Notice) -> None:
+        if change == "posted":
+            severity = notice.severity.name.lower()
+            self.diagnostics.record("notice", f"{severity} {notice.key}: {notice.title}")
+        else:
+            self.diagnostics.record("notice", f"resolved {notice.key}")
+        if self.current_workspace() is WorkspaceId.SETTINGS:
+            self.settings.diagnostics_view.refresh()
+
+    @Slot()
+    def show_diagnostics(self) -> None:
+        """Open Settings › Diagnostics with the notice history ("+N more")."""
+        self.show_workspace(WorkspaceId.SETTINGS)
+        self.settings.diagnostics_view.history_text.setFocus()
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         # Below 1000 logical px the sidebar collapses to the icon rail (spec §2.3.1).
@@ -281,13 +350,30 @@ class MainWindow(QMainWindow):
         items = ", ".join(describe(item, self.pipeline.registry) for item in availability.missing)
         return strings.MODE_UNAVAILABLE.format(items=items)
 
-    def show_unavailable(self, missing) -> None:
-        self.show_error(self.describe_missing(ModeAvailability(False, tuple(missing))))
+    def show_unavailable(self, missing, mode: WorkspaceId = WorkspaceId.CONVERSATION) -> None:
+        """A blocking notice naming every missing item; **Retry** runs ``mode``'s Start gate."""
+        title = self.describe_missing(ModeAvailability(False, tuple(missing)))
+        retry = self.start_listening if mode is WorkspaceId.CONVERSATION else self.start_call_bridge
+        self.post_notice(catalog.mode_unavailable(mode, title, self.notice_source(mode), retry))
+
+    def show_busy(self, mode: WorkspaceId, active: WorkspaceId) -> None:
+        """A refused start of ``mode`` while ``active`` holds the session: an info notice."""
+        self.post_notice(catalog.session_busy(mode, active))
+
+    def notice_source(self, mode: WorkspaceId) -> str:
+        """The ``source`` of a mode's notices: "<Mode> · <languages>"."""
+        if mode is WorkspaceId.CONVERSATION:
+            return self.conversation.notices.where()
+        if mode is WorkspaceId.CALL_BRIDGE:
+            return catalog.source(mode, self.call_bridge.lanes_name())
+        return catalog.source(mode)
 
     @Slot(str)
-    def show_error(self, message: str) -> None:
-        self.statusBar().showMessage(message, 15_000)
-        self.state_label.setText("Error")
+    def show_error(self, message: str, workspace: WorkspaceId = WorkspaceId.CONVERSATION) -> None:
+        """Any other failure: a warning notice in ``workspace`` (no longer the status bar)."""
+        self.post_notice(catalog.error(workspace, message, self.notice_source(workspace)))
+        if workspace is WorkspaceId.CONVERSATION:
+            self.state_label.setText("Error")
 
     # Established entry points, used by the shortcuts, scripts and tests.
 

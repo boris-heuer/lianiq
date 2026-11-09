@@ -6,8 +6,10 @@
   (AC-12; they left the Conversation layout, RES-06) and a readiness summary of the selected
   pair: conversation, voice output and Call Bridge.
 
-Audio devices (WI-04) and the notice history with Copy/Export (WI-03) are added by later
-work items. Each value is a keyboard-selectable label, so it is a named Tab stop that is
+- **Notice history** (WI-03): the redacted diagnostics log with **Copy** and **Export…**
+  (``DiagnosticsView``, spec §2.2.6).
+
+Audio devices (WI-04) are added by a later work item. Each value is a keyboard-selectable label, so it is a named Tab stop that is
 never shortened: a label without word wrap always gets its full text width.
 """
 
@@ -22,6 +24,7 @@ from lianiq.call_bridge.controller import check_call_bridge
 from lianiq.languages.modes import OutputKind
 from lianiq.languages.requirements import ModeAvailability, check
 from lianiq.ui import strings
+from lianiq.ui.diagnostics_view import DiagnosticsView
 
 if TYPE_CHECKING:
     from lianiq.ui.main_window import MainWindow
@@ -83,7 +86,8 @@ class SettingsWorkspace(QObject):
             label.setBuddy(field)
             form.addRow(label, field)
         layout.addWidget(diagnostics)
-        layout.addStretch(1)
+        self.diagnostics_view = DiagnosticsView(self.host)
+        layout.addWidget(self.diagnostics_view, 1)
         self.model_profile_field.setText(strings.DIAG_MODEL_PROFILE_BALANCED)
 
         conversation = self.host.conversation
@@ -125,6 +129,7 @@ class SettingsWorkspace(QObject):
         )
         self.readiness_field.setText("\n".join(self.readiness_rows()))
         self.sync_voice_output()
+        self.diagnostics_view.refresh()
 
     def readiness_rows(self) -> list[str]:
         """One line per item: the selected pair, conversation, voice output and Call Bridge."""

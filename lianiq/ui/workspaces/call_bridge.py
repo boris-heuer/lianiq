@@ -9,6 +9,9 @@ CAP-0168 WI-02: the panel is the workspace's own page (sidebar entry *Call Bridg
 ``ActiveSessionOwner.request_start``: while the conversation holds the session it is refused
 with ``SESSION_BUSY`` and opens no stream, and the panel's **Start** is disabled with that
 tooltip. A running conversation is never stopped by a Call Bridge start any more.
+
+CAP-0168 WI-03: failures and ``BridgeEvent`` errors are notices in the Call Bridge workspace
+(``notice_catalog``), naming the lane and its language; the status bar shows progress only.
 """
 
 from __future__ import annotations
@@ -36,9 +39,13 @@ from lianiq.call_bridge.translation_lane import TranslationLane
 from lianiq.languages.errors import ModeUnavailableError
 from lianiq.languages.modes import CALL_BRIDGE_MODE, SessionPair
 from lianiq.languages.registry import LanguageId
+from lianiq.ui import notice_catalog as catalog
+from lianiq.ui import strings
 from lianiq.ui.call_bridge_panel import CallBridgePanel
 from lianiq.ui.shell.session_owner import SessionBusy, SessionState
 from lianiq.ui.shell.workspaces import WorkspaceId, session_busy_message
+
+CALL_BRIDGE = WorkspaceId.CALL_BRIDGE
 
 if TYPE_CHECKING:
     from lianiq.ui.main_window import MainWindow
@@ -124,6 +131,25 @@ class CallBridgeWorkspace(QObject):
     def update_languages(self) -> None:
         self.panel.set_languages(*self._language_names())
 
+    def lanes_name(self) -> str:
+        """The Call Bridge languages for its notices: "<local> ↔ <remote>"."""
+        local, remote = self._language_names()
+        return strings.PAIR_NAME.format(a=local, b=remote)
+
+    def _lane_source(self, lane: LaneId | None) -> str:
+        """The lane and the language it listens to: "Call Bridge · outbound · German"."""
+        if lane is None:
+            return catalog.source(CALL_BRIDGE, self.lanes_name())
+        try:
+            language = CallBridgeLanes.from_session(self.session()).edge(lane).source
+        except Exception:  # noqa: BLE001 - an invalid setting: name the lane only.
+            return catalog.source(CALL_BRIDGE, lane.value)
+        name = self.pipeline.registry.display_name(language)
+        return catalog.source(CALL_BRIDGE, lane.value, name)
+
+    def _error(self, message: str) -> None:
+        self.host.show_error(message, CALL_BRIDGE)
+
     @Slot()
     def start_call_bridge(self) -> None:
         if self.active():
@@ -136,20 +162,21 @@ class CallBridgeWorkspace(QObject):
                 session, self.pipeline.catalog, self.panel.assigned_roles()
             )
         except Exception as exc:  # noqa: BLE001 - GUI boundary reports setup failures.
-            host.show_error(str(exc))
+            self._error(str(exc))
             return
         if not availability.available:
-            host.show_unavailable(availability.missing)
+            host.show_unavailable(availability.missing, CALL_BRIDGE)
             return
         try:
             assignments = self.panel.assignments()
         except Exception as exc:  # noqa: BLE001 - GUI boundary reports setup failures.
-            host.show_error(str(exc))
+            self._error(str(exc))
             return
         try:
             self._generation = self.owner.request_start(WorkspaceId.CALL_BRIDGE)
         except SessionBusy as busy:
-            host.show_error(str(busy))  # nothing was opened; the running session continues
+            # Nothing was opened; the running session continues (an info notice).
+            host.show_busy(CALL_BRIDGE, busy.active)
             return
         conversation = host.conversation
         self.starting = True
@@ -172,7 +199,12 @@ class CallBridgeWorkspace(QObject):
             self.owner.mark_idle(self._generation)
             # Start follows the selected mode's availability
             self.host.conversation.refresh_availability()
-            self.host.show_error(message or "Call bridge setup was cancelled")
+            reason = message or "Call bridge setup was cancelled"
+            self.host.post_notice(
+                catalog.model_failed(
+                    CALL_BRIDGE, reason, self._lane_source(None), self.start_call_bridge
+                )
+            )
             return
         self._begin_call_bridge(assignments, session)
 
@@ -260,15 +292,22 @@ class CallBridgeWorkspace(QObject):
             self.controller = None
             self.owner.mark_idle(self._generation)
             conversation.refresh_availability()
-            self.host.show_unavailable(exc.missing)
+            self.host.show_unavailable(exc.missing, CALL_BRIDGE)
             return
         except Exception as exc:  # noqa: BLE001 - GUI boundary reports setup failures.
             self.controller = None
             self.owner.mark_idle(self._generation)
             conversation.refresh_availability()
-            self.host.show_error(str(exc))
+            self.host.post_notice(
+                catalog.start_failed(
+                    CALL_BRIDGE, str(exc), self._lane_source(None), self.start_call_bridge
+                )
+            )
             return
         self.owner.mark_running(self._generation)
+        self.host.resolve_notices(catalog.keys_resolved_by_start(CALL_BRIDGE))
+        for role, endpoint in assignments.items():  # redacted on Copy/Export
+            self.host.diagnostics.record("call-bridge", f"{role.value}: {endpoint.endpoint_id}")
         self.panel.apply_to_config()
         self.panel.set_running(True)
         self._endpoint_monitor.start()
@@ -282,7 +321,7 @@ class CallBridgeWorkspace(QObject):
         self._endpoint_monitor.stop()
         controller, self.controller = self.controller, None
         if controller is not None and not controller.stop(timeout=10.0):
-            self.host.show_error("Call bridge workers did not stop within the shutdown contract")
+            self._error("Call bridge workers did not stop within the shutdown contract")
         self.starting = False
         self._pending_assignments = None
         self._pending_session = None
@@ -316,13 +355,14 @@ class CallBridgeWorkspace(QObject):
             inventory = list_audio_endpoints()
             self.controller.reconcile_endpoints(inventory)
         except (RuntimeError, ValueError) as exc:
-            self.host.statusBar().showMessage(f"Endpoint recovery check failed: {exc}", 10_000)
+            self.host.post_notice(catalog.bridge_recovery_failed(str(exc), self._lane_source(None)))
 
     @Slot(object, str)
     def _handle_call_bridge_capture_fault(self, role: EndpointRole, message: str) -> None:
         if self.controller is not None:
             self.controller.endpoint_lost(role)
-        self.host.statusBar().showMessage(f"Call bridge capture muted: {message}", 15_000)
+        lane = LaneId.OUTBOUND if role is EndpointRole.LOCAL_MICROPHONE else LaneId.INBOUND
+        self.host.post_notice(catalog.bridge_capture_muted(message, self._lane_source(lane)))
 
     @Slot(object)
     def _show_call_bridge_event(self, event: BridgeEvent) -> None:
@@ -337,14 +377,14 @@ class CallBridgeWorkspace(QObject):
                 )
                 self.controller.endpoint_lost(output_role)
             self.panel.set_state(BridgeState.DEGRADED, event.category)
-            self.host.statusBar().showMessage(
-                f"Call bridge {event.lane_id.value if event.lane_id else ''} failed closed: "
-                f"{event.category}",
-                15_000,
+            lane = event.lane_id.value if event.lane_id else None
+            self.host.diagnostics.record("call-bridge", f"{event.category}: {event.message}")
+            self.host.post_notice(
+                catalog.bridge_failed(lane, event.category, self._lane_source(event.lane_id))
             )
         elif event.kind is BridgeEventKind.DROPPED:
-            self.host.statusBar().showMessage(
-                f"Call bridge dropped stale work: {event.category}", 10_000
+            self.host.post_notice(
+                catalog.bridge_dropped(event.category, self._lane_source(event.lane_id))
             )
         elif event.kind is BridgeEventKind.ENDPOINT:
             self.panel.set_state(
@@ -359,21 +399,21 @@ class CallBridgeWorkspace(QObject):
     @Slot(object)
     def _run_call_bridge_route_test(self, role: EndpointRole) -> None:
         if self.controller is not None:
-            self.host.show_error("Stop the call bridge before running an isolated route test")
+            self._error("Stop the call bridge before running an isolated route test")
             return
         try:
             assignments = self.panel.assignments()
             endpoint = assignments[role]
             lanes = CallBridgeLanes.from_session(self.session())
         except Exception as exc:  # noqa: BLE001 - UI validation boundary.
-            self.host.show_error(str(exc))
+            self._error(str(exc))
             return
         # The call microphone carries the remote language, the headphones the local one.
         language = lanes.remote if role is EndpointRole.CALL_MICROPHONE_RENDER else lanes.local
         text = ROUTE_TEST_TEXT.get(language)
         if text is None:
             name = self.pipeline.registry.display_name(language)
-            self.host.show_error(f"No route test phrase for {name}")
+            self._error(f"No route test phrase for {name}")
             return
         event = self.host.bridge.call_bridge_event
 

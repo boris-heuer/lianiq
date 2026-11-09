@@ -369,6 +369,10 @@ class TestMainWindowLoadsOnlyOnStart:
         spies.release_warm_up.set()
 
         assert self.wait_until(lambda: window.state_label.text() == "Model error")
-        assert window.statusBar().currentMessage() == "warm-up 2 failed"
+        # CAP-0168 WI-03: the failure is a blocking notice, no longer status-bar text.
+        from lianiq.ui.shell.workspaces import WorkspaceId
+
+        notice = window.notices.top(WorkspaceId.CONVERSATION)
+        assert notice.title == "Models could not be prepared: warm-up 2 failed"
         assert not window.capture.running
         assert window.start_button.isEnabled()
