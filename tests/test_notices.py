@@ -3,32 +3,22 @@
 AC-23: a blocking notice stays until its own ``resolve``; repeats of a key are one notice;
 an older generation is dropped. AC-24 (Unit): every mapped failure is exactly one notice
 that names what failed, the mode/lane/language, whether recording/playback continues and its
-action. Plus the ``pipeline.py`` notice events (overflow, dropped turns, playback failure).
+action. The ``pipeline.py`` notice events (overflow, dropped turns, playback failure) are in
+``test_notices_pipeline_events.py``.
 """
 
 from __future__ import annotations
 
 import subprocess
 import sys
-import threading
 from pathlib import Path
 
 import pytest
 
-from lianiq.languages import LanguageId
-from lianiq.pipeline import PipelineEventKind, PipelineRunner, TranslationPipeline
 from lianiq.ui import notice_catalog as catalog
 from lianiq.ui import strings
 from lianiq.ui.notices import Notice, NoticeAction, NoticeCenter, Severity
 from lianiq.ui.shell.workspaces import WorkspaceId
-from tests.test_pipeline import (
-    AUTOMATIC,
-    FakeRecognizer,
-    FakeTranslator,
-    RecordingPipeline,
-    bound,
-    utterance,
-)
 
 CONVERSATION, CALL_BRIDGE, SETTINGS = (
     WorkspaceId.CONVERSATION,
@@ -238,86 +228,3 @@ def test_ac24_bridge_errors_name_the_lane_and_language() -> None:
     assert item.continues == "This lane is muted; the other lane continues."
     unknown = catalog.bridge_failed(None, "route_test_failed", "Call Bridge")
     assert unknown.title == "Call Bridge lane failed closed: route_test_failed"
-
-
-# pipeline.py notice events ----------------------------------------------------------------
-
-
-def test_runner_reports_overflow_as_a_notice_event_instead_of_text() -> None:
-    release = threading.Event()
-    pipeline = RecordingPipeline(release)
-    events, errors = [], []
-    runner = PipelineRunner(
-        pipeline, on_result=lambda _r: None, on_error=errors.append, on_event=events.append
-    )
-    runner.start(AUTOMATIC)
-    runner.submit(utterance())
-    assert pipeline.started.wait(timeout=1.0)
-    for _ in range(3):  # two fit the queue, the third drops the oldest
-        runner.submit(utterance())
-    release.set()
-    runner.stop(timeout=5.0)
-
-    assert [event.kind for event in events] == [PipelineEventKind.QUEUE_OVERFLOW]
-    assert errors == []
-
-
-def test_runner_reports_dropped_turns_at_stop_as_a_notice_event() -> None:
-    release = threading.Event()
-    pipeline = RecordingPipeline(release)
-    events, errors = [], []
-    runner = PipelineRunner(
-        pipeline, on_result=lambda _r: None, on_error=errors.append, on_event=events.append
-    )
-    runner.start(AUTOMATIC)
-    runner.submit(utterance())
-    assert pipeline.started.wait(timeout=1.0)
-    runner.submit(utterance())
-    runner.submit(utterance())
-
-    assert runner.stop(timeout=0.2) == 2
-    release.set()
-    runner._thread.join(timeout=2.0)
-    assert [(event.kind, event.count) for event in events] == [(PipelineEventKind.TURNS_DROPPED, 2)]
-    assert errors == []
-
-
-class FileSynthesizer:
-    def __init__(self, folder: Path) -> None:
-        self.folder = folder
-
-    def synthesize(self, text, language):
-        path = self.folder / f"{language}.wav"
-        path.write_bytes(b"RIFF")
-        return path
-
-
-def failing_playback(_path, _device) -> None:
-    raise RuntimeError("PortAudio error: device unavailable")
-
-
-def test_playback_failure_keeps_the_text_result_and_stops_spoken_output(tmp_path) -> None:
-    pipeline = TranslationPipeline(
-        FakeRecognizer(), FakeTranslator(), FileSynthesizer(tmp_path), failing_playback
-    )
-    events = []
-    pipeline.on_event = events.append
-    assert pipeline.voice_output
-
-    result = pipeline.process(bound())
-
-    assert result is not None and result.translated_text == "您好"  # the turn stays as text
-    assert pipeline.voice_output is False  # the session continues text-only
-    assert [(event.kind, event.language) for event in events] == [
-        (PipelineEventKind.PLAYBACK_FAILED, LanguageId("zh-Hans"))
-    ]
-    assert "device unavailable" in events[0].message
-    assert list(tmp_path.iterdir()) == []  # the synthesized file is still removed
-
-
-def test_playback_failure_without_a_listener_raises_as_before(tmp_path) -> None:
-    pipeline = TranslationPipeline(
-        FakeRecognizer(), FakeTranslator(), FileSynthesizer(tmp_path), failing_playback
-    )
-    with pytest.raises(RuntimeError, match="device unavailable"):
-        pipeline.process(bound())
