@@ -12,14 +12,12 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from lianiq.audio.devices import AudioDevice
 from lianiq.ui.shell.workspaces import WorkspaceId
+from tests._fake_devices import MICROPHONE, SPEAKERS, FakeDevices  # noqa: F401 - re-export
 from tests._spy_window import build_window
 from tests.ui._language_helpers import start, submit, transcript, wait_until
 
 CONVERSATION = WorkspaceId.CONVERSATION
-MICROPHONE = AudioDevice(0, "Test microphone", 1, 0)
-SPEAKERS = AudioDevice(1, "Test speakers", 0, 2)
 PAIR_SOURCE = "Conversation · German ↔ Mandarin (Simplified)"
 
 
@@ -35,10 +33,8 @@ def notice_window(tmp_path, spies, monkeypatch):
 
 
 def plug(monkeypatch, *devices) -> None:
-    """The fake device inventory the next enumeration (Reconnect) reads."""
-    import lianiq.ui.workspaces.conversation as conversation_module
-
-    monkeypatch.setattr(conversation_module, "list_audio_devices", lambda: list(devices))
+    """The fake device inventory the next full refresh (Reconnect) reads."""
+    FakeDevices(*devices).install(monkeypatch)
 
 
 def banner(window, workspace=CONVERSATION):
