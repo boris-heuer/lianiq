@@ -66,6 +66,10 @@ def test_start_is_refused_and_loads_nothing_when_the_mode_is_unavailable(
     assert window.statusBar().currentMessage() == (
         "No language pair is ready. Provision languages first (Language readiness)."
     )
+    # CAP-0168 WI-03: the refused start is a notice naming the same reason.
+    assert window.conversation_notice().title == (
+        "No language pair is ready. Provision languages first (Language readiness)."
+    )
     assert spies.constructed == []
     assert not window.capture.running
     assert not window.start_button.isEnabled()
@@ -105,8 +109,9 @@ def test_turns_show_results_and_export_v2_after_stop(window, spies, tmp_path) ->
 
     click(window.stop_button)
 
-    assert window.statusBar().currentMessage() == (
-        "Capture stopped; 1 turn(s) with an unclear language were discarded"
+    assert window.statusBar().currentMessage() == "Capture stopped"
+    assert window.conversation_notice().title == (
+        "1 turn(s) with an unclear language were discarded"
     )
     assert window.pipeline.held_turns() == ()
     assert not window.held_turn_bar.isVisible()
