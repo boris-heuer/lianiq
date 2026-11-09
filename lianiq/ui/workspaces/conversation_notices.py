@@ -8,11 +8,11 @@ workspace's failures into notices (``notice_catalog``) and handles their actions
   a late event of an older session is dropped;
 - device loss (``DEVICE_MIC_LOST`` / ``DEVICE_SPEAKER_LOST``): ``microphone_lost`` stops the
   session (no auto-resume), ``speakers_lost`` keeps capture and turns spoken output off.
-  WI-04 wires the real detection; tests feed these producers with fake devices. A
-  playback failure from the pipeline already counts as speakers lost (spec §2.2.3);
-- **Reconnect** re-enumerates the devices and reselects the same device, only while no
-  stream is open (``DEVICE_RECONNECT_AFTER_STOP`` otherwise); **Choose device** shows the
-  device selector;
+  The identity monitor of ``DeviceSetup`` (WI-04) detects the loss; a playback failure
+  from the pipeline also counts as speakers lost (spec §2.2.3);
+- **Reconnect** runs a full device refresh and reselects the same identity, only while no
+  stream is open (``DEVICE_RECONNECT_AFTER_STOP`` otherwise); **Choose device** opens
+  Settings › Audio devices with the selector of the flow focused;
 - a missing voice, and a failed transcript export with **Retry**.
 
 The diagnostics log gets each turn's ID, languages and timings, never its text.
@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtWidgets import QComboBox, QFileDialog, QMessageBox
 
+from lianiq.call_bridge.contracts import EndpointFlow
 from lianiq.domain import TranslationResult
 from lianiq.pipeline import PipelineEvent, PipelineEventKind
 from lianiq.ui import notice_catalog as catalog
@@ -37,6 +38,7 @@ if TYPE_CHECKING:
 
 CONVERSATION = WorkspaceId.CONVERSATION
 MICROPHONE, SPEAKERS = strings.NOTICE_MICROPHONE, strings.NOTICE_SPEAKERS
+CAPTURE, RENDER = EndpointFlow.CAPTURE, EndpointFlow.RENDER
 
 
 class ConversationNotices:
@@ -126,7 +128,7 @@ class ConversationNotices:
     def microphone_lost(self, name: str | None = None, generation: int | None = None) -> None:
         """The microphone faulted or left the inventory: stop, keep the transcript."""
         workspace = self.workspace
-        name = name or workspace.input_combo.currentText()
+        name = name or self.host.device_setup.device_name(CAPTURE)
         if self.host.session_owner.active is CONVERSATION:
             self.host.session_owner.stop()
         else:
@@ -144,7 +146,7 @@ class ConversationNotices:
 
     def speakers_lost(self, name: str | None = None, generation: int | None = None) -> None:
         """The speakers failed or left: capture continues, spoken output is off."""
-        name = name or self.workspace.output_combo.currentText()
+        name = name or self.host.device_setup.device_name(RENDER)
         self.host.pipeline.set_voice_output(False)
         self.post(
             catalog.speakers_lost(
@@ -162,24 +164,14 @@ class ConversationNotices:
         return not self.host.session_locked()
 
     def reconnect(self, flow: str) -> None:
-        """Re-enumerate, reselect the same device; resolve the notice if it is back."""
+        """Full refresh; the same identity is reselected; resolve the notice if it is back."""
         if not self.can_reconnect():
             return
-        workspace = self.workspace
-        combos = (workspace.input_combo, workspace.output_combo)
-        selected = [combo.currentData() for combo in combos]
-        for combo in combos:
-            combo.clear()
-        if not workspace.load_devices():
+        setup = self.host.device_setup
+        if not setup.refresh():
             return
-        for combo, data in zip(combos, selected, strict=True):
-            index = combo.findData(data)
-            if index >= 0:
-                combo.setCurrentIndex(index)
-        devices = workspace.device_readiness()
-        back = devices.microphone if flow == MICROPHONE else devices.playback
+        back = setup.resolved(CAPTURE if flow == MICROPHONE else RENDER).ready
         key = catalog.MICROPHONE_LOST if flow == MICROPHONE else catalog.SPEAKERS_LOST
-        workspace.refresh_availability()
         if back:
             self.host.notices.resolve(key)
         else:
@@ -188,11 +180,10 @@ class ConversationNotices:
                 self.post(notice)  # still missing: the same notice, one more repeat
 
     def choose_device(self, flow: str) -> None:
-        """Show the device selector of ``flow`` (Settings › Audio devices from WI-04)."""
-        self.host.show_workspace(CONVERSATION)
-        combo: QComboBox = (
-            self.workspace.input_combo if flow == MICROPHONE else self.workspace.output_combo
-        )
+        """Open Settings › Audio devices with the selector of ``flow`` focused."""
+        self.host.show_workspace(WorkspaceId.SETTINGS)
+        setup = self.host.device_setup
+        combo: QComboBox = setup.input_combo if flow == MICROPHONE else setup.output_combo
         combo.setFocus()
 
     # Transcript export ----------------------------------------------------------------------
