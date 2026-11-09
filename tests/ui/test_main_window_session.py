@@ -16,7 +16,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from lianiq.domain import AudioUtterance, Transcript
 from lianiq.languages import LanguageId
-from tests.test_requirement_scoped_loading import build_window, spies  # noqa: F401
+from tests._spy_window import build_window, spies  # noqa: F401
 
 DE = LanguageId("de")
 ZH = LanguageId("zh-Hans")
