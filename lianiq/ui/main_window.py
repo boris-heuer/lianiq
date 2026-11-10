@@ -14,6 +14,9 @@ starts or stops capture or playback.
 WI-03 notices (spec §2.3.4): failures are persistent notices in the ``NoticeCenter``, shown
 by a ``NoticeBanner`` at the top of each workspace; the status bar only shows progress. Every
 notice change is recorded in the local ``DiagnosticsLog`` (Settings › Diagnostics).
+
+WI-05 presentation (spec §2.3.7): ``theme.py`` styles the window; workspace content scrolls
+with Start/Stop and the strip outside it; Tab runs sidebar → workspace → strip.
 """
 
 from __future__ import annotations
@@ -30,6 +33,7 @@ from lianiq.diagnostics import DiagnosticsLog
 from lianiq.languages.modes import SessionPair
 from lianiq.pipeline import TranslationPipeline
 from lianiq.ui import notice_catalog as catalog
+from lianiq.ui import theme
 from lianiq.ui.device_setup import DeviceSetup
 from lianiq.ui.main_window_layout import MainWindowLayout
 from lianiq.ui.main_window_services import MainWindowServices
@@ -68,6 +72,7 @@ def _forward(workspace: str, name: str) -> property:
 
 
 class MainWindow(MainWindowLayout, MainWindowServices, QMainWindow):
+    default_size, minimum_size = DEFAULT_SIZE, MINIMUM_SIZE  # ``fit_to_work_area``
     # Conversation workspace.
     history = _forward("conversation", "history")
     capture = _forward("conversation", "capture")
@@ -127,7 +132,9 @@ class MainWindow(MainWindowLayout, MainWindowServices, QMainWindow):
         self.resize(*DEFAULT_SIZE)
         self._build_ui()
         self._load_devices()
-        self._apply_style()
+        # WI-05: tokens, fonts and focus outline; none of it in Windows high contrast.
+        theme.apply(self)
+        theme.follow_system(self)
 
         self.conversation.start_session_services()
         self.call_bridge_panel.set_models_ready(True)
