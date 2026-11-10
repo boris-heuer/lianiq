@@ -64,6 +64,11 @@ class GatedSpyTranslator(SpyTranslator):
 # The explicit name keeps the fixture "spies" when a test module imports it under an alias.
 @pytest.fixture(name="spies")
 def spies(monkeypatch) -> SpyAdapters:
+    return install_spies(monkeypatch)
+
+
+def install_spies(monkeypatch) -> SpyAdapters:
+    """The spy adapters in place of the real ones (also outside pytest, e.g. a subprocess)."""
     adapters = SpyAdapters()
     adapters.release_warm_up.set()
 
@@ -129,10 +134,13 @@ def session(input_kind, routing, output, fixed_source=None) -> SessionPair:
     return SessionPair(PAIR, UsageMode(input_kind, routing, output), fixed_source=fixed_source)
 
 
-def build_window(tmp_path: Path, monkeypatch, *, provisioned: bool = True, configure=None):
+def build_window(
+    tmp_path: Path, monkeypatch, *, provisioned: bool = True, configure=None, registry=None
+):
     """A shown MainWindow over spy adapters; ``provisioned`` puts STT and voices on disk.
 
-    ``configure(config, root)`` adjusts the settings and files before the catalog is built.
+    ``configure(config, root)`` adjusts the settings and files before the catalog is built;
+    ``registry`` replaces the built-in language registry (the AC-32 fixture names).
     """
     pytest.importorskip("PySide6")
     from PySide6.QtWidgets import QApplication
@@ -155,7 +163,7 @@ def build_window(tmp_path: Path, monkeypatch, *, provisioned: bool = True, confi
         provision_stt_and_voices(tmp_path, config)
     if configure is not None:
         configure(config, tmp_path)
-    pipeline = build_pipeline(config, probe=ReadinessProbe(tmp_path))
+    pipeline = build_pipeline(config, registry or BUILTIN_REGISTRY, probe=ReadinessProbe(tmp_path))
     window = main_window_module.MainWindow(config, pipeline, persist_settings=False)
     window.fake_devices = fake_devices  # the D-07 fake the device tests drive
     window.show()
