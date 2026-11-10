@@ -28,6 +28,7 @@ from lianiq.languages.modes import OutputKind
 from lianiq.languages.requirements import ModeAvailability, check
 from lianiq.ui import strings
 from lianiq.ui.diagnostics_view import DiagnosticsView
+from lianiq.ui.shell.scroll import workspace_scroll
 
 if TYPE_CHECKING:
     from lianiq.ui.main_window import MainWindow
@@ -40,6 +41,7 @@ _SELECTABLE = (
 def read_only_value(name: str) -> QLabel:
     """A full, selectable, read-only text value named ``name`` for assistive technology."""
     value = QLabel()
+    value.setObjectName("readOnlyValue")  # the stylesheet's focus outline (WI-05)
     value.setTextFormat(Qt.TextFormat.PlainText)
     value.setTextInteractionFlags(_SELECTABLE)
     value.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -55,7 +57,12 @@ class SettingsWorkspace(QObject):
     def build_page(self) -> QWidget:
         page = QWidget()
         page.setObjectName("settingsPage")
-        layout = QVBoxLayout(page)
+        page_layout = QVBoxLayout(page)
+        page_layout.setContentsMargins(0, 0, 0, 0)
+        # WI-05: the sections scroll when the window is smaller than their minimum.
+        content = QWidget()
+        page_layout.addWidget(workspace_scroll(content), 1)
+        layout = QVBoxLayout(content)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(16)
         heading = QLabel(strings.NAV_SETTINGS)
@@ -82,6 +89,8 @@ class SettingsWorkspace(QObject):
         self.model_profile_field = read_only_value(strings.DIAG_MODEL_PROFILE)
         self.compute_device_field = read_only_value(strings.DIAG_COMPUTE_DEVICE)
         self.readiness_field = read_only_value(strings.DIAG_READINESS)
+        # WI-05: a long row (e.g. Call Bridge) wraps instead of being cut or scrolled sideways.
+        self.readiness_field.setWordWrap(True)
         for caption, field in (
             (strings.DIAG_MODEL_PROFILE, self.model_profile_field),
             (strings.DIAG_COMPUTE_DEVICE, self.compute_device_field),
