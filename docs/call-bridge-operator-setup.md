@@ -31,18 +31,46 @@ For VB-Audio-style naming, the playback side is commonly named `CABLE Input` and
 recording side is named `CABLE Output`. The words describe the cable, not the application role.
 Always verify the signal meters rather than relying only on the names.
 
+## Where the Call Bridge is in Lianiq
+
+Start Lianiq with `.\.venv\Scripts\python.exe -m lianiq` and select **Call Bridge** (marked
+"Experimental") in the left sidebar, or press **Ctrl+4**. The workspace contains the
+*Full-duplex call bridge* group:
+
+- **Enable explicit four-endpoint routing**, then one selector per endpoint role. The role labels
+  name the languages of the selected pair, for example "Local microphone · German source".
+- The two route tests, labelled `Test <remote language> → call mic` (outbound) and
+  `Test <local language> → headphones` (inbound).
+- **Start call bridge** and **Stop call bridge**, which stay in view when the workspace scrolls.
+
+These four selectors are separate from Settings › Audio devices, which sets the Conversation
+microphone and speakers only. The Call Bridge never offers or uses a Windows default endpoint.
+
+Only one session runs at a time. While a conversation runs, **Start call bridge** is disabled with
+the tooltip "Stop the Conversation session first"; press **Stop (F9)** in the session strip first.
+While the Call Bridge runs, the strip shows "Call Bridge running" in every workspace, and
+**Stop (F9)** there stops it from any workspace.
+
+Call Bridge failures appear as notices at the top of the Call Bridge workspace, for example
+"Call Bridge outbound lane failed closed: …" with "This lane is muted; the other lane continues."
+The notice history is in Settings › Diagnostics. For problems outside the Call Bridge, see
+[Troubleshooting](troubleshooting.md).
+
 ## Setup sequence
 
 1. Connect the chosen headset and confirm its microphone and headphones independently in Windows
    Sound settings.
 2. Install two virtual cable pairs from the vendor and reboot if required.
-3. In the interpreter's call-bridge panel, assign all four endpoint roles.
+3. In the Call Bridge workspace, select **Enable explicit four-endpoint routing** and assign all
+   four endpoint roles. If a device was connected after Lianiq started, stop every session and
+   press **Refresh** in Settings › Audio devices first; it also re-reads the Call Bridge
+   endpoint lists and keeps existing selections by identity.
 4. Run the outbound route test. A test phrase must move the TX meter and must not play locally.
 5. Run the inbound route test. A test phrase injected into RX must play only in the selected
    headphones.
 6. In the call application, select the TX recording endpoint as microphone.
 7. In the call application, select the RX playback endpoint as speaker.
-8. Start call-bridge mode before joining or unmuting the call.
+8. Press **Start call bridge** before joining or unmuting the call.
 9. Confirm with the remote participant that only Mandarin synthesized speech is received. Do not
    represent the output as certified, simultaneous, or suitable for emergencies.
 
@@ -55,6 +83,10 @@ Export a redacted support snapshot without transcript, PCM, endpoint IDs, or end
 ```powershell
 .\.venv\Scripts\python.exe .\scripts\call_bridge_diagnostics.py
 ```
+
+In the application, Settings › Diagnostics **Copy** or **Export…** gives the notice history with
+endpoint IDs, absolute paths and the Windows user name replaced and no transcript text. Unlike
+the script above, it keeps device display names that appear in notice titles.
 
 ## Acceptance checklist
 
@@ -92,7 +124,7 @@ assignment and its signal path are verified. Never substitute a Windows default 
 
 | Symptom | Deterministic software checks | Safe remediation | Evidence boundary |
 |---|---|---|---|
-| A configured endpoint is missing after reboot, reconnect, or driver update | Run `scripts/call_bridge_diagnostics.py`; confirm that the saved role is reported unavailable rather than rebound to a numeric index or default device | Stop the bridge, reconnect the exact device, refresh the inventory, and explicitly select its stable endpoint again. If Windows created a new identity, treat it as a new device | A successful inventory lookup proves identity resolution only. Repeat the isolated route test and the disconnect/reconnect hardware gate |
+| A configured endpoint is missing after reboot, reconnect, or driver update | Run `scripts/call_bridge_diagnostics.py`; confirm that the saved role is reported unavailable rather than rebound to a numeric index or default device | Stop the bridge, reconnect the exact device, press **Refresh** in Settings › Audio devices while no session runs, and explicitly select its stable endpoint again. If Windows created a new identity, treat it as a new device | A successful inventory lookup proves identity resolution only. Repeat the isolated route test and the disconnect/reconnect hardware gate |
 | A virtual cable appears only on the wrong capture/render side | In Windows Sound settings, verify that the cable's playback endpoint (generic example: `TX playback`) is paired with its recording endpoint (`TX recording`). Check that the lianiq role selector exposes only the required flow | Reassign the lane using the paired endpoints: lianiq renders to TX playback while the call application captures TX recording; the call application renders to RX playback while lianiq captures RX recording | Correct capabilities and assignment validation do not prove that the driver transports audio between the pair |
 | The selected microphone or RX input level does not move | Confirm the application holding the source is producing audio, the relevant endpoint is not muted in Windows, and the expected lianiq lane meter is the only meter moving | Stop the bridge, correct the source application's explicit endpoint, then run the isolated route test before restarting. Do not enable listen/monitor loops to force meter activity | Meter movement proves signal arrival, not translation accuracy, latency, or remote-call delivery |
 | The remote participant hears the original German voice | Verify that the call application microphone is the paired TX recording endpoint and not the physical microphone or a Windows default | Mute or leave the call, select TX recording explicitly, and repeat the outbound route test before unmuting | Only a two-party real call proves that the remote participant receives synthesized Mandarin and no original microphone path |
@@ -116,7 +148,7 @@ two-party real-call gates in the acceptance checklist.
 
 ## Rollback
 
-1. Stop call-bridge mode.
+1. Press **Stop call bridge** in the Call Bridge workspace, or **Stop (F9)** in the session strip.
 2. Restore the physical headset as the call application's microphone and speaker if direct calling
    is required.
 3. Close the interpreter.
