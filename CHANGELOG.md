@@ -10,6 +10,11 @@ All notable user-visible changes are documented here.
   Windows audio troubleshooting matrix.
 - A Call Bridge compatibility matrix that separates design compatibility, real-call evidence, and
   production `SystemOK` for headsets and communication applications.
+- `docs/troubleshooting.md`, and README and Call Bridge operator setup sections for the sidebar,
+  session strip, notices, Settings › Audio devices and Settings › Diagnostics.
+  `scripts/capture_readme_screenshot.py --evidence <folder>` writes a screenshot of every enabled
+  workspace at 850×560, 1120×720, 1280×720 and 1440×900 to a local folder, with generic devices
+  and no transcript, and prints the SHA-256 of each file.
 
 ### Changed
 
