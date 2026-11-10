@@ -10,7 +10,6 @@ banner labels take the banner's background. Offscreen code evidence.
 from __future__ import annotations
 
 import os
-import re
 
 import pytest
 
@@ -25,9 +24,15 @@ from tests.ui._layout_checks import SHOWN, elided, load_ui_fonts, settle
 
 ARABIC = "مرحبا بكم، هذه فقرة من اليمين إلى اليسار."
 # Regional indicators, the flag emoji and the tag characters of subdivision flags.
-FLAG = re.compile(
-    "[\U0001f1e6-\U0001f1ff\U0001f3f3\U0001f3f4\U0001f38c\U0001f6a9\U0001f3c1\U000e0020-\U000e007f]"
-)
+FLAG_RANGES = ((0x1F1E6, 0x1F1FF), (0xE0020, 0xE007F))
+FLAG_POINTS = frozenset({0x1F3F3, 0x1F3F4, 0x1F38C, 0x1F6A9, 0x1F3C1})
+
+
+def has_flag(text: str) -> bool:
+    return any(
+        point in FLAG_POINTS or any(low <= point <= high for low, high in FLAG_RANGES)
+        for point in map(ord, text)
+    )
 
 
 @pytest.fixture
@@ -106,7 +111,8 @@ def test_ac32_rtl_paragraphs_read_right_to_left(window) -> None:
 
 
 def test_ac32_no_flag_glyphs_in_ui_strings_or_shown_text(window) -> None:
-    assert FLAG.search("German 🇩🇪") and FLAG.search("🏴")  # known-positive controls
+    assert has_flag("German 🇩🇪") and has_flag("🏴")  # known-positive controls
+    assert not has_flag("German 中文 مرحبا")  # known-negative control
     constants = [value for name, value in vars(strings).items() if name.isupper()]
     texts = [value for value in constants if isinstance(value, str)]
     assert len(texts) > 100
@@ -114,7 +120,7 @@ def test_ac32_no_flag_glyphs_in_ui_strings_or_shown_text(window) -> None:
         window.show_workspace(workspace)
         texts += visible_texts(window)
     texts += [item.label for item in window.navigation.entries]
-    assert [text for text in texts if FLAG.search(text)] == []
+    assert [text for text in texts if has_flag(text)] == []
 
 
 def test_no_fixed_pixel_height_on_text_bearing_widgets(window) -> None:
