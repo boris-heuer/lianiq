@@ -48,6 +48,34 @@ def synthetic_registry() -> LanguageRegistry:
     return LanguageRegistry(SYNTHETIC_LANGUAGES)
 
 
+# CAP-0168 AC-32: the built-in German and Mandarin plus fixture-backed English, Spanish and
+# French entries with a 60-character name, diacritics and CJK, and an RTL entry.
+LONG_NAME = "English (fixture) with a display name sixty characters long."
+PRESENTATION_NAMES = {
+    "en": LONG_NAME,
+    "es": "Español de México — señal, acción, pingüino",
+    "fr": "Français (Québec) — « élève », œuvre, 中文名称",
+    "qac": "العربية الفصحى",
+}
+
+
+def presentation_registry() -> LanguageRegistry:
+    from lianiq.languages.registry import BUILTIN_LANGUAGES
+
+    builtin = {definition.id: definition for definition in BUILTIN_LANGUAGES}
+    fixtures = [
+        LanguageDefinition(
+            LanguageId(tag),
+            name,
+            name,
+            dict(builtin[tag].engine_codes) if tag in builtin else {},
+            Availability.PLANNED,
+        )
+        for tag, name in PRESENTATION_NAMES.items()
+    ]
+    return LanguageRegistry((builtin[LanguageId("de")], builtin[LanguageId("zh-Hans")], *fixtures))
+
+
 def write_model_directory(root: Path, relative: str, files: Mapping[str, bytes]) -> Path:
     directory = root / relative
     directory.mkdir(parents=True, exist_ok=True)
