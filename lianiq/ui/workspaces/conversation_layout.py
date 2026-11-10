@@ -12,11 +12,14 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSplitter,
     QVBoxLayout,
+    QWidget,
 )
 
 from lianiq.ui import strings
+from lianiq.ui.combo_fit import StackWhenNarrow, WhenNarrow, WrapWhenNarrow, fit_current_text
 from lianiq.ui.held_turn_bar import HeldTurnBar
 from lianiq.ui.result_panel import ResultPanel
+from lianiq.ui.shell.scroll import workspace_scroll
 
 
 class ConversationLayout:
@@ -39,21 +42,42 @@ class ConversationLayout:
         controls.setColumnStretch(2, 1)
         layout.addLayout(controls)
 
+        # Long language names never widen the pinned row: the combos may shrink, but never
+        # below their current entry (WI-05).
+        self._combo_fits = [fit_current_text(c) for c in (self.pair_combo, self.mode_combo)]
+        page = layout.parentWidget()
+        self._field_row = StackWhenNarrow(page, controls, self.pair_combo, self.mode_combo)
+
         action_row = QHBoxLayout()
         self.start_button = QPushButton("▶  Start  (F8)")
         self.start_button.setObjectName("primaryButton")
         self.start_button.clicked.connect(self.start_listening)
         self.swap_button = QPushButton("⇄  Switch direction")
         self.swap_button.clicked.connect(self._swap_direction)
-        export_button = QPushButton("Export transcript")
-        export_button.clicked.connect(self.notices.export_transcript)
+        self.export_button = QPushButton("Export transcript")
+        self.export_button.clicked.connect(self.notices.export_transcript)
         action_row.addWidget(self.start_button)
         action_row.addWidget(self.swap_button)
         action_row.addSpacing(12)
         action_row.addWidget(self.tts_checkbox)
         action_row.addStretch()
-        action_row.addWidget(export_button)
+        action_row.addWidget(self.export_button)
         layout.addLayout(action_row)
+        # With large text, Voice output and Export move to a second line (never cut).
+        second_row = QHBoxLayout()
+        second_row.addStretch(1)
+        layout.addLayout(second_row)
+        tail = [self.tts_checkbox, self.export_button]
+        self._action_row = WrapWhenNarrow(page, action_row, second_row, tail)
+
+        # WI-05 (spec §2.3.7): the row with Start stays outside the scroll area; the held-turn
+        # bar, the result panels and the level line scroll when the window is too small.
+        content = QWidget()
+        area = workspace_scroll(content)
+        layout.addWidget(area, 1)
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
 
         self.held_turn_bar = HeldTurnBar(self.pipeline.registry)
         self.held_turn_bar.translate_requested.connect(self._resolve_held)
@@ -61,6 +85,8 @@ class ConversationLayout:
         # While the session runs **Stop** is the next action; after a stop it is **Start**.
         self.held_turn_bar.set_focus_return(self.stop_button, self.start_button)
         layout.addWidget(self.held_turn_bar)
+        bar = self.held_turn_bar
+        self._held_fit = WhenNarrow(area.viewport(), bar.one_line_width, bar.set_stacked, bar)
 
         splitter = QSplitter(Qt.Horizontal)
         self.source_panel = ResultPanel("Original", strings.TRANSCRIPT_EMPTY)

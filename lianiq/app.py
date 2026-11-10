@@ -155,4 +155,6 @@ def main() -> int:
     pipeline = build_pipeline(config)
     window = MainWindow(config, pipeline)
     window.show()
+    # 1280×720, or the largest size that fits the work area (CAP-0168 spec §2.2.1).
+    window.fit_to_work_area(window.screen().availableGeometry())
     return application.exec()

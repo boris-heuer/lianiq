@@ -18,6 +18,7 @@ from lianiq.languages.modes import CALL_BRIDGE_MODE, SessionPair
 from lianiq.ui import notice_catalog as catalog
 from lianiq.ui import strings
 from lianiq.ui.call_bridge_panel import CallBridgePanel
+from lianiq.ui.shell.scroll import workspace_scroll
 from lianiq.ui.shell.session_owner import SessionBusy, SessionState
 from lianiq.ui.shell.workspaces import WorkspaceId, session_busy_message
 
@@ -33,8 +34,14 @@ class CallBridgeLifecycle:
         page.setObjectName("callBridgePage")
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.build_panel())
-        layout.addStretch(1)
+        # WI-05 (spec §2.3.7): the panel scrolls; its Start/Stop row stays outside.
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.addWidget(self.build_panel())
+        content_layout.addStretch(1)
+        layout.addWidget(workspace_scroll(content), 1)
+        layout.addWidget(self.panel.session_actions)
         return page
 
     def build_panel(self) -> CallBridgePanel:

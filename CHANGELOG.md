@@ -42,6 +42,14 @@ All notable user-visible changes are documented here.
   and reported in a notice. Settings store the new `audio.*_policy`, `audio.*_endpoint_id` and
   `audio.*_device_name` keys; delete these six keys before downgrading to an older Lianiq.
 
+- A refreshed look from the lianiq design colours with higher-contrast control borders, Segoe
+  UI / Microsoft YaHei UI fonts and text sizes that follow Windows text and display scaling.
+  Every focused control shows a 2 px focus outline, Tab moves sidebar → workspace → session
+  strip, and focus returns to **Export…** / **Export transcript** after their dialogs. With
+  Windows high contrast on, Lianiq uses the system colours. Lianiq opens at 1280×720 or the
+  largest size that fits the screen; on a small screen or with large text the workspace scrolls
+  or wraps its rows, while Start, Stop and the session strip stay in view.
+
 - Mandarin spoken output uses the sherpa-onnx voice `vits-icefall-zh-aishell3` (speaker 20,
   8 kHz, CPU), downloaded by `scripts/download_models.py` from a pinned archive verified by size
   and SHA-256 into `models/sherpa/vits-icefall-zh-aishell3/`; German stays on Piper. Settings

@@ -24,6 +24,7 @@ import datetime as dt
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QComboBox, QFileDialog, QMessageBox
 
 from lianiq.call_bridge.contracts import EndpointFlow
@@ -194,10 +195,13 @@ class ConversationNotices:
             QMessageBox.information(
                 self.host, "Transcript", "There is no conversation history yet."
             )
+            workspace.export_button.setFocus(Qt.FocusReason.OtherFocusReason)  # AC-28
             return
         today = dt.datetime.now().astimezone().date().isoformat()
         default = str(Path.home() / f"conversation-{today}.txt")
         path, _ = QFileDialog.getSaveFileName(self.host, "Save transcript", default, "Text (*.txt)")
+        # Focus returns to **Export transcript** after the dialog (AC-28).
+        workspace.export_button.setFocus(Qt.FocusReason.OtherFocusReason)
         if not path:
             return
         try:

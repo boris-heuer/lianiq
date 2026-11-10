@@ -9,7 +9,8 @@ The excerpt yields the bar's width: it is elided to the space the other controls
 so the buttons always show their full labels (WI-08 DEV-01). It keeps a minimum width of the
 first ``EXCERPT_MIN_CHARS`` characters, so even at the 850 px minimum window it shows them
 (CAP-0168 RES-06, AC-11). For that the bar has two rows: the title, detected language and
-counter above; the excerpt and the buttons below.
+counter above; the excerpt and the buttons below. When even that row does not fit (CJK,
+large text), ``set_stacked`` puts the buttons under the excerpt (CAP-0168 WI-05).
 
 Keyboard focus never falls through to an unrelated control (WI-10 DEF-05): while a resolve
 runs the bar itself keeps focus and the next held turn's first button receives it afterwards;
@@ -23,6 +24,7 @@ from collections.abc import Sequence
 
 from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
+    QBoxLayout,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -67,7 +69,7 @@ class HeldTurnBar(QFrame):
         rows.setContentsMargins(10, 6, 10, 6)
         rows.setSpacing(4)
         header = QHBoxLayout()
-        layout = QHBoxLayout()
+        layout = self._row = QHBoxLayout()
         rows.addLayout(header)
         rows.addLayout(layout)
         icon = QLabel()
@@ -86,6 +88,9 @@ class HeldTurnBar(QFrame):
         self.transcript_label.installEventFilter(self)
         self._excerpt = ""
         self.detected_label = QLabel()
+        # Long language names wrap instead of widening the bar beyond the window (WI-05).
+        for label in (self.title_label, self.detected_label):
+            label.setWordWrap(True)
         self.counter_label = QLabel()
         header.addWidget(icon)
         header.addWidget(self.title_label)
@@ -117,6 +122,22 @@ class HeldTurnBar(QFrame):
     def excerpt(self) -> str:
         """The quoted excerpt (at most 120 characters) before it is elided to the bar."""
         return self._excerpt
+
+    def one_line_width(self) -> int:
+        """The width the excerpt row needs on one line: minimum excerpt plus every button."""
+        margins = self.layout().contentsMargins()
+        buttons = [*self.translate_buttons.values(), self.discard_button]
+        spacing = max(self._row.spacing(), 0) + 2
+        width = margins.left() + margins.right() + self.transcript_label.minimumWidth()
+        return width + sum(button.sizeHint().width() + spacing for button in buttons)
+
+    def set_stacked(self, stacked: bool) -> None:
+        """Too narrow for one line (CJK, large text): the buttons go under the excerpt."""
+        direction = (
+            QBoxLayout.Direction.TopToBottom if stacked else QBoxLayout.Direction.LeftToRight
+        )
+        if self._row.direction() != direction:
+            self._row.setDirection(direction)
 
     def set_focus_return(self, *widgets: QWidget) -> None:
         """Where focus goes when the bar hides with focus inside it: the first enabled one."""
