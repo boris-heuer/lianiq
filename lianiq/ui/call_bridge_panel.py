@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QGridLayout,
     QGroupBox,
+    QHBoxLayout,
     QLabel,
     QProgressBar,
     QPushButton,
@@ -102,13 +103,19 @@ class CallBridgePanel(QWidget):
             lambda: self.route_test_requested.emit(EndpointRole.LOCAL_HEADPHONES)
         )
         layout.addWidget(self.inbound_test_button, 5, 1)
+        # CAP-0168 WI-05: Start/Stop sit in their own row, which the workspace keeps outside
+        # its scroll area (spec §2.3.7).
+        self.session_actions = QWidget()
+        actions = QHBoxLayout(self.session_actions)
+        actions.setContentsMargins(0, 0, 0, 0)
         self.start_button = QPushButton("Start call bridge")
         self.start_button.clicked.connect(self.start_requested.emit)
-        layout.addWidget(self.start_button, 5, 2)
+        actions.addWidget(self.start_button)
         self.stop_button = QPushButton("Stop call bridge")
         self.stop_button.clicked.connect(self.stop_requested.emit)
         self.stop_button.setEnabled(False)
-        layout.addWidget(self.stop_button, 5, 3)
+        actions.addWidget(self.stop_button)
+        actions.addStretch(1)
 
         self.state_label = QLabel("Disabled")
         layout.addWidget(self.state_label, 6, 0, 1, 4)
