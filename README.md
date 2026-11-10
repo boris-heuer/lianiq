@@ -24,11 +24,13 @@ application screenshot or a performance claim.
 
 ![Sanitized lianiq application window with the experimental Call Bridge disabled](docs/assets/application-ui.png)
 
-This screenshot is captured from the Windows application by `scripts/capture_readme_screenshot.py`
-with generic device selections, empty transcript panels, a synthetic held turn in the held-turn bar,
-and the experimental Call Bridge disabled. It shows the language pair selector, **Voice output** and
-**CUDA GPU** in the action row, and the held-turn choices. It demonstrates the current UI only; it
-is not evidence that the hardware, latency, reconnect, or real-call acceptance gates passed.
+This screenshot was captured from the Windows application by
+`scripts/capture_readme_screenshot.py` with generic device selections, empty transcript panels, a
+synthetic held turn in the held-turn bar, and the experimental Call Bridge disabled. It predates the
+sidebar shell described under [Run](#run): it still shows the device selectors, *Model profile*,
+**CUDA GPU** and the Call Bridge panel in one window. Recapture it on Windows with the same script
+to show the shell. It is not evidence that the hardware, latency, reconnect, or real-call acceptance
+gates passed.
 
 ## Reference system and portability
 
@@ -171,13 +173,39 @@ spoken output in that language then stays unavailable while text output works. A
 .\.venv\Scripts\python.exe -m lianiq
 ```
 
-- `F8`: start capture
-- `F9`: stop capture
+Lianiq opens at 1280×720, or at the largest size that fits the screen, with **Conversation**
+selected.
+
+### The window
+
+- **Sidebar.** Conversation, Text translation, Listen & translate, Call Bridge (marked
+  "Experimental") and Language packs, with Settings at the bottom. Text translation, Listen &
+  translate and Language packs are greyed out as "Planned" and cannot be opened yet. Click an
+  entry, move with Up/Down and press Space or Enter, or press **Ctrl+1** … **Ctrl+6**. Below 1000 px window
+  width the sidebar becomes an icon rail with the labels in the tooltips.
+- **Session strip.** While a session starts, runs or stops, a strip below the workspace shows
+  "Conversation running" (or "Call Bridge running") and **Stop (F9)**, in every workspace. Only
+  one session runs at a time: while a conversation runs, the Call Bridge's Start is disabled with
+  "Stop the Conversation session first", and the reverse. Opening a workspace never starts or
+  stops audio.
+- **Notices.** A failure appears as a notice at the top of its workspace. It says what failed,
+  for which mode, lane and language, whether recording and playback continue, and offers its
+  action (**Retry**, **Reconnect**, **Choose device**). A blocking notice stays until its cause is
+  resolved; **+N more** opens the notice history. The status bar only shows readiness and
+  progress.
+- **Settings.** *Audio devices* (Microphone, Speakers, **Refresh**, **Test microphone**, **Test
+  speakers**), *Voice output* (the same setting as in Conversation) and *Diagnostics* (model
+  profile, compute device, the readiness of the selected pair, and the notice history with
+  **Copy** and **Export…**).
+
+### Conversation
+
+- `F8`: **Start**; `F9`: **Stop** the active session from any workspace.
 - Choose the **Language pair**. It is currently German ↔ Mandarin (Simplified); planned languages
   are shown as "planned, unavailable" and cannot be selected.
 - Choose automatic direction within the pair, German → Mandarin (Simplified), or Mandarin
   (Simplified) → German. An unavailable entry is disabled, and its tooltip names what is missing.
-- Select microphone and speakers before starting.
+- Choose the microphone and speakers in Settings › Audio devices before starting (see below).
 - Choose **Voice output** before starting. It is available only when the voices of the selected
   direction are provisioned; otherwise its tooltip names the missing voice and text output still
   works.
@@ -198,6 +226,33 @@ German** or **Translate as Mandarin (Simplified)** to recognize the turn again i
 and translate it, or **Discard** it. Later turns keep flowing while a turn is held, and **Stop**
 discards any turn that is still held. **Export transcript** writes the `# lianiq transcript v2`
 format with the language IDs of every turn, in capture order.
+
+### Audio devices
+
+Settings › Audio devices lists the Conversation **Microphone** and **Speakers**. The first entry,
+`Follow Windows default (now: <name>)`, uses the current Windows default; any other choice is
+saved by device identity, so a reordered or replugged device stays selected. Devices with the same
+name are numbered " (2)", " (3)"; no label or tooltip shows an endpoint ID.
+
+- **Refresh** lists a device plugged in after start without restarting Lianiq. While a session or
+  device test runs it only reports the change, and the lists refresh after **Stop**.
+- **Test microphone** listens for up to 5 s and moves the meter; **Test speakers** plays a 1 s
+  tone and asks whether you heard it. Both are disabled while a session runs.
+- A saved device that is missing shows as "<name> — unavailable", and **Start** is refused with a
+  notice offering **Choose device**; Lianiq never picks another device silently.
+- If the microphone is unplugged during a conversation, recording stops and the transcript is
+  kept; replug it and press **Reconnect**, then **Start**. If the speakers fail, the conversation
+  continues as text.
+
+The Call Bridge keeps its own four explicit endpoint selectors in the Call Bridge workspace and
+never follows the Windows default.
+
+### Diagnostics and troubleshooting
+
+Settings › Diagnostics **Copy** and **Export…** produce the notice history as local text with
+endpoint IDs, absolute paths and your user name replaced and no transcript text. See
+[`docs/troubleshooting.md`](docs/troubleshooting.md) for each notice, device problem, window
+scaling and the settings keys.
 
 ## Measure latency
 
@@ -224,7 +279,13 @@ to speak:
 ```
 
 The UI self-test opens the real application window, starts the microphone, injects deterministic
-speech, renders the result, plays the translated voice, and closes after a successful turn.
+speech, renders the result, plays the translated voice, then visits every enabled workspace, stops
+the session with **Stop (F9)** from Settings, and checks that the transcript and pair are unchanged.
+
+`scripts/capture_readme_screenshot.py --evidence <folder>` writes a screenshot of every enabled
+workspace (Conversation, Call Bridge, Settings) at 850×560, 1120×720, 1280×720 and 1440×900 to that
+local folder, with generic devices and no transcript, and prints one `<sha256>  <file>` line per
+screenshot. Keep the screenshots local; record the SHA-256 lines as evidence.
 
 ## Configuration and glossary
 
@@ -244,7 +305,12 @@ Schema v2 keys every language setting by language ID:
 - `translation.edges`: one model per direction, keyed `"<source>><target>"`, such as
   `"de>zh-Hans"`; a reverse direction is never derived from a configured one;
 - `tts.voices`: one voice file per language ID;
-- `call_bridge.local_language`: the language spoken on the local side of the Call Bridge.
+- `call_bridge.local_language`: the language spoken on the local side of the Call Bridge;
+- `audio.input_policy` / `audio.output_policy` (`explicit` or `follow_default`),
+  `audio.input_endpoint_id` / `audio.output_endpoint_id` and `audio.input_device_name` /
+  `audio.output_device_name`: the Conversation devices by identity. A saved older index
+  (`audio.input_device` / `audio.output_device`) is matched by name once and then set to `null`.
+  Delete these six keys before running an older Lianiq build, which cannot read them.
 
 Define domain terminology in
 [`config/glossary.json`](config/glossary.json):
@@ -297,6 +363,8 @@ files more predictably than a single executable.
 
 - Runtime code makes no network requests; all model loaders use local paths only.
 - Transcript export happens only after the user chooses a local destination.
+- Settings › Diagnostics keeps its notice history in memory; **Export…** writes it, redacted, only
+  to a local file you choose.
 - Rotating logs are stored in `logs\lianiq.log` and never contain audio.
 - Native faults are written to `logs\native-crash.log`; Qt uses software rendering for stability
   on the integrated Radeon GPU.
