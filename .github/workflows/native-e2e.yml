@@ -1,0 +1,133 @@
+name: native-e2e
+
+# Native Windows rows on the disposable Windows 11 VM (CAP-0174, docs/native-e2e-setup.md).
+# Dispatch only: never on push, on pull requests (also not from forks) or on a schedule. Each run
+# waits for the PO's approval in the environment `native-e2e` and for the one-job JIT runner
+# that tools/native-e2e/host/Invoke-NativeE2eRun.ps1 starts inside the VM.
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: "Exact 40-hex commit; it must be contained in a branch of this repository"
+        required: true
+        type: string
+      capability:
+        description: "Consuming capability, copied into the receipt (optional)"
+        required: false
+        type: string
+        default: ""
+      work_item:
+        description: "Consuming work item, copied into the receipt (optional)"
+        required: false
+        type: string
+        default: ""
+      plant_redaction_canary:
+        description: "Test hook for AC-14: plant a canary before the redaction scan (no upload)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# One VM: runs queue, a running job is never cancelled by a new dispatch.
+concurrency:
+  group: native-e2e
+  cancel-in-progress: false
+
+jobs:
+  native:
+    name: Native rows
+    runs-on: [self-hosted, windows, win11-native-e2e]
+    environment: native-e2e
+    timeout-minutes: 150
+    defaults:
+      run:
+        # The image has Windows PowerShell 5.1 only.
+        shell: powershell
+    env:
+      # Inputs reach scripts only through env, never as ${{ }} inside a script.
+      NATIVE_E2E_COMMIT: ${{ inputs.commit }}
+      NATIVE_E2E_CAPABILITY: ${{ inputs.capability }}
+      NATIVE_E2E_WORK_ITEM: ${{ inputs.work_item }}
+      NATIVE_E2E_CANARY: ${{ inputs.plant_redaction_canary }}
+      NATIVE_E2E_IMAGE_JSON: C:\ProgramData\lianiq-e2e\image.json
+
+    steps:
+      - name: Check the inputs and the runner tools
+        run: |
+          function Stop-Run([string]$Reason) {
+            [IO.File]::AppendAllText($env:GITHUB_STEP_SUMMARY, "## native-e2e rows`n`n| Row | Method | Status | Reason |`n|---|---|---|---|`n| S-01 | automated-native | blocked | $Reason |`n")
+            Write-Output "S-01 blocked: $Reason"
+            exit 1
+          }
+          if ($env:NATIVE_E2E_COMMIT -cnotmatch '^[0-9a-f]{40}\z') { Stop-Run 'commit-not-40-hex' }
+          # The optional inputs reach the receipt: empty, or a short plain identifier.
+          foreach ($value in @($env:NATIVE_E2E_CAPABILITY, $env:NATIVE_E2E_WORK_ITEM)) {
+            if ($value -and $value -cnotmatch '^[A-Za-z0-9._-]{1,64}\z') { Stop-Run 'input-not-allowed' }
+          }
+          if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Stop-Run 'git-not-available' }
+
+      # actions/checkout v7.0.1
+      - name: Check out the exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      # S-01 (spec 2.2.2, AC-09): before any project code runs, the commit must be HEAD and be
+      # contained in a branch of this repository. fetch-depth 0 fetches every branch into
+      # refs/remotes/origin/; a fork PR head is reachable from none of them.
+      - name: S-01 branch containment
+        id: s01
+        run: |
+          $head = (git rev-parse HEAD | Out-String).Trim()
+          $branches = @(git for-each-ref --contains $env:NATIVE_E2E_COMMIT '--format=%(refname)' refs/remotes/origin/ |
+            Where-Object { $_ -and $_ -ne 'refs/remotes/origin/HEAD' })
+          if ($LASTEXITCODE -ne 0 -or $head -cne $env:NATIVE_E2E_COMMIT -or $branches.Count -eq 0) {
+            [IO.File]::AppendAllText($env:GITHUB_STEP_SUMMARY, "## native-e2e rows`n`n| Row | Method | Status | Reason |`n|---|---|---|---|`n| S-01 | automated-native | blocked | commit-not-in-repository-branch |`n`nNo later row ran.`n")
+            Write-Output 'S-01 blocked: commit-not-in-repository-branch'
+            exit 1
+          }
+          Write-Output "S-01 containment: HEAD is the commit; $($branches.Count) repository branch(es) contain it."
+
+      - name: Install the checkout into the image environment
+        id: prepare
+        run: |
+          $image = Get-Content -LiteralPath $env:NATIVE_E2E_IMAGE_JSON -Raw -Encoding UTF8 | ConvertFrom-Json
+          $python = Join-Path $image.venv 'Scripts\python.exe'
+          & $python -m pip install --no-index --no-build-isolation --no-deps -e .
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          # The app resolves models/ against the checkout; the image keeps them read-only.
+          if (Test-Path -LiteralPath models) { Write-Output 'models already exists in the checkout'; exit 1 }
+          New-Item -ItemType Junction -Path models -Target $image.models_dir | Out-Null
+          $out = Join-Path $env:RUNNER_TEMP 'native-evidence'
+          [IO.File]::AppendAllText($env:GITHUB_ENV, "NATIVE_E2E_PYTHON=$python`nNATIVE_E2E_OUT=$out`n")
+
+      - name: Run the native rows
+        id: rows
+        run: |
+          $arguments = @('-m', 'native_e2e', 'run', '--commit', $env:NATIVE_E2E_COMMIT, '--out', $env:NATIVE_E2E_OUT)
+          if ($env:NATIVE_E2E_CAPABILITY) { $arguments += @('--capability', $env:NATIVE_E2E_CAPABILITY) }
+          if ($env:NATIVE_E2E_WORK_ITEM) { $arguments += @('--work-item', $env:NATIVE_E2E_WORK_ITEM) }
+          if ($env:NATIVE_E2E_CANARY -eq 'true') { $arguments += '--plant-redaction-canary' }
+          & $env:NATIVE_E2E_PYTHON @arguments
+          exit $LASTEXITCODE
+
+      # Redaction gate: nothing leaves the VM unless the receipt validates, SHA256SUMS
+      # verifies, the run's own scan was clean and a re-scan finds nothing.
+      - name: Redaction gate
+        id: gate
+        if: ${{ !cancelled() && steps.rows.outcome != 'skipped' }}
+        run: |
+          & $env:NATIVE_E2E_PYTHON -m native_e2e verify $env:NATIVE_E2E_OUT
+          exit $LASTEXITCODE
+
+      # actions/upload-artifact v7.0.1
+      - name: Upload the evidence artifact
+        if: ${{ !cancelled() && steps.gate.outcome == 'success' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: native-e2e-${{ inputs.commit }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.NATIVE_E2E_OUT }}
+          if-no-files-found: error
