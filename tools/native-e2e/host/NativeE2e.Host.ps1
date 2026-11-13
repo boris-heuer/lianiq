@@ -43,6 +43,57 @@ function Read-NativeE2eHostState([string]$StateRoot) {
     return Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
 }
 
+function Read-NativeE2eImage([string]$StateRoot) {
+    $path = Join-Path $StateRoot 'image.json'
+    if (-not (Test-Path -LiteralPath $path)) {
+        throw "No image.json found ($path). Build it with New-NativeE2eImage.ps1 first."
+    }
+    return Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
+}
+
+function Get-NativeE2eLicenceState($Image, [DateTime]$NowUtc) {
+    # Kind 'none' (key licence, no expiry), 'ok', 'warn' (14 days or fewer left), 'expired'
+    # (the date has passed) or 'unknown' (no readable evaluation expiry: refused like
+    # 'expired', since the image predates the licence record or is damaged).
+    $fields = $Image.PSObject.Properties
+    $source = if ($null -ne $fields['licence_source']) { [string]$Image.licence_source } else { '' }
+    if ($source -eq 'key') { return [pscustomobject]@{ Kind = 'none'; DaysLeft = $null; Expires = $null } }
+    $raw = if ($null -ne $fields['licence_expires']) { $Image.licence_expires } else { $null }
+    $expires = [DateTime]::MinValue
+    $styles = [Globalization.DateTimeStyles]::AdjustToUniversal -bor
+        [Globalization.DateTimeStyles]::AssumeUniversal
+    if ($raw -is [DateTime]) {
+        # pwsh 7 ConvertFrom-Json already turns ISO 8601 strings into dates.
+        $expires = $raw.ToUniversalTime()
+    } elseif ($source -ne 'evaluation' -or $raw -isnot [string] -or -not [DateTime]::TryParse(
+            $raw, [Globalization.CultureInfo]::InvariantCulture, $styles, [ref]$expires)) {
+        return [pscustomobject]@{ Kind = 'unknown'; DaysLeft = $null; Expires = $null }
+    }
+    $daysLeft = ($expires - $NowUtc.ToUniversalTime()).TotalDays
+    $kind = if ($daysLeft -le 0) { 'expired' } elseif ($daysLeft -le 14) { 'warn' } else { 'ok' }
+    return [pscustomobject]@{ Kind = $kind; DaysLeft = [Math]::Floor($daysLeft); Expires = $expires.ToString('yyyy-MM-dd') }
+}
+
+function Start-NativeE2eEgressProxy([string]$Python, [string]$Address, [int]$Port,
+        [string]$Allowlist, [string]$LogFile) {
+    # The caller names the allow-list: runs pass egress-allowlist.txt, the image build its
+    # build-only list. The proxy listens on the host's switch address only.
+    $proxyScript = Join-Path $PSScriptRoot 'egress-proxy.py'
+    $arguments = @('-I', "`"$proxyScript`"", '--listen', $Address, '--port', $Port,
+        '--allowlist', "`"$Allowlist`"", '--log', "`"$LogFile`"")
+    $process = Start-Process -FilePath $Python -ArgumentList $arguments -PassThru -WindowStyle Hidden
+    Wait-NativeE2eCondition {
+        if ($process.HasExited) { throw 'The egress proxy exited; see its log.' }
+        @(Get-NetTCPConnection -LocalAddress $Address -LocalPort $Port `
+                -State Listen -ErrorAction SilentlyContinue).Count -gt 0
+    } 30 1 'egress proxy listening'
+    return $process
+}
+
+function Stop-NativeE2eEgressProxy($Process) {
+    if ($null -ne $Process -and -not $Process.HasExited) { Stop-Process -Id $Process.Id -Force }
+}
+
 function Get-NativeE2eIntegrationService([string]$VmName, [string]$Id) {
     $service = Get-VMIntegrationService -VMName $VmName |
         Where-Object { $_.Id -like "*\$Id" }

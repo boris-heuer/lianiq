@@ -6,7 +6,9 @@ and then copies bytes in both directions. There is no TLS interception: the prox
 sees request content. Every refusal is logged with its reason; allowed tunnels are logged
 with the host name only.
 
-Started and stopped by ``Invoke-NativeE2eRun.ps1``; never run inside the guest.
+Started and stopped by ``Invoke-NativeE2eRun.ps1`` with ``egress-allowlist.txt``, and once per
+image build by ``New-NativeE2eImage.ps1`` with the build-only ``activation-allowlist.txt``
+(``--allowlist``); never run inside the guest.
 """
 
 from __future__ import annotations

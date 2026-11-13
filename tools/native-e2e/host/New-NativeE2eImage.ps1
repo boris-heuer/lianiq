@@ -1,19 +1,31 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Builds the native-e2e Windows 11 evaluation VM image on the PO workstation (CAP-0174).
+    Builds the native-e2e Windows 11 VM image on the PO workstation (CAP-0174).
 
 .DESCRIPTION
     PO step, run as administrator once and again before the 90-day evaluation ends
-    (docs/native-e2e-setup.md). The host downloads every input first: the Python 3.12
+    (docs/native-e2e-setup.md; with -LicenceSource key only once). The host downloads every
+    input first: the Python 3.12
     installer, the hash-locked wheels of requirements-lock.txt and
     native_e2e/requirements-native-lock.txt, the models (scripts/download_models.py) and the
-    GitHub Actions runner package; the PO supplies the evaluation ISO and the VB-Cable
-    package. The evaluation image is applied offline to a new VHDX together with these
-    inputs and guest/autounattend.xml; the guest then provisions itself with no network
-    (guest/provision.ps1) and shuts down. The script creates the internal switch without
-    NAT, the host proxy firewall rule and the VM adapter ACLs, takes checkpoint 'clean' and
-    prints the image id and builds to record (S-04).
+    GitHub Actions runner package; the PO supplies the ISO and the VB-Cable package. The
+    image is applied offline to a new VHDX together with these inputs and
+    guest/autounattend.xml; the guest then provisions itself (guest/provision.ps1) and shuts
+    down. The script creates the internal switch without NAT, the host proxy firewall rule
+    and the VM adapter ACLs, takes checkpoint 'clean' and prints the image id and builds to
+    record (S-04).
+
+    Activation (contract 7.4) is the only network of the build: while the guest runs, the
+    host runs egress-proxy.py once with the build-only activation-allowlist.txt; the guest
+    points its WinHTTP proxy at it, activates online, resets the WinHTTP proxy and only
+    then finishes. The proxy is stopped before checkpoint 'clean', also on failure.
+
+.PARAMETER LicenceSource
+    'evaluation' (default): the Windows 11 Enterprise evaluation ISO; image.json records
+    licence_expires. 'key': a licensed (non-evaluation) ISO of the key's edition; the PO
+    types the key on the VM console when the guest opens the product key window. The key
+    is never a script argument and never written to a log, image.json or a receipt.
 
 .EXAMPLE
     .\tools\native-e2e\host\New-NativeE2eImage.ps1 -IsoPath D:\iso\win11-eval.iso `
@@ -23,6 +35,7 @@
 param(
     [Parameter(Mandatory)][string]$IsoPath,
     [Parameter(Mandatory)][string]$VbCablePackage,
+    [ValidateSet('evaluation', 'key')][string]$LicenceSource = 'evaluation',
     [string]$VmName = 'lianiq-native-e2e',
     [string]$StateRoot = (Join-Path $env:ProgramData 'lianiq-native-e2e'),
     [string]$SwitchName = 'lianiq-e2e',
@@ -152,7 +165,7 @@ foreach ($guestScript in 'provision.ps1', 'admin-helper.ps1', 'runner-logon.ps1'
 }
 Copy-Item -LiteralPath (Join-Path $RepoRoot 'native_e2e\data\make_test_phrase.py') -Destination $payload
 
-Write-NativeE2eStep 'Hashing the evaluation ISO'
+Write-NativeE2eStep 'Hashing the ISO'
 $hostVersion = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
 $commit = (& git -C $RepoRoot rev-parse HEAD).Trim()
 $networkPrefix = Get-NativeE2eNetworkPrefix $HostAddress $PrefixLength
@@ -162,6 +175,7 @@ $inputs = [ordered]@{
     created_utc      = (Get-Date).ToUniversalTime().ToString('o')
     host_os_build    = '{0}.{1}' -f $hostVersion.CurrentBuild, $hostVersion.UBR
     source_commit    = $commit
+    licence_source   = $LicenceSource
     python_installer = $python
     runner           = $runner
     vb_cable         = [ordered]@{ file = $vbFile; sha256 = Get-NativeE2eSha256 (Join-Path $payload $vbFile) }
@@ -198,6 +212,7 @@ try {
         Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
     if (-not $imageFile) { throw 'The ISO has no sources\install.wim or install.esd.' }
     $edition = Select-NativeE2eEdition $imageFile $ImageIndex
+    Assert-NativeE2eLicenceMedia $LicenceSource $edition
     $language = @($edition.Languages)[0]
     if (-not $language) { $language = 'en-US' }
     New-NativeE2eSystemDisk $vhdPath $DiskSizeGB $imageFile $edition (New-Unattend $language) $payload
@@ -206,18 +221,37 @@ try {
 }
 
 New-NativeE2eVm $VmName $vhdPath $vmRoot $SwitchName $HostAddress $ProxyPort
-Write-NativeE2eStep 'Starting the guest; it provisions itself offline and shuts down.'
-Write-NativeE2eStep 'If VB-Cable asks to trust the driver publisher, confirm it in the VM console (Hyper-V Manager > Connect).'
-Start-VM -Name $VmName
-Wait-NativeE2eCondition { (Get-VM -Name $VmName).State -eq 'Off' } ($ProvisionTimeoutMinutes * 60) 30 'guest provisioning'
+$hostPython = (& $RepoPython -c 'import sys; print(sys._base_executable)').Trim()
+$logDir = Join-Path $StateRoot "logs\$imageId"
+New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+$activationProxy = $null
+try {
+    # Build-only activation egress (contract 7.4): the adapter ACLs are already in place and
+    # the guest reaches only this proxy, which relays only to the activation hosts.
+    Write-NativeE2eStep 'Starting the build-only activation proxy'
+    $activationProxy = Start-NativeE2eEgressProxy $hostPython $HostAddress $ProxyPort `
+        (Join-Path $PSScriptRoot 'activation-allowlist.txt') (Join-Path $logDir 'activation-proxy.log')
+    Write-NativeE2eStep 'Starting the guest; it provisions itself, activates Windows and shuts down.'
+    Write-NativeE2eStep 'If VB-Cable asks to trust the driver publisher, confirm it in the VM console (Hyper-V Manager > Connect).'
+    if ($LicenceSource -eq 'key') {
+        Write-NativeE2eStep 'PO step: when the guest opens the product key window, type your key in the VM console (Hyper-V Manager > Connect). Never paste it anywhere else.'
+    }
+    Start-VM -Name $VmName
+    Wait-NativeE2eCondition { (Get-VM -Name $VmName).State -eq 'Off' } ($ProvisionTimeoutMinutes * 60) 30 'guest provisioning'
+} finally {
+    Stop-NativeE2eEgressProxy $activationProxy
+    Write-NativeE2eStep 'Activation proxy stopped'
+}
 
-$imageJson = Read-NativeE2eProvisionResult $vhdPath (Join-Path $StateRoot "logs\$imageId")
-[IO.File]::WriteAllText((Join-Path $StateRoot 'image.json'), $imageJson, (New-Object Text.UTF8Encoding $false))
+$imageJson = Read-NativeE2eProvisionResult $vhdPath $logDir
 $image = $imageJson | ConvertFrom-Json
+if ([string]$image.activation -ne 'activated' -or [string]$image.licence_source -ne $LicenceSource) {
+    throw "Windows is not activated (image.json activation '$($image.activation)'); see docs/native-e2e-setup.md."
+}
+[IO.File]::WriteAllText((Join-Path $StateRoot 'image.json'), $imageJson, (New-Object Text.UTF8Encoding $false))
 
 Get-VMSnapshot -VMName $VmName | Remove-VMSnapshot
 Checkpoint-VM -Name $VmName -SnapshotName $script:NativeE2eCheckpoint
-$hostPython = (& $RepoPython -c 'import sys; print(sys._base_executable)').Trim()
 Write-NativeE2eJson (Join-Path $StateRoot 'host.json') ([ordered]@{
         schema = 'lianiq-native-e2e-host/v1'; image_id = $imageId; vm_name = $VmName
         switch_name = $SwitchName; host_address = $HostAddress; guest_address = $GuestAddress
@@ -232,5 +266,7 @@ Write-NativeE2eStep "Checkpoint '$($script:NativeE2eCheckpoint)' taken. Record t
 Write-Host "  image id:        $($image.image_id) ($($image.image))"
 Write-Host "  Windows build:   $($image.windows_build) ($($image.windows_edition))"
 Write-Host "  host OS build:   $($image.host_os_build)"
+Write-Host "  licence:         $($image.licence_source), $($image.activation)"
+if ($LicenceSource -eq 'evaluation') { Write-Host "  licence expires: $($image.licence_expires) (rebuild before then)" }
 Write-Host "  test phrase:     $($image.test_phrase.sha256)"
 Write-Host "  models manifest: $($image.models_manifest_sha256)"

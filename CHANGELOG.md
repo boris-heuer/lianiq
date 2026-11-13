@@ -18,6 +18,10 @@ All notable user-visible changes are documented here.
 - `docs/native-e2e-setup.md` and the `tools/native-e2e/` scripts build a disposable, GitHub-only
   Windows 11 evaluation VM on a maintainer's Hyper-V host for automated native checks; the
   application itself is unchanged.
+- The native-e2e image build activates Windows once through a build-only Microsoft activation
+  allow-list, takes `-LicenceSource evaluation|key` (the key is typed only on the VM console),
+  and `Invoke-NativeE2eRun.ps1` refuses runs on an expired evaluation image and warns 14 days
+  ahead.
 
 ### Changed
 
