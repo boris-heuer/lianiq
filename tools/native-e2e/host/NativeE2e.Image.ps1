@@ -44,9 +44,28 @@ function Select-NativeE2eEdition([string]$ImageFile, [int]$ImageIndex) {
     }
     if ($chosen.Count -ne 1) {
         $names = ($images | ForEach-Object { '{0}: {1}' -f $_.ImageIndex, $_.ImageName }) -join '; '
-        throw "Choose the Enterprise evaluation edition with -ImageIndex ($names)."
+        throw "Choose the edition with -ImageIndex ($names)."
     }
     return Get-WindowsImage -ImagePath $ImageFile -Index $chosen[0].ImageIndex
+}
+
+function Test-NativeE2eEvaluationEdition($Edition) {
+    # Evaluation media name the edition '...Eval' (for example EnterpriseEval) and the image
+    # '... Evaluation'.
+    return ([string]$Edition.EditionId -like '*Eval') -or ([string]$Edition.ImageName -like '*Evaluation*')
+}
+
+function Assert-NativeE2eLicenceMedia([string]$LicenceSource, $Edition) {
+    # An evaluation installation cannot be converted with a key (contract 7.4), so the
+    # media must match the licence source before anything is written.
+    $isEvaluation = Test-NativeE2eEvaluationEdition $Edition
+    if ($LicenceSource -eq 'evaluation' -and -not $isEvaluation) {
+        throw "-LicenceSource evaluation needs the evaluation ISO; '$($Edition.ImageName)' is not an evaluation edition."
+    }
+    if ($LicenceSource -eq 'key' -and $isEvaluation) {
+        throw "-LicenceSource key needs a licensed (non-evaluation) ISO of the key's edition; '$($Edition.ImageName)' is an evaluation edition."
+    }
+    if (@('evaluation', 'key') -notcontains $LicenceSource) { throw "Unknown licence source '$LicenceSource'." }
 }
 
 function New-NativeE2eSystemDisk([string]$VhdPath, [int]$SizeGB, [string]$ImageFile, $Edition,
