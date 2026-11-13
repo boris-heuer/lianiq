@@ -1,0 +1,25 @@
+# Host names the native-e2e guest may reach through egress-proxy.py (CAP-0174, contract 4.4).
+#
+# Format: one lower-case host name per line. A line starting with "#" is a comment.
+# One "*" is allowed in the first label only and matches inside that one label
+# (for example "*.actions.githubusercontent.com" matches "pipelines.actions.githubusercontent.com"
+# but not "a.b.actions.githubusercontent.com"). No IP addresses, ports, schemes or paths.
+# Only HTTPS CONNECT to port 443 is relayed. The proxy log of the first run confirms the list
+# (spec section 9 item 6); add a host only through a reviewed pull request.
+
+# Repository checkout, API and the one-job runner registration.
+github.com
+api.github.com
+codeload.github.com
+
+# Action and runner downloads.
+objects.githubusercontent.com
+objects-origin.githubusercontent.com
+github-releases.githubusercontent.com
+release-assets.githubusercontent.com
+
+# Actions service: broker, pipelines, tokens, results and job logs.
+*.actions.githubusercontent.com
+
+# Actions artifact, job summary and log storage (results storage accounts).
+productionresultssa*.blob.core.windows.net
