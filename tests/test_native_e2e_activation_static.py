@@ -73,8 +73,16 @@ def test_the_activation_list_holds_exact_microsoft_hosts_only() -> None:
     text = ACTIVATION.read_text(encoding="utf-8")
     entries = load_proxy().parse_allowlist(text)  # the proxy loads the same format
     assert "*" not in "".join(entries)
-    assert all(entry.endswith((".microsoft.com", ".live.com")) for entry in entries)
-    assert "activation-v2.sls.microsoft.com" in entries
+    sls = [f"{name}.sls.microsoft.com" for name in ("activation", "validation")]
+    sls += [host.replace(".sls", "-v2.sls") for host in sls]
+    store = [
+        f"{name}.{zone}microsoft.com"
+        for name in ("licensing", "displaycatalog", "purchase")
+        for zone in ("mp.", "md.mp.")
+    ]
+    expected = set(sls + store + ["go.microsoft.com", "login.live.com"])
+    assert len(entries) == len(set(entries)) == 12
+    assert set(entries) == expected  # exact hosts: no wildcard, no extra host
     assert "first build" in text and "native-e2e-setup.md" in text
     egress = load_proxy().parse_allowlist((HOST / "egress-allowlist.txt").read_text("utf-8"))
     assert set(entries).isdisjoint(egress)
