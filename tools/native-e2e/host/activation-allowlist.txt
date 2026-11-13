@@ -1,0 +1,28 @@
+# Build-only list: Microsoft activation hosts the guest may reach through egress-proxy.py
+# during New-NativeE2eImage.ps1 only (CAP-0174, contract 7.4 "Licence and activation").
+# Invoke-NativeE2eRun.ps1 never loads this file; runs use egress-allowlist.txt only.
+#
+# Format: as egress-allowlist.txt, one lower-case host name per line, "#" starts a comment.
+# Exact host names only: no wildcard, IP address, port, scheme or path. Only HTTPS CONNECT
+# to port 443 is relayed, so plain-HTTP CRL/OCSP fetches are refused.
+#
+# The list is verified at first build: see "Assumptions checked at first build" in
+# docs/native-e2e-setup.md. Change it only through a reviewed pull request.
+
+# Windows activation and validation (Software Licensing Service).
+activation.sls.microsoft.com
+activation-v2.sls.microsoft.com
+validation.sls.microsoft.com
+validation-v2.sls.microsoft.com
+
+# Licensing and catalog services used by digital-licence activation.
+licensing.mp.microsoft.com
+licensing.md.mp.microsoft.com
+displaycatalog.mp.microsoft.com
+displaycatalog.md.mp.microsoft.com
+purchase.mp.microsoft.com
+purchase.md.mp.microsoft.com
+
+# Redirects and sign-in used by the activation client.
+go.microsoft.com
+login.live.com
