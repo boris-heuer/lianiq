@@ -9,7 +9,9 @@
     configuration that Invoke-NativeE2eRun.ps1 copies in with Copy-VMFile, reads it, deletes
     the file and starts the runner once with it. The runner is not a service and holds no
     reusable credential; the JIT configuration is invalid after its one job. The
-    configuration is never written to the log.
+    configuration is never written to the log. MinGit's cmd folder is put on PATH for this
+    process and the runner it starts only (S-01 and actions/checkout need git); the system
+    and user PATH stay unchanged.
 #>
 [CmdletBinding()]
 param(
@@ -56,6 +58,12 @@ while ($null -eq $config) {
 }
 Remove-Item -LiteralPath $JitPath -Force
 Write-LogonLog 'JIT configuration received; starting the runner'
+
+$MinGitCmd = Join-Path $Root 'mingit\cmd'
+if (-not (Test-Path -LiteralPath (Join-Path $MinGitCmd 'git.exe') -PathType Leaf)) {
+    Write-LogonLog "git.exe is missing in $MinGitCmd; the job reports git-not-available"
+}
+$env:PATH = "$MinGitCmd;$env:PATH"
 
 $runner = Join-Path $RunnerDir 'run.cmd'
 Push-Location -LiteralPath $RunnerDir

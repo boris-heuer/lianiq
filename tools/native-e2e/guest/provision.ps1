@@ -8,7 +8,8 @@
     New-NativeE2eImage.ps1 has copied every input into C:\ProgramData\lianiq-e2e\setup
     beforehand; the guest has no network except the activation step. The script installs Python 3.12 for all users,
     the hash-locked wheels into the image environment, the read-only models, VB-Cable (one
-    cable), the N-01 test phrase, the GitHub Actions runner package (not a service), the
+    cable), the N-01 test phrase, the GitHub Actions runner package (not a service), MinGit
+    (on no system or user PATH; runner-logon.ps1 adds it for the runner process only), the
     SYSTEM admin helper, the e2e logon task and WFP auditing; it creates the non-admin
     auto-logon user 'e2e', activates Windows online through the host's build-only
     activation proxy (WinHTTP proxy set, then reset in a finally path; for the licence
@@ -33,6 +34,8 @@ $Venv = Join-Path $Root 'venv'
 $PythonDir = 'C:\Program Files\Python312'
 $Interpreter = Join-Path $PythonDir 'python.exe'
 $RunnerDir = 'C:\actions-runner'
+$MinGitDir = Join-Path $Root 'mingit'
+$GitExe = Join-Path $MinGitDir 'cmd\git.exe'
 $TestUser = 'e2e'
 $SidSystem = '*S-1-5-18'
 $SidAdministrators = '*S-1-5-32-544'
@@ -278,6 +281,20 @@ try {
         Invoke-Native 'icacls.exe' @($RunnerDir, '/grant', "${TestUser}:(OI)(CI)M", '/q')
     }
 
+    Invoke-Step 'mingit' {
+        # Offline and on no system or user PATH. The folder inherits the root ACL, so the
+        # test user can read and run it but not change it.
+        $package = Join-Path $Setup $inputs.mingit.file
+        if ((Get-FileSha256 $package) -cne $inputs.mingit.sha256) {
+            throw 'The MinGit package does not match the SHA-256 in build-inputs.json.'
+        }
+        Expand-Archive -LiteralPath $package -DestinationPath $MinGitDir -Force
+        $reported = (& $GitExe --version | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0 -or $reported -cne "git version $($inputs.mingit.version)") {
+            throw "MinGit reports '$reported', expected git version $($inputs.mingit.version)."
+        }
+    }
+
     Invoke-Step 'scheduled-tasks' {
         $powershell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
         $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) `
@@ -336,6 +353,8 @@ try {
             audio                  = 'virtual (VB-Cable A)'
             test_user              = $TestUser
             runner_dir             = $RunnerDir
+            git                    = $GitExe
+            git_version            = $inputs.mingit.version
             https_proxy            = [Environment]::GetEnvironmentVariable('https_proxy', 'Machine')
             inputs                 = $inputs.inputs
         }
@@ -345,7 +364,7 @@ try {
 
     Invoke-Step 'cleanup' {
         foreach ($item in 'wheels', 'models', 'vbcable', $inputs.python_installer.file,
-            $inputs.vb_cable.file, $inputs.runner.file) {
+            $inputs.vb_cable.file, $inputs.runner.file, $inputs.mingit.file) {
             Remove-Item -LiteralPath (Join-Path $Setup $item) -Recurse -Force -ErrorAction SilentlyContinue
         }
         foreach ($answer in 'C:\Windows\Panther\unattend.xml', 'C:\Windows\Panther\Unattend') {

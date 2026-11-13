@@ -9,7 +9,7 @@
     input first: the Python 3.12
     installer, the hash-locked wheels of requirements-lock.txt and
     native_e2e/requirements-native-lock.txt, the models (scripts/download_models.py) and the
-    GitHub Actions runner package; the PO supplies the ISO and the VB-Cable package. The
+    GitHub Actions runner package and the pinned MinGit; the PO supplies the ISO and the VB-Cable package. The
     image is applied offline to a new VHDX together with these inputs and
     guest/autounattend.xml; the guest then provisions itself (guest/provision.ps1) and shuts
     down. The script creates the internal switch without NAT, the host proxy firewall rule
@@ -62,6 +62,14 @@ $PythonVersion = '3.12.10'
 $PythonUrl = 'https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe'
 $PythonSize = 26964224
 
+# MinGit gives the guest the git that S-01 and actions/checkout need. The release, asset and
+# SHA-256 are pinned; the download must match both the pin and the release asset digest.
+$MinGitTag = 'v2.56.0.windows.4'
+$MinGitVersion = $MinGitTag.TrimStart('v')
+$MinGitAsset = 'MinGit-2.56.0.4-64-bit.zip'
+$MinGitUrl = 'https://github.com/git-for-windows/git/releases/download/v2.56.0.windows.4/MinGit-2.56.0.4-64-bit.zip'
+$MinGitSha256 = 'e3bf78351fe777fba47ddee5950082f8a98bb0f02604fdc7ba3ee2cb68ffa877'
+
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $RepoPython = Join-Path $RepoRoot '.venv\Scripts\python.exe'
 $GuestDir = Join-Path $RepoRoot 'tools\native-e2e\guest'
@@ -111,6 +119,20 @@ function Get-RunnerPackage([string]$Payload) {
     return [ordered]@{ file = $asset[0].name; version = $release.tag_name.TrimStart('v'); sha256 = $sha }
 }
 
+function Get-MinGitPackage([string]$Payload) {
+    $release = Invoke-NativeE2eGh @('api', ('repos/git-for-windows/git/releases/tags/' + $MinGitTag)) | ConvertFrom-Json
+    $asset = @($release.assets | Where-Object { $_.name -ceq $MinGitAsset })
+    if ($asset.Count -ne 1 -or [string]$asset[0].digest -cne "sha256:$MinGitSha256" -or
+        [string]$asset[0].browser_download_url -cne $MinGitUrl) {
+        throw "The MinGit release $MinGitTag has no single $MinGitAsset with the pinned SHA-256 digest."
+    }
+    Invoke-NativeE2eGh @('release', 'download', $MinGitTag, '--repo', 'git-for-windows/git',
+        '--pattern', $MinGitAsset, '--dir', $Payload) | Out-Null
+    $sha = Get-NativeE2eSha256 (Join-Path $Payload $MinGitAsset)
+    if ($sha -cne $MinGitSha256) { throw 'The MinGit package does not match its pinned SHA-256.' }
+    return [ordered]@{ file = $MinGitAsset; version = $MinGitVersion; sha256 = $sha }
+}
+
 function Get-Wheels([string]$Payload) {
     Copy-Item -LiteralPath (Join-Path $RepoRoot 'requirements-lock.txt') -Destination $Payload
     Copy-Item -LiteralPath (Join-Path $RepoRoot 'native_e2e\requirements-native-lock.txt') -Destination $Payload
@@ -153,11 +175,12 @@ if ($LASTEXITCODE -ne 0) { throw "icacls failed on $StateRoot." }
 New-Item -ItemType Directory -Path $payload, $vmRoot -Force | Out-Null
 Write-NativeE2eStep "Image $imageId; inputs go to $payload"
 
-Write-NativeE2eStep 'Downloading Python, wheels, models and the runner on the host'
+Write-NativeE2eStep 'Downloading Python, wheels, models, the runner and MinGit on the host'
 $python = Get-PythonInstaller $payload
 Get-Wheels $payload
 $modelsSha = Get-Models $payload
 $runner = Get-RunnerPackage $payload
+$minGit = Get-MinGitPackage $payload
 $vbFile = Split-Path $VbCablePackage -Leaf
 Copy-Item -LiteralPath $VbCablePackage -Destination (Join-Path $payload $vbFile)
 foreach ($guestScript in 'provision.ps1', 'admin-helper.ps1', 'runner-logon.ps1') {
@@ -178,6 +201,7 @@ $inputs = [ordered]@{
     licence_source   = $LicenceSource
     python_installer = $python
     runner           = $runner
+    mingit           = $minGit
     vb_cable         = [ordered]@{ file = $vbFile; sha256 = Get-NativeE2eSha256 (Join-Path $payload $vbFile) }
     network          = [ordered]@{ host_address = $HostAddress; guest_address = $GuestAddress
         prefix_length = $PrefixLength; proxy_port = $ProxyPort }
@@ -186,6 +210,8 @@ $inputs = [ordered]@{
         python_sha256          = $python.sha256
         runner_version         = $runner.version
         runner_sha256          = $runner.sha256
+        mingit_version         = $minGit.version
+        mingit_sha256          = $minGit.sha256
         vb_cable_sha256        = Get-NativeE2eSha256 (Join-Path $payload $vbFile)
         requirements_lock_sha256 = Get-NativeE2eSha256 (Join-Path $payload 'requirements-lock.txt')
         native_lock_sha256     = Get-NativeE2eSha256 (Join-Path $payload 'requirements-native-lock.txt')
