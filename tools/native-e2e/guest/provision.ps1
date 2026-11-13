@@ -6,12 +6,15 @@
 .DESCRIPTION
     Runs once as the built-in Administrator from the answer file's FirstLogonCommands.
     New-NativeE2eImage.ps1 has copied every input into C:\ProgramData\lianiq-e2e\setup
-    beforehand; the guest has no network. The script installs Python 3.12 for all users,
+    beforehand; the guest has no network except the activation step. The script installs Python 3.12 for all users,
     the hash-locked wheels into the image environment, the read-only models, VB-Cable (one
     cable), the N-01 test phrase, the GitHub Actions runner package (not a service), the
     SYSTEM admin helper, the e2e logon task and WFP auditing; it creates the non-admin
-    auto-logon user 'e2e', writes image.json, disables the build account, deletes the
-    answer file and shuts the guest down. The host then takes checkpoint 'clean'.
+    auto-logon user 'e2e', activates Windows online through the host's build-only
+    activation proxy (WinHTTP proxy set, then reset in a finally path; for the licence
+    source 'key' the PO types the key into the product key window on the VM console),
+    writes image.json, disables the build account, deletes the answer file and shuts the
+    guest down. The host then takes checkpoint 'clean'.
     The outcome is written to setup\provision-result.json for the host to read.
 #>
 [CmdletBinding()]
@@ -36,6 +39,8 @@ $SidAdministrators = '*S-1-5-32-544'
 $SidUsers = '*S-1-5-32-545'
 # Audit subcategory "Filtering Platform Connection" (events 5156/5157), locale independent.
 $WfpConnectionAudit = '{0CCE9226-69AE-11D9-BED3-505054503030}'
+# Application id of Windows in the Software Licensing Service.
+$WindowsAppId = '55c92734-d682-4d71-983e-d6ec3f16059f'
 $script:Step = 'start'
 
 function Invoke-Step([string]$Name, [scriptblock]$Body) {
@@ -47,6 +52,60 @@ function Invoke-Step([string]$Name, [scriptblock]$Body) {
 function Invoke-Native([string]$FilePath, [string[]]$Arguments) {
     & $FilePath @Arguments
     if ($LASTEXITCODE -ne 0) { throw "$FilePath exited with code $LASTEXITCODE" }
+}
+
+function Invoke-Netsh([string[]]$Arguments) {
+    # netsh is native: a local 'Continue' keeps its output from turning into errors.
+    $ErrorActionPreference = 'Continue'
+    & netsh.exe @Arguments | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw "netsh $($Arguments -join ' ') exited with code $LASTEXITCODE" }
+}
+
+function Get-WindowsLicence {
+    # The installed Windows licence. Only status, channel and grace period are read; the
+    # product key, or any part of it, is never read, logged or recorded.
+    $filter = "ApplicationID='$WindowsAppId' AND LicenseIsAddon=False AND PartialProductKey IS NOT NULL"
+    $products = @(Get-CimInstance -ClassName SoftwareLicensingProduct -Filter $filter)
+    if ($products.Count -ne 1) { throw "Expected one installed Windows licence, found $($products.Count)." }
+    return $products[0]
+}
+
+function Invoke-GuestActivation([string]$Source) {
+    $isEvaluation = [string](Get-WindowsLicence).Description -like '*TIMEBASED_EVAL*'
+    if (($Source -eq 'evaluation') -ne $isEvaluation) {
+        throw "The installed edition does not match the licence source '$Source'."
+    }
+    $minutes = 10
+    if ($Source -eq 'key') {
+        $minutes = 60
+        Write-Host 'PO step: type your product key in the window that opens (VM console). It is never logged.'
+        Start-Process -FilePath 'slui.exe' -ArgumentList '3'
+    }
+    $deadline = (Get-Date).AddMinutes($minutes)
+    $lastError = 'no attempt'
+    do {
+        try {
+            $call = Invoke-CimMethod -InputObject (Get-WindowsLicence) -MethodName Activate
+            $lastError = "Activate returned $($call.ReturnValue)"
+            $product = Get-WindowsLicence
+            if ($call.ReturnValue -eq 0 -and $product.LicenseStatus -eq 1) { break }
+        } catch {
+            $lastError = $_.Exception.Message
+        }
+        Start-Sleep -Seconds 30
+    } while ((Get-Date) -lt $deadline)
+    $product = Get-WindowsLicence
+    if ($product.LicenseStatus -ne 1) {
+        throw ("Online activation failed ($lastError). First suspect: a CRL/OCSP fetch over plain " +
+            'HTTP, which the CONNECT-only proxy refuses; see activation-proxy.log on the host.')
+    }
+    $expires = $null
+    if ($Source -eq 'evaluation') {
+        $grace = [int64]$product.GracePeriodRemaining
+        if ($grace -le 0) { throw 'The evaluation licence reports no remaining time.' }
+        $expires = [DateTime]::UtcNow.AddMinutes($grace).ToString('yyyy-MM-ddTHH:mm:ssZ')
+    }
+    return [pscustomobject]@{ Result = 'activated'; Expires = $expires }
 }
 
 function Set-ExclusiveAcl([string]$Path, [string[]]$Grants) {
@@ -241,6 +300,19 @@ try {
         Invoke-Native 'wevtutil.exe' @('sl', 'Security', '/ms:268435456')
     }
 
+    $licence = $null
+    Invoke-Step 'activation' {
+        # Build-only egress (contract 7.4): the host proxy relays only to the activation
+        # hosts now. Activation reads the WinHTTP proxy, not https_proxy.
+        $winhttpProxy = '{0}:{1}' -f $inputs.network.host_address, $inputs.network.proxy_port
+        try {
+            Invoke-Netsh @('winhttp', 'set', 'proxy', "proxy-server=$winhttpProxy")
+            $script:licence = Invoke-GuestActivation ([string]$inputs.licence_source)
+        } finally {
+            Invoke-Netsh @('winhttp', 'reset', 'proxy')
+        }
+    }
+
     Invoke-Step 'image-json' {
         $version = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
         $python = (& $Interpreter -c 'import platform; print(platform.python_version())').Trim()
@@ -251,6 +323,8 @@ try {
             created_utc            = $inputs.created_utc
             windows_build          = '{0}.{1}' -f $version.CurrentBuild, $version.UBR
             windows_edition        = [string]$version.EditionID
+            licence_source         = [string]$inputs.licence_source
+            activation             = $script:licence.Result
             host_os_build          = $inputs.host_os_build
             source_commit          = $inputs.source_commit
             python                 = $python
@@ -265,6 +339,7 @@ try {
             https_proxy            = [Environment]::GetEnvironmentVariable('https_proxy', 'Machine')
             inputs                 = $inputs.inputs
         }
+        if ($inputs.licence_source -eq 'evaluation') { $image['licence_expires'] = $script:licence.Expires }
         Write-Json (Join-Path $Root 'image.json') $image
     }
 
