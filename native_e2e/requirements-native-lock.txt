@@ -1,0 +1,27 @@
+# VM-only dependencies of the native-e2e row runner (CAP-0174, contract section 4.4).
+# Installed in the image next to requirements-lock.txt, never by ci.yml or scripts/setup.ps1:
+#    python -m pip install --no-index --find-links <wheels> --require-hashes \
+#        -r requirements-lock.txt -r native_e2e/requirements-native-lock.txt
+# Target: CPython 3.12, x86_64-pc-windows-msvc. Only the Windows wheel of each release is
+# hashed, so pip never falls back to a source build. Hashes are the PyPI sha256 digests.
+# To update, pin the new version and replace its hash from https://pypi.org/pypi/<name>/<version>/json
+# and rebuild the image; the pins are reviewed like requirements-lock.txt.
+# comtypes: pywinauto 0.6.9 sets no upper bound on Python 3.12; 1.4.17 (2026-09-21) is the
+# newest release that was at least two weeks old when this lock was written. 1.5.0
+# (2026-11-09) is a new minor line not yet proven with pywinauto 0.6.9 in the VM.
+# six: a runtime requirement of pywinauto 0.6.9 that requirements-lock.txt does not contain.
+comtypes==1.4.17 \
+    --hash=sha256:4e0a221dde2c589b82977bed802efd71cd5eb67a380347b732e02735e597f586
+    # via pywinauto
+psutil==7.2.2 \
+    --hash=sha256:eb7e81434c8d223ec4a219b5fc1c47d0417b12be7ea866e24fb5ad6e84b3d988
+    # via native_e2e (E-01 open_files and memory_maps)
+pywin32==312 \
+    --hash=sha256:b457f6d628a47e8a7346ce22acb7e1a46a4a78b52e1d17e1af56871bd19a93bc
+    # via pywinauto
+pywinauto==0.6.9 \
+    --hash=sha256:5924b3072864a1d730c5546bbeb17cf4063ba518b618dbc5e43c18276c7c9356
+    # via native_e2e (UIA rows)
+six==1.17.0 \
+    --hash=sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274
+    # via pywinauto
