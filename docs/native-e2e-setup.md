@@ -28,6 +28,14 @@ This use is private and non-commercial (PO decision of 2026-11-11). Before any c
 the licence must be clarified with VB-Audio. The package is never committed to this
 repository; the image build records its SHA-256 in `image.json`.
 
+### MinGit licence
+
+MinGit (Git for Windows) is GPLv2 software. Lianiq uses it only inside the test VM, so that
+`actions/checkout` clones with git and S-01 can check the branch; it is never committed to
+this repository and not distributed. The build pins SHA-256
+`e3bf78351fe777fba47ddee5950082f8a98bb0f02604fdc7ba3ee2cb68ffa877` and records it in
+`image.json`.
+
 ## Build the image
 
 Run once, and again for every rebuild, from an elevated PowerShell in the lianiq checkout:
@@ -52,7 +60,9 @@ What the script does:
    Foundation signature checked), the wheels of `requirements-lock.txt` and
    [`native_e2e/requirements-native-lock.txt`](../native_e2e/requirements-native-lock.txt)
    with `pip download --require-hashes`, the models with `scripts\download_models.py`, and the
-   latest GitHub Actions runner package for Windows x64 (checked against its release digest).
+   latest GitHub Actions runner package for Windows x64 (checked against its release digest),
+   and MinGit `MinGit-2.56.0.4-64-bit.zip` of Git for Windows `v2.56.0.windows.4` (checked
+   against the pinned SHA-256 and the release digest; see [MinGit licence](#mingit-licence)).
 3. Creates the internal switch without NAT, gives the host its switch address and adds the
    host firewall rule `lianiq-native-e2e-proxy` (inbound TCP to the proxy port from the guest
    address only).
@@ -66,7 +76,7 @@ What the script does:
 6. Starts the VM. The guest signs in once as the build account and runs
    [`provision.ps1`](../tools/native-e2e/guest/provision.ps1) with no network except the
    activation hosts (step 7): Python 3.12 for all users, the image environment from the
-   wheels, the models (read-only), VB-Cable, the test phrase, the runner package (not a service), the SYSTEM admin helper, the logon task, WFP
+   wheels, the models (read-only), VB-Cable, the test phrase, the runner package (not a service), MinGit in `C:\ProgramData\lianiq-e2e\mingit` (on no machine `PATH`; the logon task puts its `cmd` folder on `PATH` for the runner process only), the SYSTEM admin helper, the logon task, WFP
    auditing, the machine-wide `https_proxy`, the non-admin auto-logon user `e2e` and
    `C:\ProgramData\lianiq-e2e\image.json`. It disables the build account, deletes the answer
    file and shuts down.
@@ -122,7 +132,7 @@ A `key` image has no `licence_expires` and needs no 90-day rebuild.
 (`activated`), `licence_expires` (evaluation only, UTC, from the remaining evaluation time
 after activation), `python`, `interpreter` (the base interpreter
 `C:\Program Files\Python312\python.exe`), `venv`, `models_dir`, `models_manifest_sha256`,
-`test_phrase` (`path` and `sha256`), `audio`, `test_user`, `runner_dir`, `https_proxy` and
+`test_phrase` (`path` and `sha256`), `audio`, `test_user`, `runner_dir`, `git`, `git_version`, `https_proxy` and
 the SHA-256 of every build input. The test phrase "Guten Morgen, das ist ein Test." is
 generated in the guest by
 [`make_test_phrase.py`](../native_e2e/data/make_test_phrase.py) with the German Piper voice;
@@ -189,6 +199,8 @@ Open the run in lianiq › Actions › `native-e2e`. It shows **Review deploymen
 environment `native-e2e`. Check that the commit is the one you expect, then approve. Approve
 only runs that you or the requesting agent dispatched for a known commit; reject anything else.
 A changed screenshot is signed off later from the run summary and `compare/application-ui.png`.
+Until WI-04 adds the UIA rows, every run ends red (exit 1: rows E-01, E-11, E-03 and E-10
+are `open`); the artifact still uploads when the redaction gate passes.
 
 ## The 90-day rebuild
 
