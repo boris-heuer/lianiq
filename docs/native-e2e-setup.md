@@ -14,7 +14,7 @@ no reusable credential and reaches only GitHub, through an allow-list proxy on t
 | Item | What to do |
 | --- | --- |
 | Windows host with Hyper-V | Windows 11 Pro or Enterprise, 64-bit, virtualization enabled in the firmware. Enable Hyper-V from an elevated PowerShell with `Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All` and restart. The VM needs 4 vCPUs, 8 GB RAM and up to 128 GB of disk. |
-| Windows 11 Enterprise evaluation ISO | Download the ISO yourself from the Microsoft Evaluation Center and read its evaluation terms. The evaluation runs for 90 days; the image is then rebuilt (see [The 90-day rebuild](#the-90-day-rebuild)). Prefer the English (United States) ISO; the answer file uses the built-in `Administrator` account name. |
+| Windows 11 Enterprise evaluation ISO | Download the ISO yourself from the Microsoft Evaluation Center and read its evaluation terms. The evaluation runs for 90 days; the image is then rebuilt (see [The 90-day rebuild](#the-90-day-rebuild)). Prefer the English (United States) ISO; the answer file uses the built-in `Administrator` account name. For a permanent licence instead, see [Licence source `key`](#licence-source-key). |
 | VB-Cable package | Download the VB-Cable driver pack (one cable, for example `VBCABLE_Driver_Pack45.zip`) yourself from VB-Audio Software and read its licence first. See [VB-Cable licence](#vb-cable-licence). |
 | Lianiq checkout | A clone of `boris-heuer/lianiq` at the commit you want the image built from, with `scripts\setup.ps1` already run so that `.venv` holds the locked dependency set and `scripts\download_models.py` can run. |
 | Git and GitHub CLI | `git` and `gh` on `PATH`; `gh auth login` with **your own** account. Only the host uses this login: to download the runner package and to request one JIT runner configuration per run. It never enters the VM. |
@@ -38,7 +38,8 @@ Run once, and again for every rebuild, from an elevated PowerShell in the lianiq
     -VbCablePackage D:\downloads\VBCABLE_Driver_Pack45.zip
 ```
 
-Add `-Replace` for a rebuild: it deletes the previous VM `lianiq-native-e2e` and its disk. The
+`-LicenceSource evaluation` is the default; see [Licence source `key`](#licence-source-key)
+for your own key. Add `-Replace` for a rebuild: it deletes the previous VM `lianiq-native-e2e` and its disk. The
 defaults put everything under `C:\ProgramData\lianiq-native-e2e` and use the internal switch
 `lianiq-e2e` with the host at `192.168.250.1/24`, the guest at `192.168.250.10` and the proxy on
 port 8080. If that subnet is already used on your network, pass `-HostAddress`,
@@ -55,21 +56,32 @@ What the script does:
 3. Creates the internal switch without NAT, gives the host its switch address and adds the
    host firewall rule `lianiq-native-e2e-proxy` (inbound TCP to the proxy port from the guest
    address only).
-4. Applies the Enterprise evaluation edition offline to a new VHDX, writes the answer file
+4. Checks that the ISO matches `-LicenceSource` (evaluation media for `evaluation` only),
+   applies the edition offline to a new VHDX, writes the answer file
    ([`autounattend.xml`](../tools/native-e2e/guest/autounattend.xml) with a random one-time
    build password) and copies the inputs and guest scripts into it.
 5. Creates the generation 2 VM: 4 vCPUs, 8 GB static memory, Secure Boot, virtual TPM,
    1920×1080, no automatic checkpoints, one network adapter with MAC spoofing off and the
    adapter ACLs (deny all, allow only TCP to the proxy port on the host).
 6. Starts the VM. The guest signs in once as the build account and runs
-   [`provision.ps1`](../tools/native-e2e/guest/provision.ps1) with no network: Python 3.12 for
-   all users, the image environment from the wheels, the models (read-only), VB-Cable, the test
-   phrase, the runner package (not a service), the SYSTEM admin helper, the logon task, WFP
+   [`provision.ps1`](../tools/native-e2e/guest/provision.ps1) with no network except the
+   activation hosts (step 7): Python 3.12 for all users, the image environment from the
+   wheels, the models (read-only), VB-Cable, the test phrase, the runner package (not a service), the SYSTEM admin helper, the logon task, WFP
    auditing, the machine-wide `https_proxy`, the non-admin auto-logon user `e2e` and
    `C:\ProgramData\lianiq-e2e\image.json`. It disables the build account, deletes the answer
    file and shuts down.
-7. Reads the provisioning result from the disk, takes checkpoint `clean` and prints the values
-   to record.
+7. **Activation, the build's only network** (contract §7.4). Before it starts the guest, with
+   the adapter ACLs already in place, the host starts `egress-proxy.py` once, until the guest
+   is off, with the build-only list
+   [`activation-allowlist.txt`](../tools/native-e2e/host/activation-allowlist.txt) (exact Microsoft activation host names, no wildcards). At the end of provisioning the guest
+   points its WinHTTP proxy at the host proxy (`netsh winhttp set proxy`; activation does not
+   read `https_proxy`), activates online, and resets it (`netsh winhttp reset proxy`) in a
+   `finally` path, so a failed activation also leaves no WinHTTP proxy. The host stops the
+   proxy once the guest is off, also on failure, before checkpoint `clean`. The proxy log is
+   `C:\ProgramData\lianiq-native-e2e\logs\<image-id>\activation-proxy.log`. A failed
+   activation fails the build; no checkpoint is taken.
+8. Reads the provisioning result from the disk, checks that Windows is activated, takes
+   checkpoint `clean` and prints the values to record, including the licence expiry.
 
 **PO step during the build:** if Windows asks whether to trust the VB-Audio driver publisher,
 open the VM console (Hyper-V Manager › `lianiq-native-e2e` › **Connect**) and confirm it. The
@@ -79,11 +91,36 @@ build waits up to 15 minutes for the two cable endpoints `CABLE Input` and `CABL
 build into the capability's `verification-report.md`. The same values stay in
 `C:\ProgramData\lianiq-native-e2e\image.json` and the guest copy.
 
+### Licence source `key`
+
+`-LicenceSource key` builds the image with your own licence (a retail or volume key, or a
+Visual Studio subscription key) instead of the evaluation. Prerequisites:
+
+- A licensed, non-evaluation Windows 11 ISO of the key's edition, passed with `-IsoPath`. An
+  evaluation installation cannot be converted with a key, so the script refuses evaluation
+  media for `key` (and non-evaluation media for `evaluation`) before it writes the disk. The
+  edition follows the ISO: if it holds no single Enterprise image, choose the key's edition
+  with `-ImageIndex` (the error lists the indexes).
+- You at the VM console (Hyper-V Manager › `lianiq-native-e2e` › **Connect**) during the
+  activation step. The guest opens the Windows product key window and waits up to 60 minutes;
+  type the key there. The key is never a script argument and never written to the
+  repository, a log, `image.json` or a receipt. Never paste it into a terminal, an issue or a
+  chat.
+
+```powershell
+.\tools\native-e2e\host\New-NativeE2eImage.ps1 -LicenceSource key `
+    -IsoPath D:\iso\Win11_licensed.iso -VbCablePackage D:\downloads\VBCABLE_Driver_Pack45.zip
+```
+
+A `key` image has no `licence_expires` and needs no 90-day rebuild.
+
 ### Image contents
 
 `image.json` (schema `lianiq-native-e2e-image/v1`) holds: `image_id` and `image`
 (`win11-native-e2e@<image-id>`), `windows_build` (`CurrentBuild.UBR`), `windows_edition`,
-`host_os_build`, `source_commit`, `python`, `interpreter` (the base interpreter
+`host_os_build`, `source_commit`, `licence_source` (`evaluation` or `key`), `activation`
+(`activated`), `licence_expires` (evaluation only, UTC, from the remaining evaluation time
+after activation), `python`, `interpreter` (the base interpreter
 `C:\Program Files\Python312\python.exe`), `venv`, `models_dir`, `models_manifest_sha256`,
 `test_phrase` (`path` and `sha256`), `audio`, `test_user`, `runner_dir`, `https_proxy` and
 the SHA-256 of every build input. The test phrase "Guten Morgen, das ist ein Test." is
@@ -105,6 +142,7 @@ Once per image, before the first run, start the VM from Hyper-V Manager, let it 
 Test-NetConnection 192.168.250.1 -Port 445
 Test-NetConnection <a LAN address> -Port 80
 Invoke-WebRequest https://example.com -Proxy $env:https_proxy -UseBasicParsing
+Invoke-WebRequest https://activation-v2.sls.microsoft.com -Proxy $env:https_proxy -UseBasicParsing
 Invoke-WebRequest https://api.github.com -Proxy $env:https_proxy -UseBasicParsing
 whoami /groups
 ```
@@ -113,7 +151,8 @@ Start the proxy first in a second elevated host window with the host Python reco
 `host.json`:
 `& <host_python> -I .\tools\native-e2e\host\egress-proxy.py --listen 192.168.250.1`.
 Windows PowerShell 5.1 does not read `https_proxy` by itself, hence `-Proxy`; the runner and
-Python do. Pass only when the host, the LAN address and example.com fail, api.github.com succeeds and
+Python do. Pass only when the host, the LAN address, example.com and the activation host
+(from `activation-allowlist.txt`, which runs never load) fail, api.github.com succeeds and
 `whoami /groups` lists no Administrators group. Record the output with addresses replaced by
 `<lan>`. Then stop the proxy, shut the VM down and revert it to `clean` in Hyper-V Manager
 (or start the next run, which reverts it).
@@ -128,7 +167,8 @@ Python do. Pass only when the host, the LAN address and example.com fail, api.gi
    .\tools\native-e2e\host\Invoke-NativeE2eRun.ps1
    ```
 
-   It checks the switch, the absence of NAT and the adapter ACLs, reverts the VM to `clean`,
+   It checks the switch, the absence of NAT, the adapter ACLs and the licence expiry (see
+   [The 90-day rebuild](#the-90-day-rebuild)), reverts the VM to `clean`,
    starts [`egress-proxy.py`](../tools/native-e2e/host/egress-proxy.py), starts the VM, waits
    for the Hyper-V heartbeat, requests a one-job JIT runner configuration with your `gh` login
    (labels `self-hosted`, `windows`, `win11-native-e2e`) and copies it into the guest with
@@ -152,12 +192,27 @@ A changed screenshot is signed off later from the run summary and `compare/appli
 
 ## The 90-day rebuild
 
-The evaluation image expires 90 days after the build; the image id starts with the build date
-(`yyyyMMdd-…`). Rebuild before then with `New-NativeE2eImage.ps1 -Replace` and a current
-evaluation ISO, record the new image values (S-04) and check the isolation again (E-01). The
-image is kept until the next rebuild (teardown T-03). After a rebuild the first SHOT row is
-expected to be `pending` until you accept a screenshot from the new image. Runs are refused
-while the image is expired because the runner never comes online.
+An evaluation image expires 90 days after its activation; `image.json` records the date as
+`licence_expires`. `Invoke-NativeE2eRun.ps1` reads it before it touches the VM:
+
+- **14 days or fewer left:** the run goes ahead with a warning naming the date. Plan the
+  rebuild now.
+- **Date passed** (or `image.json` has no evaluation expiry, for example an image built
+  before the licence record): the run is refused before the VM starts, as an infrastructure
+  fault with exit code 1. Nothing is reverted or started.
+
+Rebuild runbook:
+
+1. Download a current Windows 11 Enterprise evaluation ISO (S-01).
+2. From an elevated PowerShell in an up-to-date checkout run
+   `New-NativeE2eImage.ps1 -Replace -IsoPath <iso> -VbCablePackage <zip>`. It deletes the old
+   VM and its disk, builds and activates the new image and prints the new expiry.
+3. Record the new image values (S-04) and check the isolation again (E-01).
+4. The first SHOT row after a rebuild is expected to be `pending` until you accept a
+   screenshot from the new image.
+
+The image is kept until the next rebuild (teardown T-03). A `-LicenceSource key` image is
+rebuilt only when the recipe changes.
 
 ## Diagnostic: `-NoRevert`
 
@@ -182,6 +237,16 @@ stops the build or the run instead of passing silently.
 - The integration-service ids of the guest service interface and the heartbeat, the stored
   `Protocol` value of the allow ACL (`6` or `TCP`), the unscoped values of the deny ACLs and
   the OOBE skip settings behave as written in the scripts.
+- **Activation hosts** (contract §7.4): `activation-allowlist.txt` holds the well-known
+  Windows activation, licensing and sign-in host names. The first build's
+  `activation-proxy.log` shows every host the guest asked for; a refused Microsoft host is
+  added by pull request, as an exact name. The activation client is assumed to use the
+  WinHTTP proxy, and the evaluation's remaining time is assumed to be readable as
+  `GracePeriodRemaining` after activation.
+- **CRL/OCSP over plain HTTP:** activation may also fetch certificate revocation data
+  (CRL/OCSP) over plain HTTP, which the CONNECT-only proxy refuses (logged as a refusal). If
+  activation fails, this is the first suspect; it is not allowed silently: a fix needs a
+  reviewed change to the contract and the proxy.
 - Spec section 9: WFP events 5156/5157 name the interpreter path (item 1); blocking the base
   interpreter blocks the app started from the image environment (item 2); VB-Cable installs
   with at most one consent click (item 3); the Actions artifact hosts fit the allow-list, as
@@ -192,6 +257,8 @@ stops the build or the run instead of passing silently.
 | Symptom | Cause and action |
 | --- | --- |
 | The build stops at "guest provisioning" | Open the VM console. A visible VB-Cable prompt needs your confirmation. Otherwise read `C:\ProgramData\lianiq-native-e2e\logs\<image-id>\provision.log` after the timeout; the script names the failed step. Fix the cause and rebuild with `-Replace`. |
+| The build stops in step `activation` | Read `activation-proxy.log` under `logs\<image-id>`. A refused activation host or a plain-HTTP CRL/OCSP request is the usual cause (see [Assumptions checked at first build](#assumptions-checked-at-first-build)). For `key`, check that the key matches the ISO's edition. Fix it and rebuild with `-Replace`. |
+| "Infrastructure fault: the evaluation licence expired" | Follow [The 90-day rebuild](#the-90-day-rebuild). |
 | `pip download` fails | A locked wheel is missing for Windows x64 / Python 3.12, or the network failed. Rerun the build; a changed lock is fixed by pull request, never by unpinning. |
 | "The VM adapter ACLs differ" or "A NetNat covers …" | The network no longer matches the recipe. Remove the extra NAT or rebuild the image; never run with a routed or opened network. |
 | "the runner did not come online within 10 minutes" | Infrastructure fault. Check the proxy log for refusals and the guest log `C:\ProgramData\lianiq-e2e\state\runner-logon.log`. You may start the host script once more. If GitHub rejects an outdated runner version, rebuild the image. |
@@ -214,7 +281,9 @@ stops the build or the run instead of passing silently.
   gateway and no DNS server. The proxy relays only HTTPS `CONNECT` to port 443 for host names
   in `egress-allowlist.txt`, resolves them on the host, refuses private, loopback and
   link-local addresses and logs every refusal. There is no TLS interception, no host share
-  and no clipboard or drive redirection (blocked by policy in the guest).
+  and no clipboard or drive redirection (blocked by policy in the guest). Only during the
+  image build does the proxy load `activation-allowlist.txt` instead (Microsoft activation
+  hosts only); runs never load it.
 - **Privileges:** the test user `e2e` is not an administrator. Admin actions go only through
   the SYSTEM admin helper ([`admin-helper.ps1`](../tools/native-e2e/guest/admin-helper.ps1)),
   which executes exactly `firewall-block-app <path>`, `firewall-unblock-app` and
