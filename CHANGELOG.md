@@ -22,6 +22,11 @@ All notable user-visible changes are documented here.
   allow-list, takes `-LicenceSource evaluation|key` (the key is typed only on the VM console),
   and `Invoke-NativeE2eRun.ps1` refuses runs on an expired evaluation image and warns 14 days
   ahead.
+- The dispatch-only `native-e2e` workflow and `python -m native_e2e run|verify` run the S, C-03,
+  C-04, E-12, screenshot and cleanup rows on the native-e2e VM for an exact commit, block
+  commits outside the repository's branches, and upload the hashed evidence only after a
+  redaction gate; the application itself is unchanged. The image carries a pinned,
+  hash-checked MinGit (GPLv2, used only inside the test VM) on the runner's `PATH` only.
 
 ### Changed
 
