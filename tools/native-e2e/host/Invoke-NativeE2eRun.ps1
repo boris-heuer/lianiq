@@ -69,16 +69,9 @@ function Remove-Runner([string]$RunnerId) {
 }
 
 function Start-EgressProxy($State, [string]$LogFile) {
-    $proxyScript = Join-Path $PSScriptRoot 'egress-proxy.py'
-    $arguments = @('-I', "`"$proxyScript`"", '--listen', $State.host_address, '--port', $State.proxy_port,
-        '--allowlist', "`"$(Join-Path $PSScriptRoot 'egress-allowlist.txt')`"", '--log', "`"$LogFile`"")
-    $process = Start-Process -FilePath $State.host_python -ArgumentList $arguments -PassThru -WindowStyle Hidden
-    Wait-NativeE2eCondition {
-        if ($process.HasExited) { throw 'The egress proxy exited; see its log.' }
-        @(Get-NetTCPConnection -LocalAddress $State.host_address -LocalPort $State.proxy_port `
-                -State Listen -ErrorAction SilentlyContinue).Count -gt 0
-    } 30 1 'egress proxy listening'
-    return $process
+    # Runs only ever use the GitHub-only list.
+    return Start-NativeE2eEgressProxy $State.host_python $State.host_address $State.proxy_port `
+        (Join-Path $PSScriptRoot 'egress-allowlist.txt') $LogFile
 }
 
 function Stop-Guest([string]$VmName) {
@@ -162,6 +155,15 @@ if (-not (Get-VMSnapshot -VMName $vm -Name $script:NativeE2eCheckpoint -ErrorAct
     throw "Checkpoint '$($script:NativeE2eCheckpoint)' is missing; rebuild the image."
 }
 Assert-NativeE2eNetwork $state
+$licence = Get-NativeE2eLicenceState (Read-NativeE2eImage $StateRoot) (Get-Date).ToUniversalTime()
+if ($licence.Kind -eq 'expired' -or $licence.Kind -eq 'unknown') {
+    $why = if ($licence.Kind -eq 'expired') { "the evaluation licence expired on $($licence.Expires)" } else { 'image.json has no evaluation expiry' }
+    Write-NativeE2eStep "FAILED: Infrastructure fault: $why. Rebuild the image (docs/native-e2e-setup.md, The 90-day rebuild)."
+    exit 1
+}
+if ($licence.Kind -eq 'warn') {
+    Write-Warning "The evaluation licence expires on $($licence.Expires) ($($licence.DaysLeft) days left); rebuild the image soon (docs/native-e2e-setup.md, The 90-day rebuild)."
+}
 
 $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMddHHmmss')
 $logDir = Join-Path $StateRoot 'logs'
