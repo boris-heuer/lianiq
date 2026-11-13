@@ -15,6 +15,9 @@ All notable user-visible changes are documented here.
   `scripts/capture_readme_screenshot.py --evidence <folder>` writes a screenshot of every enabled
   workspace at 850×560, 1120×720, 1280×720 and 1440×900 to a local folder, with generic devices
   and no transcript, and prints the SHA-256 of each file.
+- `docs/native-e2e-setup.md` and the `tools/native-e2e/` scripts build a disposable, GitHub-only
+  Windows 11 evaluation VM on a maintainer's Hyper-V host for automated native checks; the
+  application itself is unchanged.
 
 ### Changed
 
