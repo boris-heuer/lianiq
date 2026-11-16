@@ -136,6 +136,20 @@ function Write-Json([string]$Path, $Value) {
         (New-Object Text.UTF8Encoding $false))
 }
 
+function Get-ActiveEndpointName([string]$Flow) {
+    # Endpoint description (PKEY_Device_DeviceDesc) of every active endpoint of one flow. As
+    # in the app, an endpoint without these values is skipped (a missing value throws).
+    $base = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\$Flow"
+    foreach ($endpoint in @(Get-ChildItem -LiteralPath $base -ErrorAction SilentlyContinue)) {
+        try {
+            $state = Get-ItemPropertyValue -LiteralPath $endpoint.PSPath -Name 'DeviceState'
+            if (-not ($state -band 1)) { continue }
+            Get-ItemPropertyValue -LiteralPath (Join-Path $endpoint.PSPath 'Properties') `
+                -Name '{a45c254e-df1c-4efd-8020-67d146a850e0},2'
+        } catch { }
+    }
+}
+
 function Assert-Signed([string]$Path) {
     $signature = Get-AuthenticodeSignature -LiteralPath $Path
     if ($signature.Status -ne 'Valid') { throw "Authenticode signature is not valid: $Path" }
@@ -255,14 +269,19 @@ try {
         Assert-Signed $setupExe
         Write-Host 'Installing VB-Cable. If Windows asks to trust the driver publisher, confirm it in the VM console.'
         Start-Process -FilePath $setupExe -ArgumentList @('-i', '-h') -Wait | Out-Null
-        $deadline = (Get-Date).AddMinutes(15)
+        # The endpoint names the app reads (lianiq.audio.windows_endpoints); the Plug and Play
+        # name can differ ("Speakers (VB-Audio Virtual Cable)" for CABLE Input).
+        $deadline = (Get-Date).AddMinutes(5)
         do {
-            $endpoints = @(Get-PnpDevice -Class 'AudioEndpoint' -PresentOnly -ErrorAction SilentlyContinue |
-                Where-Object { $_.FriendlyName -like 'CABLE Input*' -or $_.FriendlyName -like 'CABLE Output*' })
-            if ($endpoints.Count -ge 2) { break }
-            Start-Sleep -Seconds 5
-        } while ((Get-Date) -lt $deadline)
-        if ($endpoints.Count -lt 2) { throw 'VB-Cable endpoints CABLE Input and CABLE Output are missing.' }
+            $render = @(Get-ActiveEndpointName 'Render')
+            $capture = @(Get-ActiveEndpointName 'Capture')
+            $found = ($render -ccontains 'CABLE Input') -and ($capture -ccontains 'CABLE Output')
+            if (-not $found) { Start-Sleep -Seconds 5 }
+        } while (-not $found -and (Get-Date) -lt $deadline)
+        if (-not $found) {
+            throw ("VB-Cable endpoints CABLE Input and CABLE Output are missing (active render: '" +
+                ($render -join "', '") + "'; active capture: '" + ($capture -join "', '") + "').")
+        }
     }
 
     $phrase = $null
