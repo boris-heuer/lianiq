@@ -1,22 +1,39 @@
 """Row order of one run (CAP-0174 spec §2.2.1 step 4, §2.3; contract §5).
 
-S-01 → S-02 → S-03 → (S-04 window opens) → S-05 → C-04 → [E-01 → E-11 → E-03 → E-10, WI-04]
-→ E-12 → C-03 → SHOT → (S-04 window closes, S-04 recorded) → T-01..T-04.
+S-01 → S-02 → S-03 → (S-04 window opens) → S-05 → C-04 → E-01 → E-11 → E-03 → E-10
+→ E-12 → C-03 → SHOT → (app left open is closed; S-04 window closes, S-04 recorded)
+→ T-01..T-04.
 
 Rules: only a passing S-01 lets any later row run (fork commit, leftover marker). Without
-an S-03 backup the app rows do not run (CAP-0168: T-01 would be impossible); T rows still
-run. A row that raises is ``fail`` with the exception type only. Rows are never retried.
-The T rows run even when an earlier row raised. The UIA rows of WI-04 are not run yet, so
-the receipt reports them as open.
+an S-03 backup the app rows, UIA rows included, do not run (CAP-0168: T-01 would be
+impossible); T rows still run. A row that raises is ``fail`` with the exception type only.
+Rows are never retried. The T rows run even when an earlier row raised. A full run gives
+every Phase 1 row a status (AC-15).
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 
+from native_e2e import uia_app
 from native_e2e.context import RunContext
 from native_e2e.evidence.model import Row, Status
-from native_e2e.rows import c03, c04, e12, s01, s02, s03, s04, s05, shot, teardown
+from native_e2e.rows import (
+    c03,
+    c04,
+    e01,
+    e03,
+    e10,
+    e11,
+    e12,
+    s01,
+    s02,
+    s03,
+    s04,
+    s05,
+    shot,
+    teardown,
+)
 from native_e2e.rows.common import error_row
 
 
@@ -39,6 +56,10 @@ def _app_rows() -> tuple[tuple[str, Callable[[RunContext], Row]], ...]:
     return (
         ("S-05", s05.run),
         ("C-04", c04.run),
+        ("E-01", e01.run),
+        ("E-11", e11.run),
+        ("E-03", e03.run),
+        ("E-10", e10.run),
         ("E-12", e12.run),
         ("C-03", c03.run),
         ("SHOT", shot.run),
@@ -61,6 +82,10 @@ def execute(ctx: RunContext) -> dict[str, Row]:
                 for row_id, step in _app_rows():
                     rows[row_id] = _guard(row_id, step, ctx)
             finally:
+                try:
+                    uia_app.close_open(ctx)
+                except Exception:  # noqa: BLE001, S110 - the T rows and S-04 still run
+                    pass
                 rows["S-04"] = _guard("S-04", s04.finish, ctx)
     finally:
         for row in teardown.run(ctx):
