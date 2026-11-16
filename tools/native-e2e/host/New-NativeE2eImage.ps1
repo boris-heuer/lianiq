@@ -263,7 +263,16 @@ try {
         Write-NativeE2eStep 'PO step: when the guest opens the product key window, type your key in the VM console (Hyper-V Manager > Connect). Never paste it anywhere else.'
     }
     Start-VM -Name $VmName
-    Wait-NativeE2eCondition { (Get-VM -Name $VmName).State -eq 'Off' } ($ProvisionTimeoutMinutes * 60) 30 'guest provisioning'
+    # Ctrl+C (for example to copy text from this window) would end the build here and leave
+    # the guest unread; during the wait it is read as input instead. Closing the window ends it.
+    $ctrlC = $null
+    try { $ctrlC = [Console]::TreatControlCAsInput; [Console]::TreatControlCAsInput = $true } catch { $ctrlC = $null }
+    Write-NativeE2eStep 'Waiting for the guest to shut down (often 30 to 90 minutes); Ctrl+C is ignored until then.'
+    try {
+        Wait-NativeE2eCondition { (Get-VM -Name $VmName).State -eq 'Off' } ($ProvisionTimeoutMinutes * 60) 30 'guest provisioning' 10
+    } finally {
+        if ($null -ne $ctrlC) { [Console]::TreatControlCAsInput = $ctrlC }
+    }
 } finally {
     Stop-NativeE2eEgressProxy $activationProxy
     Write-NativeE2eStep 'Activation proxy stopped'
