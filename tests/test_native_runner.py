@@ -21,7 +21,6 @@ from native_e2e.evidence.sums import SUMS_NAME, write_sums
 from native_e2e.scrub import scrub
 
 COMMIT = "0123456789abcdef0123456789abcdef01234567"
-UIA_ROWS = ("E-01", "E-11", "E-03", "E-10")
 ENVIRONMENT = {
     "windows_build": "26100.4349",
     "image": "win11-native-e2e@20261113",
@@ -37,7 +36,7 @@ def make_row(row_id: str, status: Status = Status.PASS, reason: str | None = Non
 
 def fake_rows(monkeypatch, statuses=None, ids=None, write=None) -> None:
     statuses = statuses or {}
-    ids = ids if ids is not None else [r for r in PHASE1_ROWS if r not in UIA_ROWS]
+    ids = ids if ids is not None else PHASE1_ROWS
 
     def execute(ctx):
         ctx.state["environment"] = dict(ENVIRONMENT)
@@ -70,22 +69,39 @@ def test_run_writes_receipt_junit_sums_and_the_row_table(tmp_path, monkeypatch, 
     fake_rows(monkeypatch)
     out = tmp_path / "evidence"
 
-    code = run(out, "--capability", "CAP-0174", "--work-item", "WI-03")
+    code = run(out, "--capability", "CAP-0174", "--work-item", "WI-04")
 
     data = receipt(out)
-    assert validate(data) == [f"open: {row_id}" for row_id in UIA_ROWS]
+    assert validate(data) == []  # AC-15: every Phase 1 row has a status, none is open
     assert data["commit"] == COMMIT and data["workflow_run"] == "4242-1"
-    assert (data["capability"], data["work_item"]) == ("CAP-0174", "WI-03")
-    assert [row["id"] for row in data["rows"]] == [r for r in PHASE1_ROWS if r not in UIA_ROWS]
+    assert (data["capability"], data["work_item"]) == ("CAP-0174", "WI-04")
+    assert [row["id"] for row in data["rows"]] == list(PHASE1_ROWS)
     assert data["redaction_scan"]["status"] == "clean"
     assert data["redaction_scan"]["files_scanned"] >= 1
     assert (out / "junit.xml").is_file() and (out / SUMS_NAME).is_file()
-    assert code == 1  # open rows are neither pass nor pending
+    assert code == 0
     table = summary.read_text(encoding="utf-8")
     for row_id in PHASE1_ROWS:
         assert f"| {row_id} |" in table
-    assert "| E-01 | - | open |" in table
+    assert "| open |" not in table
     assert cli.main(["verify", str(out)]) == 0
+
+
+def test_a_missing_row_is_still_reported_open_and_makes_the_run_red(
+    tmp_path, monkeypatch, summary
+) -> None:
+    fake_rows(monkeypatch, ids=[r for r in PHASE1_ROWS if r != "E-10"])
+    out = tmp_path / "evidence"
+    assert run(out) == 1
+    assert validate(receipt(out)) == ["open: E-10"]
+    assert "| E-10 | - | open |" in summary.read_text(encoding="utf-8")
+
+
+def test_the_receipt_records_the_masked_screens(tmp_path, monkeypatch, summary) -> None:
+    fake_rows(monkeypatch, write=lambda ctx: ctx.state.update(screens_masked=5))
+    out = tmp_path / "evidence"
+    assert run(out) == 0
+    assert receipt(out)["redaction_scan"]["screens_masked"] == 5
 
 
 def test_run_exits_0_only_when_every_phase1_row_is_pass_or_pending(

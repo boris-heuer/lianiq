@@ -199,8 +199,9 @@ Open the run in lianiq › Actions › `native-e2e`. It shows **Review deploymen
 environment `native-e2e`. Check that the commit is the one you expect, then approve. Approve
 only runs that you or the requesting agent dispatched for a known commit; reject anything else.
 A changed screenshot is signed off later from the run summary and `compare/application-ui.png`.
-Until WI-04 adds the UIA rows, every run ends red (exit 1: rows E-01, E-11, E-03 and E-10
-are `open`); the artifact still uploads when the redaction gate passes.
+A run is green when every Phase 1 row is `pass` or `pending`. The UIA rows E-01, E-11, E-03
+and E-10 drive the real window: do not use the VM console while a run is going
+([native-e2e-rows.md](native-e2e-rows.md)).
 
 ## The 90-day rebuild
 
