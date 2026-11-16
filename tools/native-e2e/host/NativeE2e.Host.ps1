@@ -102,10 +102,19 @@ function Get-NativeE2eIntegrationService([string]$VmName, [string]$Id) {
 }
 
 function Wait-NativeE2eCondition([scriptblock]$Condition, [int]$TimeoutSeconds,
-        [int]$PollSeconds, [string]$What) {
-    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+        [int]$PollSeconds, [string]$What, [int]$ReportMinutes = 0) {
+    # ReportMinutes > 0 prints a progress line at that interval, so a long wait is not
+    # mistaken for a hang.
+    $start = Get-Date
+    $deadline = $start.AddSeconds($TimeoutSeconds)
+    $nextReport = $start.AddMinutes($ReportMinutes)
     while (-not (& $Condition)) {
         if ((Get-Date) -gt $deadline) { throw "Timed out after $TimeoutSeconds s: $What" }
+        if ($ReportMinutes -gt 0 -and (Get-Date) -ge $nextReport) {
+            Write-NativeE2eStep ('Still waiting for {0} ({1:N0} of at most {2:N0} min)' -f $What,
+                ((Get-Date) - $start).TotalMinutes, ($TimeoutSeconds / 60))
+            $nextReport = $nextReport.AddMinutes($ReportMinutes)
+        }
         Start-Sleep -Seconds $PollSeconds
     }
 }
