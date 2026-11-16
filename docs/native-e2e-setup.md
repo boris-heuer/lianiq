@@ -95,7 +95,8 @@ What the script does:
 
 **PO step during the build:** if Windows asks whether to trust the VB-Audio driver publisher,
 open the VM console (Hyper-V Manager › `lianiq-native-e2e` › **Connect**) and confirm it. The
-build waits up to 15 minutes for the two cable endpoints `CABLE Input` and `CABLE Output`.
+build waits up to 5 minutes for the active endpoints `CABLE Input` and `CABLE Output`. While
+the guest provisions, Ctrl+C is ignored, so copying text cannot end the build.
 
 **Record the image (e2e plan S-04):** copy the printed image id, Windows build and host OS
 build into the capability's `verification-report.md`. The same values stay in
