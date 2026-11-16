@@ -212,7 +212,7 @@ try {
     }
 
     Invoke-Step 'folders' {
-        foreach ($folder in $Bin, $Models, 'admin\requests', 'admin\results', 'jit', 'state') {
+        foreach ($folder in 'bin', 'models', 'admin\requests', 'admin\results', 'jit', 'state') {
             New-Item -ItemType Directory -Path (Join-Path $Root $folder) -Force | Out-Null
         }
         # Users read the root; only SYSTEM and Administrators write it (bin, models, image.json).
