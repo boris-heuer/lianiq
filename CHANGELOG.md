@@ -6,6 +6,10 @@ All notable user-visible changes are documented here.
 
 ### Added
 
+- Native E2E UIA rows E-01, E-11, E-03 and E-10 (`native_e2e/rows/`, `native_e2e/audio.py`):
+  the real window through UI Automation and the virtual cable, transcripts stored as SHA-256
+  only and endpoint names masked in every screenshot before it is written; a full run now gives
+  every Phase 1 row a status. Runbook: `docs/native-e2e-rows.md`.
 - A sanitized application screenshot, repository-owned Markdown link validation, and a fail-closed
   Windows audio troubleshooting matrix.
 - A Call Bridge compatibility matrix that separates design compatibility, real-call evidence, and
