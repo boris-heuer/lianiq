@@ -204,3 +204,42 @@ def test_guest_folder_loops_join_only_relative_names_onto_the_root() -> None:
     for items, _body in joined:
         for item in (part.strip() for part in items.split(",")):
             assert re.fullmatch(r"'[a-z]+(\\[a-z]+)*'", item), item
+
+
+def test_vb_cable_step_checks_the_endpoint_names_the_app_reads() -> None:
+    # The first VB-Cable build failed: Plug and Play names the render endpoint
+    # "Speakers (VB-Audio Virtual Cable)", while the audio endpoint itself is "CABLE Input".
+    from lianiq.audio.windows_endpoints import DEVICE_DESCRIPTION_PROPERTY
+
+    source = code(GUEST / "provision.ps1")
+    step = source[
+        source.index("Invoke-Step 'vb-cable'") : source.index("Invoke-Step 'test-phrase'")
+    ]
+    assert "Get-PnpDevice" not in step and "FriendlyName" not in step
+    assert "$render -ccontains 'CABLE Input'" in step
+    assert "$capture -ccontains 'CABLE Output'" in step
+    reader = source[source.index("function Get-ActiveEndpointName") :]
+    reader = reader[: reader.index("\n}\n") + 3]
+    assert r"MMDevices\Audio\$Flow" in reader
+    assert "-Name 'DeviceState'" in reader and "if (-not ($state -band 1)) { continue }" in reader
+    assert f"-Name '{DEVICE_DESCRIPTION_PROPERTY}'" in reader
+    # On Windows PowerShell 5.1 a missing value throws whatever -ErrorAction says, so every
+    # value read sits in a try block whose catch skips the endpoint.
+    body = reader[reader.index("try {") : reader.index("} catch { }")]
+    assert body.count("Get-ItemPropertyValue") == 2 and "-ErrorAction" not in body
+
+
+def test_the_image_build_wait_survives_ctrl_c_and_reports_progress() -> None:
+    source = code(HOST / "New-NativeE2eImage.ps1")
+    wait = source[source.index("Start-VM -Name $VmName") : source.index("Activation proxy stopped")]
+    assert "[Console]::TreatControlCAsInput = $true" in wait
+    restore = "if ($null -ne $ctrlC) { [Console]::TreatControlCAsInput = $ctrlC }"
+    assert wait.index("} finally {") < wait.index(restore)  # restored in the finally path
+    assert "'guest provisioning' 10" in wait
+    helper = code(HOST / "NativeE2e.Host.ps1")
+    loop = helper[helper.index("function Wait-NativeE2eCondition") :]
+    loop = loop[: loop.index("\n}\n")]
+    assert "[int]$ReportMinutes = 0" in loop
+    report = "if ($ReportMinutes -gt 0 -and (Get-Date) -ge $nextReport) {"
+    assert report in loop and loop.index(report) < loop.index("Still waiting for")
+    assert "$nextReport = $nextReport.AddMinutes($ReportMinutes)" in loop
