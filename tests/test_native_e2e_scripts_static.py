@@ -192,3 +192,15 @@ def test_the_setup_doc_covers_every_ac20_topic() -> None:
         "egress-allowlist.txt",
     ):
         assert topic in text, topic
+
+
+def test_guest_folder_loops_join_only_relative_names_onto_the_root() -> None:
+    # Join-Path with an absolute child gives "C:\root\C:\..." and the guest build stops in
+    # step 'folders' ("The given path's format is not supported"), seen at the first build.
+    source = code(GUEST / "provision.ps1")
+    loops = re.findall(r"foreach \(\$(\w+) in ([^)]*)\) \{([^}]*)\}", source)
+    joined = [(items, body) for name, items, body in loops if f"Join-Path $Root ${name}" in body]
+    assert joined, "the folders loop is no longer found"
+    for items, _body in joined:
+        for item in (part.strip() for part in items.split(",")):
+            assert re.fullmatch(r"'[a-z]+(\\[a-z]+)*'", item), item
