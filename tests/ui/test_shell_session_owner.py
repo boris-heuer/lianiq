@@ -60,9 +60,11 @@ def test_qt_free_modules_never_import_pyside6() -> None:
     assert result.returncode == 0, result.stderr
 
 
-def test_ac03_registry_lists_six_entries_in_spec_order_with_settings_last() -> None:
+def test_ac03_registry_lists_seven_entries_in_spec_order_with_settings_last() -> None:
+    # CAP-0177 AC-29: Meeting is second and enabled; the other six keep order and state.
     assert [(item.id, item.label, item.state) for item in DEFAULT_ENTRIES] == [
         (WorkspaceId.CONVERSATION, "Conversation", EntryState.ENABLED),
+        (WorkspaceId.MEETING, "Meeting", EntryState.ENABLED),
         (WorkspaceId.TEXT_TRANSLATION, "Text translation", EntryState.PLANNED),
         (WorkspaceId.LISTEN, "Listen & translate", EntryState.PLANNED),
         (WorkspaceId.CALL_BRIDGE, "Call Bridge", EntryState.EXPERIMENTAL),
@@ -71,6 +73,7 @@ def test_ac03_registry_lists_six_entries_in_spec_order_with_settings_last() -> N
     ]
     assert [item.id.value for item in DEFAULT_ENTRIES] == [
         "conversation",
+        "meeting",
         "text-translation",
         "listen-and-translate",
         "call-bridge",
@@ -175,6 +178,21 @@ def test_a_stopper_that_does_not_report_back_still_ends_the_session() -> None:
     owner.request_start(CONVERSATION)
     owner.stop()
     assert calls == ["stop"] and owner.state is SessionState.IDLE and owner.active is None
+
+
+def test_an_asynchronous_stopper_keeps_the_session_stopping_until_it_reports_idle() -> None:
+    # CAP-0177: the meeting drains after Stop; nothing else may start until it reports idle.
+    owner, calls = ActiveSessionOwner(), []
+    owner.register(WorkspaceId.MEETING, lambda: calls.append("stop"), asynchronous=True)
+    generation = owner.request_start(WorkspaceId.MEETING)
+    owner.mark_running(generation)
+    owner.stop()
+    assert calls == ["stop"] and owner.state is SessionState.STOPPING
+    assert owner.busy_for(WorkspaceId.CONVERSATION) is WorkspaceId.MEETING
+    with pytest.raises(SessionBusy, match="Stop the Meeting session first"):
+        owner.request_start(WorkspaceId.CALL_BRIDGE)
+    owner.mark_idle(generation)
+    assert owner.state is SessionState.IDLE and owner.busy_for(WorkspaceId.CONVERSATION) is None
 
 
 def test_stale_generations_change_nothing() -> None:
