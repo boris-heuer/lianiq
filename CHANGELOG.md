@@ -12,6 +12,14 @@ All notable user-visible changes are documented here.
   default or a chosen microphone) and the output for German speech with its headset mark, and
   whether the table microphone is muted while Lianiq speaks Mandarin (Simplified). **Start
   meeting** stays disabled and lists every missing model or device and any device conflict.
+- A running **Meeting**: the table's Mandarin (Simplified) appears as German "Table" lines and
+  your recognised German as "You" lines, in speech-end order, with *Translating…* until a line
+  is ready. Per input the strip shows the level, *Listening*, *Muted while speaking …* or
+  *Device lost*, and how many other-language contributions were ignored; it says when
+  translation falls behind (nothing is lost). **Speak German for me** can be switched while
+  the meeting runs; a lost device gets a persistent notice and no other device is used. **End
+  meeting** offers to save a text transcript in both languages, only if something was
+  translated; audio is never saved.
 - Native E2E UIA rows E-01, E-11, E-03 and E-10 (`native_e2e/rows/`, `native_e2e/audio.py`):
   the real window through UI Automation and the virtual cable, transcripts stored as SHA-256
   only and endpoint names masked in every screenshot before it is written; a full run now gives

@@ -71,3 +71,27 @@ def test_an_engine_failure_withdraws_the_contribution_and_the_worker_continues(
     assert wait_until(lambda: len(controller.results) == 1)
     assert len(harness.events.of(Kind.WITHDRAWN)) == 1
     assert "category=stt_failure" in caplog.text
+
+
+def test_a_capture_that_fails_to_stop_still_stops_the_other_and_drains(meeting) -> None:
+    """``stop`` stops both captures and drains even if one capture's stop raises (WI-05)."""
+    from lianiq.ui.shell.session_owner import SessionState
+
+    harness = meeting(SCRIPT)
+    controller = harness.controller
+    controller.start()
+    harness.recognizer.hold = hold = threading.Event()
+    say(controller, USER, 20)
+    say(controller, USER, 21)
+    table = controller.captures[TABLE]
+
+    def broken_stop() -> None:
+        raise RuntimeError("PortAudio refused")
+
+    table.stop = broken_stop
+    threading.Timer(0.2, hold.set).start()
+    assert controller.stop(timeout=5.0)
+    assert not controller.captures[USER].running
+    assert len(controller.results) == 2  # drained before STOPPED
+    assert [event.kind for event in harness.events.items][-1] is Kind.STOPPED
+    assert harness.owner.state is SessionState.IDLE

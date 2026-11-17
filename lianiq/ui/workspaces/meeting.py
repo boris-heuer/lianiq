@@ -19,8 +19,10 @@ while the meeting holds it (AC-19).
 page's asynchronous stopper (F9, **End meeting**, closing) runs it on a worker thread, and
 the session stays *stopping* until ``STOPPED`` (or a failed drain) reaches the GUI thread,
 which then marks it idle; until then every other start is refused (AC-19). The
-controller's ``mark_idle`` and its events reach the GUI thread through queued signals. The running view,
-the status strip and the end-of-meeting dialog are WI-05.
+controller's ``mark_idle``, its events and the input levels reach the GUI thread through
+queued signals (the ``UiBridge`` hand-off pattern). The running view and the status strip
+are ``meeting_running`` (WI-05), device loss and the end-of-meeting dialog
+``meeting_notices``. **Speak {language} for me** can change while the meeting runs (AC-05).
 """
 
 from __future__ import annotations
@@ -45,14 +47,19 @@ from lianiq.ui.shell.workspaces import session_busy_message
 from lianiq.ui.workspaces.meeting_devices import CONFLICT_ROLES, MeetingDevices
 from lianiq.ui.workspaces.meeting_layout import MeetingLayout
 from lianiq.ui.workspaces.meeting_lifecycle import MEETING, MeetingLifecycle
+from lianiq.ui.workspaces.meeting_notices import MeetingEnd
+from lianiq.ui.workspaces.meeting_running import MeetingRunning
 
 if TYPE_CHECKING:
     from lianiq.ui.main_window import MainWindow
 
 
-class MeetingWorkspace(MeetingLayout, MeetingDevices, MeetingLifecycle, QObject):
+class MeetingWorkspace(
+    MeetingLayout, MeetingDevices, MeetingLifecycle, MeetingRunning, MeetingEnd, QObject
+):
     models_ready = Signal(int, bool, str)  # start generation, ready, error message
     meeting_event = Signal(object)  # MeetingEvent, from the capture and worker threads
+    meeting_level = Signal(object, float)  # input role, level, from the capture threads
     owner_idle = Signal(int)  # the controller's mark_idle, from the stopping thread
 
     def __init__(self, host: MainWindow) -> None:
@@ -66,6 +73,7 @@ class MeetingWorkspace(MeetingLayout, MeetingDevices, MeetingLifecycle, QObject)
         self._pending: SessionPair | None = None
         self.models_ready.connect(self._models_ready)
         self.meeting_event.connect(self._event)
+        self.meeting_level.connect(self.show_level)
         self.owner_idle.connect(self.owner.mark_idle)
         self.owner.register(MEETING, self.stop_meeting, asynchronous=True)
         self.owner.subscribe(self._session_changed)
@@ -154,7 +162,8 @@ class MeetingWorkspace(MeetingLayout, MeetingDevices, MeetingLifecycle, QObject)
         speech_reason = self.missing_text(speech_missing)
         checkbox = self.speak_local_checkbox
         checkbox.blockSignals(True)
-        checkbox.setEnabled(not busy and availability is not None and not speech_missing)
+        settling = self.starting or self.stopping  # switchable while running (AC-05)
+        checkbox.setEnabled(not settling and availability is not None and not speech_missing)
         checkbox.setChecked(self.config.meeting.speak_local and not speech_missing)
         checkbox.setToolTip(speech_reason)
         checkbox.setAccessibleDescription(speech_reason)
@@ -183,6 +192,19 @@ class MeetingWorkspace(MeetingLayout, MeetingDevices, MeetingLifecycle, QObject)
 
     def _speak_local_toggled(self, on: bool) -> None:
         self.config.meeting.speak_local = on
+        if self.controller is None or self.stopping:
+            return
+        try:
+            self.controller.set_speak_local(on)
+        except ValueError:  # no German output of its own in this meeting: revert, say why
+            self.config.meeting.speak_local = False
+            checkbox = self.speak_local_checkbox
+            checkbox.blockSignals(True)
+            checkbox.setChecked(False)
+            checkbox.blockSignals(False)
+            reason = _conflict_text(EndpointConflict.LOCAL_IS_TABLE, self.language_names()[0])
+            checkbox.setToolTip(reason)
+            checkbox.setAccessibleDescription(reason)
 
     def _table_mode_chosen(self, mode: TableInputDuringOutput) -> None:
         self.config.meeting.table_input_during_output = mode.value  # used at the next Start

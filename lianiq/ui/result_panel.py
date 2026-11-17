@@ -110,3 +110,14 @@ class ResultPanel(QWidget):
         kept = scroll_bar.value()
         self.text.appendPlainText(line)
         scroll_bar.setValue(scroll_bar.maximum() if self.follow else kept)
+
+    def replace_text(self, text: str) -> None:
+        """Replace the whole text (the Meeting running view), following like ``append_line``.
+
+        A placeholder line can become its translation anywhere in the text; while *follow* is
+        on the view moves to the end, otherwise it stays where the user left it.
+        """
+        scroll_bar = self.text.verticalScrollBar()
+        kept = scroll_bar.value()
+        self.text.setPlainText(text)
+        scroll_bar.setValue(scroll_bar.maximum() if self.follow else kept)

@@ -213,8 +213,13 @@ class MeetingController(ContributionProcessing):
         worker = self._worker
         if worker is None:
             return True
-        for role in _CAPTURE_ORDER:
-            self._captures[role].stop()
+        for role in _CAPTURE_ORDER:  # a failing stop must not keep the other input open
+            try:
+                self._captures[role].stop()
+            except Exception as exc:  # noqa: BLE001 - external capture adapter boundary.
+                LOGGER.error(
+                    "Meeting capture stop failed: role=%s %s", role.value, type(exc).__name__
+                )
         self._stopping.set()
         worker.join(timeout)
         drained = not worker.is_alive()

@@ -43,6 +43,9 @@ MEETING_SAVE_FAILED = "The transcript could not be saved: {reason}"
 # Not in the §7 table (proposed §7 addendum): the reason of the start-failed notice when the
 # window was built without the controller factory ``lianiq.app`` registers.
 MEETING_NO_CONTROLLER = "No meeting controller is configured in this build"
+# Not in the §7 table (proposed §7 addendum, WI-05): the title and accessible name of the
+# running text view.
+MEETING_RUNNING_VIEW = "Meeting text"
 
 __all__ = [
     "MEETING_CONFLICT_LOCAL_IS_TABLE",
@@ -62,6 +65,7 @@ __all__ = [
     "MEETING_NO_CONTROLLER",
     "MEETING_OPTIONS_LOCKED",
     "MEETING_PENDING",
+    "MEETING_RUNNING_VIEW",
     "MEETING_SAVE",
     "MEETING_SAVE_FAILED",
     "MEETING_SAVE_PROMPT",

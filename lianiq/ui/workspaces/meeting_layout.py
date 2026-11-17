@@ -1,9 +1,10 @@
-"""The Meeting page: pair, devices, options and Start/End (CAP-0177 spec §2.1, §2.3).
+"""The Meeting page: setup, running view and Start/End (CAP-0177 spec §2.1, §2.3).
 
 ``MeetingWorkspace`` base (file-size split). Stock widgets only, styled by ``theme.py``; every
 control has an accessible name, and the Tab order follows the creation order: pair → devices
-→ options → **Start meeting** / **End meeting** (spec §2.3 "Accessibility"). The content
-scrolls; the Start/End row stays outside the scroll area (CAP-0168 spec §2.3.7). Labels that
+→ options → **Start meeting** → running view → **End meeting** (spec §2.3 "Accessibility").
+The setup scrolls; the status strip with the running view (``meeting_running``) and the
+Start/End row stay outside the scroll area (CAP-0168 spec §2.3.7). Labels that
 name a language take the registry English name (``{language}``), never a literal.
 """
 
@@ -59,8 +60,12 @@ class MeetingLayout:
         self.availability_label.setWordWrap(True)
         column.addWidget(self.availability_label)
         column.addStretch(1)
-        layout.addWidget(workspace_scroll(content), 1)
+        layout.addWidget(workspace_scroll(content), 3)
+        layout.addWidget(self.build_running(), 2)
         layout.addWidget(self._session_actions())
+        # Keyboard order: … Start → running view → End (spec §2.3 "Accessibility").
+        QWidget.setTabOrder(self.start_button, self.running_view.text)
+        QWidget.setTabOrder(self.running_view.text, self.end_button)
         self.name_languages()
         return page
 
