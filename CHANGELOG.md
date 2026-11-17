@@ -6,6 +6,12 @@ All notable user-visible changes are documented here.
 
 ### Added
 
+- A **Meeting** workspace, the second sidebar entry (**Ctrl+2**; the shortcuts are now
+  **Ctrl+1** … **Ctrl+7** by position): choose the table speakerphone's microphone and speaker
+  (the other half of the same device is suggested), *Your microphone* (follows the Windows
+  default or a chosen microphone) and the output for German speech with its headset mark, and
+  whether the table microphone is muted while Lianiq speaks Mandarin (Simplified). **Start
+  meeting** stays disabled and lists every missing model or device and any device conflict.
 - Native E2E UIA rows E-01, E-11, E-03 and E-10 (`native_e2e/rows/`, `native_e2e/audio.py`):
   the real window through UI Automation and the virtual cable, transcripts stored as SHA-256
   only and endpoint names masked in every screenshot before it is written; a full run now gives
