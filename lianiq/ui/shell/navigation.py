@@ -7,7 +7,7 @@ label; the description adds the state. Below 1000 logical px window width the si
 ≈ 56 px icon rail: the labels move to the tooltips, the accessible names stay.
 
 Keyboard: click, Space or Enter selects; Up/Down move the focus within the list (skipping
-planned entries); ``MainWindow`` binds Ctrl+1…Ctrl+6 to ``select_index``.
+planned entries); ``MainWindow`` binds Ctrl+1…Ctrl+7 to ``select_index`` by position.
 """
 
 from __future__ import annotations
@@ -32,6 +32,7 @@ RAIL_WIDTH = 56
 RAIL_BELOW = 1000
 ICONS = {
     WorkspaceId.CONVERSATION: QStyle.StandardPixmap.SP_MediaVolume,
+    WorkspaceId.MEETING: QStyle.StandardPixmap.SP_DesktopIcon,
     WorkspaceId.TEXT_TRANSLATION: QStyle.StandardPixmap.SP_FileDialogContentsView,
     WorkspaceId.LISTEN: QStyle.StandardPixmap.SP_MediaPlay,
     WorkspaceId.CALL_BRIDGE: QStyle.StandardPixmap.SP_DriveNetIcon,
@@ -120,7 +121,7 @@ class NavigationSidebar(QFrame):
         return True
 
     def select_index(self, index: int) -> bool:
-        """Ctrl+1…Ctrl+6: select entry ``index`` (0-based); planned entries are ignored."""
+        """Ctrl+1…Ctrl+7: select entry ``index`` (0-based); planned entries are ignored."""
         if not 0 <= index < len(self.entries):
             return False
         return self.select(self.entries[index].id)
