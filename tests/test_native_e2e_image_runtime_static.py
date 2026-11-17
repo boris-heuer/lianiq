@@ -1,14 +1,19 @@
 """Static checks of the native-e2e image runtime inputs (CAP-0174 WI-04).
 
 The image build and guest provisioning act on Hyper-V and a VM, so they never run here:
-these checks pin the Visual C++ runtime the guest needs and the failure message of the
-test-phrase step.
+these checks pin the Visual C++ runtime the guest needs, the failure message of the
+test-phrase step and the licence query's retry while the licensing service stops.
 """
 
 from __future__ import annotations
 
+import base64
 import re
+import shutil
+import subprocess
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 HOST = ROOT / "tools" / "native-e2e" / "host"
@@ -69,3 +74,61 @@ def test_a_test_phrase_failure_names_its_stderr() -> None:
     assert "Invoke-NativeCaptured $FilePath $FilePath $Arguments | Out-Null" in native
     assert "& $FilePath" not in native
     assert helper.endswith("\n    return $output")  # the test phrase reads the JSON line from it
+
+
+def licence_query_run(failures: int) -> list[str]:
+    """Run the guest's Get-WindowsLicence against a stub that fails ``failures`` times."""
+    exe = shutil.which("powershell") or shutil.which("pwsh")
+    if exe is None:
+        pytest.skip("PowerShell is not installed")
+    source = (GUEST / "provision.ps1").read_text(encoding="utf-8")
+    function = source[source.index("function Get-WindowsLicence") :]
+    function = function[: function.index("\n}\n") + 3]
+    stopping = (
+        "The Software Licensing Service reported that the operation cannot be completed "
+        "because the service is stopping."
+    )
+    body = f"""
+    $ErrorActionPreference = 'Stop'
+    $WindowsAppId = 'app'
+    $script:calls = 0
+    function Start-Sleep {{ }}
+    function Get-CimInstance {{
+        $script:calls++
+        if ($script:calls -le {failures}) {{ throw '{stopping}' }}
+        [pscustomobject]@{{ LicenseStatus = 1 }}
+    }}
+    {function}
+    try {{ 'status=' + (Get-WindowsLicence).LicenseStatus }} catch {{ 'error=' + $_.Exception.Message }}
+    'calls=' + $script:calls
+    """
+    encoded = base64.b64encode(body.encode("utf-16-le")).decode("ascii")
+    completed = subprocess.run(
+        [
+            exe,
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-EncodedCommand",
+            encoded,
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=120,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    return [line for line in completed.stdout.splitlines() if "=" in line]
+
+
+def test_the_licence_query_rides_out_a_stopping_licensing_service() -> None:
+    # The third build failed in step activation: sppsvc stops itself when idle, and the
+    # licence query outside the Activate retry loop hit it while it was stopping.
+    assert licence_query_run(2) == ["status=1", "calls=3"]
+    assert licence_query_run(0) == ["status=1", "calls=1"]
+    outcome = licence_query_run(99)
+    assert outcome[0].startswith("error=") and "service is stopping" in outcome[0]
+    assert outcome[1] == "calls=6"  # bounded: about a minute, then the step fails
