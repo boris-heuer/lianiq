@@ -266,7 +266,9 @@ stops the build or the run instead of passing silently.
   reviewed change to the contract and the proxy.
   Git in the job does hit this: MinGit's schannel backend checks revocation online, so the
   workflow sets `http.schannelCheckRevoke=false` for the job (first run: `CRYPT_E_REVOCATION_OFFLINE`
-  at checkout). The chain is still verified and the proxy allow-list is unchanged.
+  at checkout). git applies that setting only when `http.sslBackend` is set, which MinGit's system
+  config does not do, so the job also sets `http.sslBackend=schannel` (second run: same error
+  without it). The chain is still verified and the proxy allow-list is unchanged.
 - Spec section 9: WFP events 5156/5157 name the interpreter path (item 1); blocking the base
   interpreter blocks the app started from the image environment (item 2); VB-Cable installs
   with at most one consent click (item 3); the Actions artifact hosts fit the allow-list, as
