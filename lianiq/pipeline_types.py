@@ -35,6 +35,12 @@ class Synthesizer(Protocol):
     def synthesize(self, text: str, language: LanguageId) -> Path: ...
 
 
+class PcmSynthesizer(Protocol):
+    """In-memory synthesis (CAP-0177 meeting): PCM16 mono samples and rate, no file."""
+
+    def synthesize_pcm(self, text: str, language: LanguageId) -> tuple[np.ndarray, int]: ...
+
+
 @dataclass(frozen=True, slots=True)
 class AdapterFactories:
     """Adapter constructors, each called at most once and only when a mode requires it."""
