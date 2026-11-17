@@ -17,7 +17,7 @@ never retried.
 
 | Row | Steps | Evidence |
 |---|---|---|
-| E-01 | Starts the app; reads the six sidebar entries, their order, selection, enabled state and description; checks that Conversation shows no Call Bridge control, Model profile, CUDA box or hardware subtitle; checks with psutil that no app process has a file under `models\` open or mapped before **Start** | Checks; `screens/e01-conversation.png` |
+| E-01 | Starts the app; reads the seven sidebar entries (Meeting second, enabled), their order, selection, enabled state and description; checks that Conversation shows no Call Bridge control, Model profile, CUDA box or hardware subtitle; checks with psutil that no app process has a file under `models\` open or mapped before **Start** | Checks; `screens/e01-conversation.png` |
 | E-11 | Writes `config/settings.local.json` from `native_e2e/data/legacy-settings.template.json` with `audio.input_device` set to the PortAudio index of "CABLE Output"; starts the app; waits for "Microphone set to '…' from your previous settings"; closes the app; reads the migrated keys | `name_matches` (never the name); `screens/e11-migration-notice.png` |
 | E-03 | Checks the test phrase WAV against `image.json`; in Settings › Audio devices selects "CABLE Output" as Microphone; in Conversation unticks *Voice output*; **Start** (F8); plays the WAV into "CABLE Input"; waits for a turn in *Original* and *Translation* that two consecutive reads agree on; visits every enabled workspace; presses F9 in Settings; returns to Conversation | `name_matches` for the Microphone (never the name); transcript SHA-256 (never the text); `screens/e03-running.png`, `screens/e03-after.png` |
 | E-10 | Settings › Diagnostics › **Export…**: types the path into the save dialog's file-name field (`AutomationId` 1148) and presses Enter, first to `%TEMP%\lianiq-e2e\diagnostics-E10.txt`, then into `%TEMP%\lianiq-e2e\ro\`, whose ACL denies the test user writes (`icacls`) | Forbidden pattern classes found (none on a pass); whether the second dialog closed (`dialog-closed`); `screens/e10-export-failed.png` |
@@ -52,7 +52,7 @@ and both transcript panels are black rectangles. Run `python -m native_e2e verif
 
 | Symptom | First thing to check |
 |---|---|
-| E-01 `sidebar-six-entries-in-order` fails with 0 entries | The window was not reachable through UI Automation: the app did not start, or the console session was locked |
+| E-01 `sidebar-seven-entries-in-order` fails with 0 entries | The window was not reachable through UI Automation: the app did not start, or the console session was locked |
 | E-11 `migration-notice-shown` times out | The cable is missing or renamed (T-02 also fails), or the app did not read `settings.local.json` |
 | E-03 `turn-in-original-and-translation` times out | Spec assumption 4: the German model did not recognise the Piper phrase through the cable |
 | E-03 `microphone-cable-selected` or `voice-output-off` fails | The cable is missing from the Microphone list (T-02 also fails), or *Voice output* did not react to the click; the row does not press **Start** then |
