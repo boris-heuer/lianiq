@@ -6,13 +6,10 @@
 .DESCRIPTION
     Runs once as the built-in Administrator (answer file FirstLogonCommands) on the inputs
     New-NativeE2eImage.ps1 copied to C:\ProgramData\lianiq-e2e\setup; no network except
-    activation. Installs the VC++ runtime, Python 3.12, the locked wheels, the models,
-    VB-Cable, the test phrase, the runner (not a service), MinGit (on PATH for the runner
-    only), the admin helper, the logon task and WFP auditing; creates the non-admin
-    auto-logon user 'e2e', activates Windows via the host's build-only proxy (WinHTTP proxy
-    reset in finally; for licence 'key' the PO types the key on the VM console), writes
-    image.json, disables the build account, deletes the answer file and shuts down. The
-    host takes checkpoint 'clean' and reads setup\provision-result.json.
+    activation. Installs the VC++ runtime, Python, wheels, models, VB-Cable, the test phrase,
+    the runner, MinGit, the admin helper, the logon task and WFP auditing; creates the
+    non-admin auto-logon user 'e2e', activates Windows via the host's build-only proxy,
+    writes image.json, disables the build account, deletes the answer file and shuts down.
 #>
 [CmdletBinding()]
 param(
@@ -38,7 +35,7 @@ $SidAdministrators = '*S-1-5-32-544'
 $SidUsers = '*S-1-5-32-545'
 # Audit subcategory "Filtering Platform Connection" (events 5156/5157), locale independent.
 $WfpConnectionAudit = '{0CCE9226-69AE-11D9-BED3-505054503030}'
-# Application id of Windows in the Software Licensing Service.
+# Windows in the Software Licensing Service.
 $WindowsAppId = '55c92734-d682-4d71-983e-d6ec3f16059f'
 $script:Step = 'start'
 
@@ -64,7 +61,7 @@ function Invoke-NativeCaptured([string]$Name, [string]$FilePath, [string[]]$Argu
 }
 
 function Invoke-Netsh([string[]]$Arguments) {
-    # netsh is native: a local 'Continue' keeps its output from turning into errors.
+    # Native: a local 'Continue' keeps its output from turning into errors.
     $ErrorActionPreference = 'Continue'
     & netsh.exe @Arguments | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "netsh $($Arguments -join ' ') exited with code $LASTEXITCODE" }
@@ -73,7 +70,12 @@ function Invoke-Netsh([string[]]$Arguments) {
 function Get-WindowsLicence {
     # Status, channel and grace period only; no part of the product key is read or logged.
     $filter = "ApplicationID='$WindowsAppId' AND LicenseIsAddon=False AND PartialProductKey IS NOT NULL"
-    $products = @(Get-CimInstance -ClassName SoftwareLicensingProduct -Filter $filter)
+    # sppsvc stops when idle; a query during the stop fails: retry.
+    for ($try = 1; ; $try++) {
+        try { $products = @(Get-CimInstance -ClassName SoftwareLicensingProduct -Filter $filter); break }
+        catch { if ($try -ge 6) { throw }; Write-Host "Licence query $try failed: $($_.Exception.Message)" }
+        Start-Sleep -Seconds 10
+    }
     if ($products.Count -ne 1) { throw "Expected one installed Windows licence, found $($products.Count)." }
     return $products[0]
 }
