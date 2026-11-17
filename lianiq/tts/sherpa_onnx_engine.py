@@ -148,6 +148,22 @@ class SherpaOnnxEngine:
 
     def synthesize(self, text: str, language: str) -> Path:
         """Synthesize ``text`` to a PCM16 mono WAV temp file, peak-normalised to 0.9."""
+        pcm, sample_rate = self.synthesize_pcm(text, language)
+        with tempfile.NamedTemporaryFile(prefix="lianiq-", suffix=".wav", delete=False) as handle:
+            output = Path(handle.name)
+        try:
+            with wave.open(str(output), "wb") as wav_file:
+                wav_file.setnchannels(1)
+                wav_file.setsampwidth(2)
+                wav_file.setframerate(sample_rate)
+                wav_file.writeframes(pcm.tobytes())
+            return output
+        except Exception:
+            output.unlink(missing_ok=True)
+            raise
+
+    def synthesize_pcm(self, text: str, language: str) -> tuple[np.ndarray, int]:
+        """Synthesize ``text`` in memory: PCM16 mono samples, peak-normalised to 0.9, and rate."""
         tts = self._load(language)
         language_id = self.registry.get(language).id
         with self._lock:
@@ -159,15 +175,4 @@ class SherpaOnnxEngine:
         if peak > 0.0:
             samples = samples * (PEAK_LEVEL / peak)
         pcm = (np.clip(samples, -1.0, 1.0) * 32767.0).astype("<i2")
-        with tempfile.NamedTemporaryFile(prefix="lianiq-", suffix=".wav", delete=False) as handle:
-            output = Path(handle.name)
-        try:
-            with wave.open(str(output), "wb") as wav_file:
-                wav_file.setnchannels(1)
-                wav_file.setsampwidth(2)
-                wav_file.setframerate(int(audio.sample_rate))
-                wav_file.writeframes(pcm.tobytes())
-            return output
-        except Exception:
-            output.unlink(missing_ok=True)
-            raise
+        return pcm, int(audio.sample_rate)
