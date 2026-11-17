@@ -51,6 +51,12 @@ jobs:
       NATIVE_E2E_WORK_ITEM: ${{ inputs.work_item }}
       NATIVE_E2E_CANARY: ${{ inputs.plant_redaction_canary }}
       NATIVE_E2E_IMAGE_JSON: C:\ProgramData\lianiq-e2e\image.json
+      # MinGit's schannel asks the CA's CRL/OCSP servers, which the guest cannot reach (the
+      # CONNECT-only proxy allows no plain HTTP): skip only that revocation lookup. The chain is
+      # still checked against the Windows roots, and the proxy allows the GitHub hosts only.
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: http.schannelCheckRevoke
+      GIT_CONFIG_VALUE_0: "false"
 
     steps:
       - name: Check the inputs and the runner tools
