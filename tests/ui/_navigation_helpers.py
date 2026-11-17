@@ -17,7 +17,12 @@ from tests._spy_window import build_window
 from tests.ui._language_helpers import submit, transcript, wait_until
 
 PLANNED = (WorkspaceId.TEXT_TRANSLATION, WorkspaceId.LISTEN, WorkspaceId.LANGUAGE_PACKS)
-ENABLED = (WorkspaceId.CONVERSATION, WorkspaceId.CALL_BRIDGE, WorkspaceId.SETTINGS)
+ENABLED = (
+    WorkspaceId.CONVERSATION,
+    WorkspaceId.MEETING,
+    WorkspaceId.CALL_BRIDGE,
+    WorkspaceId.SETTINGS,
+)
 
 
 # The explicit name keeps the fixture "window" for test modules importing this function.
