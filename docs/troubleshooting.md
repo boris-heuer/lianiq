@@ -55,7 +55,7 @@ the full name, host API and channel count, never an endpoint ID.
   screen or with large text, the workspace scrolls or wraps its rows; **Start**, **Stop** and the
   session strip stay in view.
 - Below 1000 px window width the sidebar becomes an icon rail. The labels move to the tooltips;
-  the accessible names stay the same. **Ctrl+1** … **Ctrl+6** select the sidebar entries in
+  the accessible names stay the same. **Ctrl+1** … **Ctrl+7** select the sidebar entries in
   order (planned entries are ignored).
 - Text sizes follow Windows text scaling ("Make text bigger") and display scaling. With Windows
   high contrast on, Lianiq uses the system colours instead of its own.
