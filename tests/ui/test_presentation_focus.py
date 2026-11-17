@@ -1,7 +1,7 @@
-"""AC-28 (UI AND UIA): Tab order, focus outline, Ctrl+1…6 and focus return (CAP-0168 WI-05).
+"""AC-28 (UI AND UIA): Tab order, focus outline, Ctrl+1…7 and focus return (CAP-0168 WI-05).
 
 UI: Tab runs sidebar → workspace → session strip and wraps; Shift+Tab goes back; every
-focused Tab stop draws the 2 px focus outline (read from the rendered pixels); Ctrl+1…6
+focused Tab stop draws the 2 px focus outline (read from the rendered pixels); Ctrl+1…7
 select the enabled entries; focus returns to the invoking control after the export dialogs
 and after switching back to a workspace. UIA: the same Tab stops through Qt's accessibility
 interface (what the UI Automation bridge reads): focused state, a name, and the window's
@@ -145,19 +145,19 @@ def test_ac28_ctrl_number_and_focus_returns_after_switching_back(window) -> None
     control = Qt.KeyboardModifier.ControlModifier
     window.swap_button.setFocus()
     assert wait_until(lambda: focused() is window.swap_button)
-    press(focused(), Qt.Key.Key_6, control)
+    press(focused(), Qt.Key.Key_7, control)
     assert window.current_workspace() is SETTINGS
     settings_value = window.model_profile_field
     settings_value.setFocus()
-    press(focused(), Qt.Key.Key_4, control)
+    press(focused(), Qt.Key.Key_5, control)
     assert window.current_workspace() is CALL_BRIDGE
-    press(focused(), Qt.Key.Key_2, control)  # planned: ignored
+    press(focused(), Qt.Key.Key_3, control)  # planned: ignored
     assert window.current_workspace() is CALL_BRIDGE
 
     press(focused(), Qt.Key.Key_1, control)
     assert window.current_workspace() is CONVERSATION
     assert focused() is window.swap_button  # the control that invoked the switch
-    press(focused(), Qt.Key.Key_6, control)
+    press(focused(), Qt.Key.Key_7, control)
     assert focused() is settings_value
 
     # Switching from the sidebar keeps focus in the sidebar.
