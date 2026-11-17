@@ -2,7 +2,9 @@
 
 After the turn it navigates to every enabled workspace, stops the session with the session
 strip's **Stop (F9)** from Settings and returns to Conversation; the transcript and the pair
-must be unchanged (spec VoR-01, E2E C-03). Needs the provisioned models (D-01).
+must be unchanged (spec VoR-01, E2E C-03). The sidebar must list seven entries and open the
+Meeting page with **Start meeting** (CAP-0177 E2E C-02); no meeting is started. Needs the
+provisioned models (D-01).
 """
 
 from __future__ import annotations
@@ -71,12 +73,20 @@ def main() -> int:
         """Visit every enabled workspace, Stop from Settings, return to Conversation."""
         transcript = window.source_text.toPlainText()
         pair = window.pair_combo.currentText()
-        for workspace in (WorkspaceId.CALL_BRIDGE, WorkspaceId.SETTINGS):
+        if len(window.navigation.buttons) != 7:
+            print(f"FAIL navigation: {len(window.navigation.buttons)} sidebar entries", flush=True)
+            application.exit(8)
+            return
+        for workspace in (WorkspaceId.MEETING, WorkspaceId.CALL_BRIDGE, WorkspaceId.SETTINGS):
             window.navigation.buttons[workspace].click()
             application.processEvents()
             if window.current_workspace() is not workspace or not window.stop_button.isVisible():
                 print(f"FAIL navigation: {workspace.value} without the session strip", flush=True)
                 application.exit(5)
+                return
+            if workspace is WorkspaceId.MEETING and not window.meeting.start_button.isVisible():
+                print("FAIL navigation: Meeting without Start meeting", flush=True)
+                application.exit(9)
                 return
         window.stop_button.click()  # Stop (F9) in the session strip, from Settings
         application.processEvents()
@@ -93,7 +103,11 @@ def main() -> int:
             print("FAIL navigation: transcript or pair changed", flush=True)
             application.exit(7)
             return
-        print("PASS navigation: Stop from Settings; transcript and pair unchanged", flush=True)
+        print(
+            "PASS navigation: seven sidebar entries, Meeting opened, Stop from Settings; "
+            "transcript and pair unchanged",
+            flush=True,
+        )
         outcome["code"] = 0
         QTimer.singleShot(500, application.quit)
 
