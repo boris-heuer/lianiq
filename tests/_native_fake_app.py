@@ -21,6 +21,7 @@ CABLE = "CABLE Output (VB-Audio Virtual Cable)"
 PLANNED = "Planned — not available yet"
 SIDEBAR = (
     ("Conversation", True, ""),
+    ("Meeting", True, ""),
     ("Text translation", False, PLANNED),
     ("Listen & translate", False, PLANNED),
     ("Call Bridge", True, "Experimental"),
@@ -135,7 +136,7 @@ class FakeApp:
                 Node(f"Information: {title}", "Group", rect=NOTICE_RECT, parents=top),
                 Node(title, "Text", rect=NOTICE_RECT, parents=(*top, "Notices")),
             ]
-        out += getattr(self, f"_{self.page.split()[0].lower()}")(top)
+        out += getattr(self, f"_{self.page.split()[0].lower()}", lambda _: [])(top)
         out += self.extra
         return [node for node in out if node.name not in self.missing]
 
