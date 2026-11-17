@@ -2,8 +2,8 @@
 
 The real window, pywinauto and VB-Cable exist only in the VM image; ``tests/_native_fake_app``
 stands in for them. These tests pin the pass rules of contract §5: E-01 passes only with the
-six entries in order and state, nothing removed shown in Conversation and no model file
-open before Start; E-11 passes only with the migration notice naming the cable (stored as
+seven entries in order and state (CAP-0177: Meeting second), nothing removed shown in
+Conversation and no model file open before Start; E-11 passes only with the migration notice naming the cable (stored as
 ``name_matches``, never the name) and the migrated keys after the close.
 """
 
@@ -52,7 +52,7 @@ def test_e01_passes_on_the_shell_at_launch_and_closes_the_app(ctx, monkeypatch) 
     assert row.status is Status.PASS, row.checks
     assert row.method is Method.NATIVE and row.acs == ("AC-11",)
     assert [check.name for check in row.checks] == [
-        "sidebar-six-entries-in-order",
+        "sidebar-seven-entries-in-order",
         "conversation-selected",
         "planned-entries-disabled-with-description",
         "call-bridge-experimental",
@@ -74,19 +74,24 @@ def _swap(order, a, b):
 @pytest.mark.parametrize(
     ("knobs", "check"),
     [
-        ({"missing": {"Language packs"}}, "sidebar-six-entries-in-order"),
-        ({"missing": {"Settings"}}, "sidebar-six-entries-in-order"),
-        ({"sidebar": _swap(SIDEBAR, 1, 2)}, "sidebar-six-entries-in-order"),
+        ({"missing": {"Language packs"}}, "sidebar-seven-entries-in-order"),
+        ({"missing": {"Settings"}}, "sidebar-seven-entries-in-order"),
+        ({"missing": {"Meeting"}}, "sidebar-seven-entries-in-order"),
+        ({"sidebar": _swap(SIDEBAR, 1, 2)}, "sidebar-seven-entries-in-order"),
         (
-            {"sidebar": (SIDEBAR[0], ("Text translation", True, PLANNED), *SIDEBAR[2:])},
+            {"sidebar": (*SIDEBAR[:2], ("Text translation", True, PLANNED), *SIDEBAR[3:])},
             "planned-entries-disabled-with-description",
         ),
         (
-            {"sidebar": (SIDEBAR[0], ("Text translation", False, ""), *SIDEBAR[2:])},
+            {"sidebar": (*SIDEBAR[:2], ("Text translation", False, ""), *SIDEBAR[3:])},
             "planned-entries-disabled-with-description",
         ),
         (
-            {"sidebar": (*SIDEBAR[:3], ("Call Bridge", True, ""), *SIDEBAR[4:])},
+            {"sidebar": (SIDEBAR[0], ("Meeting", False, ""), *SIDEBAR[2:])},
+            "planned-entries-disabled-with-description",
+        ),
+        (
+            {"sidebar": (*SIDEBAR[:4], ("Call Bridge", True, ""), *SIDEBAR[5:])},
             "call-bridge-experimental",
         ),
         ({"extra": [Node("Model profile", "ComboBox")]}, "conversation-without-removed-controls"),
