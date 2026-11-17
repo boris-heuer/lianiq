@@ -14,6 +14,7 @@ from lianiq.conversation.routing import TurnRouter
 from lianiq.languages.capabilities import CapabilityCatalog, ReadinessProbe
 from lianiq.languages.registry import BUILTIN_REGISTRY, LanguageId, LanguageRegistry
 from lianiq.logging_setup import configure_logging
+from lianiq.meeting.controller import MeetingController, SharedEngines
 from lianiq.pipeline import AdapterFactories, TranslationPipeline
 from lianiq.stt.faster_whisper_engine import FasterWhisperEngine
 from lianiq.translation.glossary import Glossary
@@ -111,6 +112,29 @@ def build_pipeline(
     return pipeline
 
 
+def build_meeting_controller(
+    config: AppConfig, pipeline: TranslationPipeline, session, endpoints, options, owner, publish
+) -> MeetingController:
+    """The Meeting controller factory (CAP-0177): called only at **Start meeting**.
+
+    The engines are the pipeline's shared adapters, which ``prepare`` has just constructed and
+    warmed for requirement row 8; nothing else is loaded here.
+    """
+    engines = SharedEngines(
+        pipeline.speech_recognizer(), pipeline.text_translator(), pipeline.voice_synthesizer()
+    )
+    return MeetingController(
+        session,
+        endpoints,
+        options,
+        engines,
+        owner,
+        publish,
+        audio=config.audio,
+        detection_min_probability=config.languages.detection_min_probability,
+    )
+
+
 def report_settings_error(error: SettingsMigrationError) -> None:
     """Show why settings could not be loaded; no settings file is written."""
     message = (
@@ -153,7 +177,8 @@ def main() -> int:
     application = QApplication(sys.argv)
     application.setApplicationName("lianiq")
     pipeline = build_pipeline(config)
-    window = MainWindow(config, pipeline)
+    meeting_factory = partial(build_meeting_controller, config, pipeline)
+    window = MainWindow(config, pipeline, meeting_factory=meeting_factory)
     window.show()
     # 1280×720, or the largest size that fits the work area (CAP-0168 spec §2.2.1).
     window.fit_to_work_area(window.screen().availableGeometry())
