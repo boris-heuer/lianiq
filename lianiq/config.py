@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from lianiq.config_meeting import validate_meeting_config
 from lianiq.config_migration import (
     SCHEMA_VERSION,
     backup_legacy_settings,
@@ -200,6 +201,30 @@ class CallBridgeConfig:
 
 
 @dataclass(slots=True)
+class MeetingConfig:
+    """Meeting workspace settings (CAP-0177 contract.md §8), optional in schema v2.
+
+    Endpoints are stored by identity only. ``local_language`` must also be a member of the
+    session pair; ``SessionPair`` checks that when a meeting starts.
+    """
+
+    local_language: str = "de"
+    table_capture_endpoint_id: str | None = None
+    table_render_endpoint_id: str | None = None
+    user_input_policy: str = "follow_default"
+    user_input_endpoint_id: str | None = None  # used iff ``user_input_policy`` is explicit
+    local_output_endpoint_id: str | None = None
+    local_output_is_headset: bool = False  # fail-safe: unknown counts as a speaker
+    speak_local: bool = False
+    table_input_during_output: str = "mute"
+    guard_tail_ms: int = 300
+    max_playback_defer_ms: int = 5_000
+
+    def __post_init__(self) -> None:
+        validate_meeting_config(self)
+
+
+@dataclass(slots=True)
 class AppConfig:
     schema_version: int = SCHEMA_VERSION
     languages: LanguagesConfig = field(default_factory=LanguagesConfig)
@@ -209,6 +234,7 @@ class AppConfig:
     tts: TtsConfig = field(default_factory=TtsConfig)
     ui: UiConfig = field(default_factory=UiConfig)
     call_bridge: CallBridgeConfig = field(default_factory=CallBridgeConfig)
+    meeting: MeetingConfig = field(default_factory=MeetingConfig)
 
     def __post_init__(self) -> None:
         if self.schema_version != SCHEMA_VERSION:
@@ -240,6 +266,7 @@ class AppConfig:
             tts=TtsConfig(**raw.get("tts", {})),
             ui=UiConfig(**raw.get("ui", {})),
             call_bridge=CallBridgeConfig(**raw.get("call_bridge", {})),
+            meeting=MeetingConfig(**raw.get("meeting", {})),
         )
 
     def save(self, path: Path | None = None) -> None:
