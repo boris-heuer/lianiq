@@ -85,6 +85,7 @@ class DeviceWatch:
         change = self.state.check_identities()
         if not change.is_empty():
             self.host.post_notice(catalog.devices_changed(change.summary(), self.where()))
+        self.host.meeting.check_endpoints()  # a lost meeting endpoint (CAP-0177 AC-15)
         conversation = self.host.conversation
         if not conversation.capture.running:
             return
