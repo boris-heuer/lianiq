@@ -54,9 +54,13 @@ jobs:
       # MinGit's schannel asks the CA's CRL/OCSP servers, which the guest cannot reach (the
       # CONNECT-only proxy allows no plain HTTP): skip only that revocation lookup. The chain is
       # still checked against the Windows roots, and the proxy allows the GitHub hosts only.
-      GIT_CONFIG_COUNT: "1"
-      GIT_CONFIG_KEY_0: http.schannelCheckRevoke
-      GIT_CONFIG_VALUE_0: "false"
+      # git applies schannelCheckRevoke only when http.sslBackend is set, and MinGit's system
+      # config does not set it, so name schannel (already its default backend) explicitly.
+      GIT_CONFIG_COUNT: "2"
+      GIT_CONFIG_KEY_0: http.sslBackend
+      GIT_CONFIG_VALUE_0: schannel
+      GIT_CONFIG_KEY_1: http.schannelCheckRevoke
+      GIT_CONFIG_VALUE_1: "false"
 
     steps:
       - name: Check the inputs and the runner tools
