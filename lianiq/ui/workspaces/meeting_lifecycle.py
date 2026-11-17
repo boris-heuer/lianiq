@@ -2,13 +2,16 @@
 
 The controller is built here, only at Start, after the models are prepared; its ``stop()``
 runs on a worker thread (see ``meeting.py``). ``_ControllerOwner`` is the session owner as
-the controller sees it. The running view and the end-of-meeting dialog are WI-05.
+the controller sees it. Its events reach ``running_event`` (``meeting_running``) on the GUI
+thread; ``STOPPED`` ends the page's meeting, then offers the end-of-meeting dialog
+(``meeting_notices``).
 """
 
 from __future__ import annotations
 
 import logging
 import threading
+from functools import partial
 
 from PySide6.QtCore import Signal, Slot
 
@@ -18,6 +21,7 @@ from lianiq.ui import notice_catalog as catalog
 from lianiq.ui import strings
 from lianiq.ui.shell.session_owner import ActiveSessionOwner, SessionBusy
 from lianiq.ui.shell.workspaces import WorkspaceId
+from lianiq.ui.workspaces.meeting_notices import keys_resolved_by_meeting_start
 
 MEETING = WorkspaceId.MEETING
 LOGGER = logging.getLogger(__name__)
@@ -105,6 +109,9 @@ class MeetingLifecycle:
                 _ControllerOwner(self.owner, self._generation, self.owner_idle),
                 self.meeting_event.emit,
             )
+            for role, capture in self.controller.captures.items():  # the strip's level bars
+                capture.on_level = partial(self.meeting_level.emit, role)
+            self.reset_running(running=True)
             self.controller.start()
         except _NoController:
             reason = strings.MEETING_NO_CONTROLLER
@@ -115,6 +122,7 @@ class MeetingLifecycle:
             self._start_failed(catalog.start_failed(MEETING, str(exc), where, self.start_meeting))
         else:
             self.host.resolve_notices(catalog.keys_resolved_by_start(MEETING))
+            self.host.resolve_notices(keys_resolved_by_meeting_start())
             self.refresh()
             self.state_label.setText(strings.SESSION_RUNNING.format(mode=strings.NAV_MEETING))
 
@@ -130,6 +138,7 @@ class MeetingLifecycle:
     def _start_failed(self, notice) -> None:
         self.controller = None
         self.owner.mark_idle(self._generation)
+        self.reset_running(running=False)
         self.host.post_notice(notice)
         self.refresh()
 
@@ -167,11 +176,18 @@ class MeetingLifecycle:
 
     @Slot(object)
     def _event(self, event) -> None:
-        if event.kind is MeetingEventKind.STOPPED:
-            self.controller, self.stopping = None, False
-            self.owner.mark_idle(self._generation)  # drained: other modes may start now
-            self.refresh()
-            self.host.conversation.refresh_availability()
+        if event.kind is not MeetingEventKind.STOPPED:
+            if self.controller is not None:  # a late event of an ended meeting is ignored
+                self.running_event(event)
+            return
+        controller = self.controller
+        self.controller, self.stopping = None, False
+        self.owner.mark_idle(self._generation)  # drained: other modes may start now
+        self.reset_running(running=False)
+        self.refresh()
+        self.host.conversation.refresh_availability()
+        if controller is not None:  # after the drain: the end-of-meeting dialog (WI-05)
+            self.meeting_ended(controller)
 
 
 def _drain(controller, publish) -> None:
