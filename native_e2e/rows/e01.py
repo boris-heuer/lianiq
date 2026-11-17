@@ -1,8 +1,9 @@
 """E-01: the shell at launch in the real window (contract §5; CAP-0168 E-01, AC-03).
 
 Launch ``python -m lianiq`` (``QT_QPA_PLATFORM`` unset) and read the sidebar with pywinauto
-``backend="uia"``: six entries in order, Conversation selected, the planned entries disabled
-with the description "Planned — not available yet", Call Bridge marked "Experimental". The
+``backend="uia"``: seven entries in order (CAP-0177 adds Meeting second, enabled),
+Conversation selected, the planned entries disabled with the description "Planned — not
+available yet", Call Bridge marked "Experimental". The
 shown Conversation page has no Call Bridge control, Model profile, CUDA box or hardware
 subtitle (controls of hidden pages and the sidebar's own entries do not count). Before Start
 no app process has a file under the models folder open or mapped (psutil ``open_files()``
@@ -58,6 +59,7 @@ def _model_roots(ctx: RunContext) -> list[str]:
 def _sidebar_checks(entries, s) -> list[Check]:
     expected = [
         s.NAV_CONVERSATION,
+        s.NAV_MEETING,
         s.NAV_TEXT_TRANSLATION,
         s.NAV_LISTEN,
         s.NAV_CALL_BRIDGE,
@@ -78,7 +80,7 @@ def _sidebar_checks(entries, s) -> list[Check]:
     bridge = by.get(s.NAV_CALL_BRIDGE)
     return [
         check(
-            "sidebar-six-entries-in-order",
+            "sidebar-seven-entries-in-order",
             names == expected and tops == sorted(tops),
             f"{len(names)} entries",
         ),
@@ -109,7 +111,7 @@ def _removed_shown(nodes, s) -> list[str]:
 def _checks(ctx: RunContext, app: Any) -> tuple[list[Check], list]:
     s = ui.strings()
     try:
-        ui.wait_nodes(app, lambda nodes: len(ui.sidebar(nodes, s.NAV_REGION)) >= 6)
+        ui.wait_nodes(app, lambda nodes: len(ui.sidebar(nodes, s.NAV_REGION)) >= 7)
     except TimeoutError:
         pass  # the order check below records what is shown
     nodes = app.nodes()
