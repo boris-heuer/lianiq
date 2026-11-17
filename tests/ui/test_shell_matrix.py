@@ -136,7 +136,7 @@ def test_ac33_keyboard_only(tmp_path, spies, monkeypatch, request) -> None:  # n
         press(focused(), Qt.Key.Key_Tab)
     press(window.start_button, Qt.Key.Key_Space)
     assert wait_until(lambda: window.capture.running)
-    press(focused(), Qt.Key.Key_6, Qt.KeyboardModifier.ControlModifier)
+    press(focused(), Qt.Key.Key_7, Qt.KeyboardModifier.ControlModifier)
     assert window.current_workspace() is WorkspaceId.SETTINGS
     while focused() is not window.stop_button:
         press(focused(), Qt.Key.Key_Tab)

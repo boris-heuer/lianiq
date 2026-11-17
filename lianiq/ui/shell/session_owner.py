@@ -5,7 +5,10 @@ opens any stream; while another session is not idle the request raises ``Session
 ``stop()`` works from every workspace and calls the active mode's registered stopper.
 Each start gets a new generation, so a late ``mark_running``/``mark_idle`` of an older
 start changes nothing. The conversation mode wraps its ``SessionController`` gate: the
-owner records which mode holds the session, the controller keeps the bound pair.
+owner records which mode holds the session, the controller keeps the bound pair. A mode
+whose stop takes long (the CAP-0177 meeting drains its contributions) registers an
+asynchronous stopper: the session then stays *stopping* until the mode reports
+``mark_idle`` itself, so no other mode can start while it still holds its devices.
 
 All calls happen on the GUI thread; worker threads hand results over through ``UiBridge``.
 """
@@ -41,11 +44,22 @@ class ActiveSessionOwner:
         self.state = SessionState.IDLE
         self.generation = 0
         self._stoppers: dict[WorkspaceId, Callable[[], None]] = {}
+        self._asynchronous: set[WorkspaceId] = set()
         self._listeners: list[Listener] = []
 
-    def register(self, mode: WorkspaceId, stopper: Callable[[], None]) -> None:
-        """``stopper`` stops ``mode``'s session and reports ``mark_idle`` (synchronously)."""
+    def register(
+        self, mode: WorkspaceId, stopper: Callable[[], None], *, asynchronous: bool = False
+    ) -> None:
+        """``stopper`` stops ``mode``'s session and reports ``mark_idle``.
+
+        A synchronous stopper (the default) has stopped when it returns; an asynchronous one
+        only begins the stop and must call ``mark_idle`` when the session has ended.
+        """
         self._stoppers[mode] = stopper
+        if asynchronous:
+            self._asynchronous.add(mode)
+        else:
+            self._asynchronous.discard(mode)
 
     def request_start(self, mode: WorkspaceId) -> int:
         """Record ``mode`` as starting and return its new generation, or raise ``SessionBusy``."""
@@ -67,9 +81,12 @@ class ActiveSessionOwner:
             return
         generation = self.generation
         stopper = self._stoppers.get(self.active)
+        asynchronous = stopper is not None and self.active in self._asynchronous
         self._set(SessionState.STOPPING)
         if stopper is not None:
             stopper()
+        if asynchronous:
+            return  # the mode reports ``mark_idle`` once it has stopped
         # Stoppers are synchronous; a stopper that did not report back still ends the session.
         self.mark_idle(generation)
 

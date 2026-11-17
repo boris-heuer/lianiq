@@ -46,6 +46,7 @@ class MainWindowLayout:
         self.conversation.build(conversation_layout)
         self.workspace_pages = {
             WorkspaceId.CONVERSATION: conversation_page,
+            WorkspaceId.MEETING: self.meeting.build_page(),
             WorkspaceId.CALL_BRIDGE: self.call_bridge.build_page(),
             WorkspaceId.SETTINGS: self.settings.build_page(),
         }

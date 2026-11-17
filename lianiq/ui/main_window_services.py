@@ -58,7 +58,8 @@ class MainWindowServices:
 
     def session_locked(self) -> bool:
         conversation = self.conversation
-        return conversation.starting or conversation.capture.running or self.call_bridge.active()
+        running = conversation.starting or conversation.capture.running
+        return running or self.call_bridge.active() or self.meeting.active()
 
     def prepare_in_background(self, session: SessionPair, ready: Signal) -> None:
         self.start_generation += 1

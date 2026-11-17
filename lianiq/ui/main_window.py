@@ -8,8 +8,9 @@ established ``MainWindow`` attribute paths for scripts and tests.
 WI-02 shell (spec §2.3.1-§2.3.2): the navigation sidebar on the left, the workspace pages in
 a ``QStackedWidget`` and the session strip with **Stop (F9)** below them. The one
 ``ActiveSessionOwner`` allows one session across modes; F9 stops the active session from
-every workspace; Ctrl+1…Ctrl+6 select the enabled sidebar entries. Showing a page never
-starts or stops capture or playback.
+every workspace; Ctrl+1…Ctrl+7 select the enabled sidebar entries by position. Showing a
+page never starts or stops capture or playback. CAP-0177 adds the Meeting workspace, second;
+its controller is built at Start by ``meeting_factory`` (registered by ``lianiq.app``).
 
 WI-03 notices (spec §2.3.4): failures are persistent notices in the ``NoticeCenter``, shown
 by a ``NoticeBanner`` at the top of each workspace; the status bar only shows progress. Every
@@ -42,6 +43,7 @@ from lianiq.ui.shell.session_owner import ActiveSessionOwner, SessionState
 from lianiq.ui.shell.workspaces import DEFAULT_ENTRIES, WorkspaceId
 from lianiq.ui.workspaces.call_bridge import CallBridgeWorkspace
 from lianiq.ui.workspaces.conversation import ConversationWorkspace
+from lianiq.ui.workspaces.meeting import MeetingWorkspace
 from lianiq.ui.workspaces.settings import SettingsWorkspace
 
 DEFAULT_SIZE = (1280, 720)
@@ -109,11 +111,13 @@ class MainWindow(MainWindowLayout, MainWindowServices, QMainWindow):
         config: AppConfig,
         pipeline: TranslationPipeline,
         persist_settings: bool = True,
+        meeting_factory=None,
     ) -> None:
         super().__init__()
         self.config = config
         self.pipeline = pipeline
         self.persist_settings = persist_settings
+        self.meeting_factory = meeting_factory  # builds the MeetingController at Start
         self.bridge = UiBridge()
         self.bridge.error.connect(self.show_error)
         self.notices = NoticeCenter()
@@ -124,6 +128,7 @@ class MainWindow(MainWindowLayout, MainWindowServices, QMainWindow):
         self.session_owner = ActiveSessionOwner()
         self.conversation = ConversationWorkspace(self)
         self.call_bridge = CallBridgeWorkspace(self)
+        self.meeting = MeetingWorkspace(self)
         self.settings = SettingsWorkspace(self)
         self.device_setup = DeviceSetup(self)
 
@@ -139,6 +144,7 @@ class MainWindow(MainWindowLayout, MainWindowServices, QMainWindow):
         self.conversation.start_session_services()
         self.call_bridge_panel.set_models_ready(True)
         self.conversation.connect_selection()
+        self.meeting.connect_selection()
         if "--diagnostic-wav" in sys.argv:
             argument_index = sys.argv.index("--diagnostic-wav") + 1
             if argument_index >= len(sys.argv):
@@ -173,6 +179,8 @@ class MainWindow(MainWindowLayout, MainWindowServices, QMainWindow):
             self.navigation.select(workspace, notify=False)
         if workspace is WorkspaceId.SETTINGS:
             self.settings.refresh()
+        elif workspace is WorkspaceId.MEETING:
+            self.meeting.refresh()
         self.pages.setCurrentWidget(page)
         return True
 
@@ -248,6 +256,7 @@ class MainWindow(MainWindowLayout, MainWindowServices, QMainWindow):
     _conversation_session = staticmethod(ConversationWorkspace.conversation_session)
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        self.meeting.end_meeting()  # drains on its own thread; never blocks the close
         self.stop_call_bridge()
         self.stop_listening()
         if self.persist_settings:

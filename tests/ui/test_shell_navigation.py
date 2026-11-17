@@ -2,9 +2,10 @@
 
 pytest-qt style offscreen UI tests over spy adapters: AC-03 (sidebar order, Conversation
 shown, removed controls), AC-04 (planned entries) and keyboard navigation (Up/Down, Enter,
-Ctrl+1…6). AC-05, AC-08, the icon rail and the < 100 ms timing are in
-``test_shell_navigation_workspaces.py``; the shared helpers in ``_navigation_helpers.py``.
-The Native half of AC-03 is proven in WI-06.
+Ctrl+1…7). CAP-0177 (AC-29) adds Meeting as the seventh entry, second and enabled; the
+other six keep their order and state, and Ctrl+1…Ctrl+7 select entries by position. AC-05,
+AC-08, the icon rail and the < 100 ms timing are in ``test_shell_navigation_workspaces.py``;
+the shared helpers in ``_navigation_helpers.py``. The Native half of AC-03 is proven in WI-06.
 """
 
 from __future__ import annotations
@@ -36,11 +37,12 @@ from tests.ui.test_main_window_wi08_fixes import (  # noqa: F401 - autouse Segoe
 # AC-03 ------------------------------------------------------------------------------------
 
 
-def test_ac03_sidebar_lists_six_entries_in_order_with_settings_at_the_bottom(window) -> None:
+def test_ac03_sidebar_lists_seven_entries_in_order_with_settings_at_the_bottom(window) -> None:
     navigation = window.navigation
     buttons = [navigation.buttons[item.id] for item in DEFAULT_ENTRIES]
     assert [button.accessibleName() for button in buttons] == [
         "Conversation",
+        "Meeting",
         "Text translation",
         "Listen & translate",
         "Call Bridge",
@@ -135,8 +137,10 @@ def test_ac04_up_down_skip_planned_entries_and_enter_selects(window) -> None:
     assert wait_until(lambda: QApplication.focusWidget() is buttons[WorkspaceId.CONVERSATION])
 
     press(buttons[WorkspaceId.CONVERSATION], Qt.Key.Key_Down)
-    assert QApplication.focusWidget() is buttons[WorkspaceId.CALL_BRIDGE]
+    assert QApplication.focusWidget() is buttons[WorkspaceId.MEETING]
     assert window.current_workspace() is WorkspaceId.CONVERSATION  # moving does not select
+    press(buttons[WorkspaceId.MEETING], Qt.Key.Key_Down)
+    assert QApplication.focusWidget() is buttons[WorkspaceId.CALL_BRIDGE]
     press(buttons[WorkspaceId.CALL_BRIDGE], Qt.Key.Key_Down)
     assert QApplication.focusWidget() is buttons[WorkspaceId.SETTINGS]
     press(buttons[WorkspaceId.SETTINGS], Qt.Key.Key_Down)  # no wrap-around
@@ -151,15 +155,18 @@ def test_ac04_up_down_skip_planned_entries_and_enter_selects(window) -> None:
     assert not buttons[WorkspaceId.SETTINGS].isChecked()
 
 
-def test_ctrl_number_selects_enabled_entries(window) -> None:
+def test_ctrl_number_selects_enabled_entries_by_position(window) -> None:
     from PySide6.QtCore import Qt
 
     activate(window)
     control = Qt.KeyboardModifier.ControlModifier
     for key, expected in (
-        (Qt.Key.Key_6, WorkspaceId.SETTINGS),
-        (Qt.Key.Key_4, WorkspaceId.CALL_BRIDGE),
-        (Qt.Key.Key_2, WorkspaceId.CALL_BRIDGE),  # planned: ignored
+        (Qt.Key.Key_7, WorkspaceId.SETTINGS),
+        (Qt.Key.Key_5, WorkspaceId.CALL_BRIDGE),
+        (Qt.Key.Key_3, WorkspaceId.CALL_BRIDGE),  # planned: ignored
+        (Qt.Key.Key_2, WorkspaceId.MEETING),
+        (Qt.Key.Key_4, WorkspaceId.MEETING),  # planned: ignored
+        (Qt.Key.Key_6, WorkspaceId.MEETING),  # planned: ignored
         (Qt.Key.Key_1, WorkspaceId.CONVERSATION),
     ):
         press(window.focusWidget() or window, key, control)

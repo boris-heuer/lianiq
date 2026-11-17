@@ -21,7 +21,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from lianiq.ui.shell.workspaces import DEFAULT_ENTRIES, WorkspaceId
 
 AC29_SIZES = ((850, 560), (1120, 720), (1280, 720), (1440, 900))
-ENABLED = (WorkspaceId.CONVERSATION, WorkspaceId.CALL_BRIDGE, WorkspaceId.SETTINGS)
+ENABLED = (
+    WorkspaceId.CONVERSATION,
+    WorkspaceId.MEETING,  # CAP-0177: the seventh entry, second and enabled
+    WorkspaceId.CALL_BRIDGE,
+    WorkspaceId.SETTINGS,
+)
+SHOTS = len(ENABLED) * len(AC29_SIZES)
 LINE = re.compile(r"^(?P<digest>[0-9a-f]{64})  (?P<name>[^\s/\\]+\.png)$")
 
 
@@ -73,7 +79,7 @@ def test_evidence_mode_writes_one_png_per_enabled_workspace_and_size(evidence_ru
 
     assert code == 0
     files = sorted(path.name for path in folder.iterdir())
-    assert len(files) == len(ENABLED) * len(AC29_SIZES) == 12
+    assert len(files) == SHOTS == 16
     assert files == sorted(
         capture.evidence_name(workspace, width, height, grabs[0][3].devicePixelRatioF())
         for workspace in ENABLED
@@ -100,7 +106,7 @@ def test_printed_sha256_lines_match_the_written_files(evidence_run) -> None:
     _capture, _code, folder, out, _err, _grabs, _asset = evidence_run
 
     lines = out.strip().splitlines()
-    assert len(lines) == 12
+    assert len(lines) == SHOTS
     printed = {}
     for line in lines:
         match = LINE.match(line)
@@ -136,8 +142,8 @@ def test_no_transcript_text_endpoint_id_or_path_in_names_or_output(evidence_run)
         for item in forbidden:
             assert item not in text, item
     # The evidence window shows no held turn, so no transcript text is rendered either.
-    assert len(grabs) == 12
-    assert [held for *_rest, held in grabs] == [False] * 12
+    assert len(grabs) == SHOTS
+    assert [held for *_rest, held in grabs] == [False] * SHOTS
 
 
 def test_evidence_mode_restores_the_patches(evidence_run) -> None:

@@ -142,7 +142,7 @@ QPushButton#primaryButton {{ background: {c["primary"]}; border-color: {c["prima
 QPushButton:disabled, QComboBox:disabled, QPushButton#primaryButton:disabled {{
     color: {c["disabled_text"]}; background: {c["disabled_bg"]}; border-color: {c["muted"]};
     border-style: dashed; }}
-QCheckBox, QLabel#readOnlyValue {{ border: {f}px solid transparent; border-radius: 4px;
+QCheckBox, QRadioButton, QLabel#readOnlyValue {{ border: {f}px solid transparent; border-radius: 4px;
     padding: 1px; }}
 QProgressBar {{ background: {c["well"]}; border: 1px solid {c["muted"]}; border-radius: 5px; }}
 QProgressBar::chunk {{ background: {c["mint"]}; border-radius: 4px; }}
@@ -160,7 +160,8 @@ QPushButton:focus, QPushButton#primaryButton:focus, QComboBox:focus {{
     border: {f}px solid {c["focus"]};
     padding: {SPACING[1] - 1}px {SPACING[2] - 1}px; }}
 QPlainTextEdit:focus {{ border: {f}px solid {c["focus"]}; padding: {SPACING[2] - 1}px; }}
-QCheckBox:focus, QLabel#readOnlyValue:focus, QFrame#navigationSidebar QToolButton:focus,
+QCheckBox:focus, QRadioButton:focus, QLabel#readOnlyValue:focus,
+QFrame#navigationSidebar QToolButton:focus,
 QFrame#noticeBanner:focus, QFrame#heldTurnBar:focus {{ border: {f}px solid {c["focus"]}; }}
 """
 

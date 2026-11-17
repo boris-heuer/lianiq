@@ -178,10 +178,10 @@ selected.
 
 ### The window
 
-- **Sidebar.** Conversation, Text translation, Listen & translate, Call Bridge (marked
+- **Sidebar.** Conversation, Meeting, Text translation, Listen & translate, Call Bridge (marked
   "Experimental") and Language packs, with Settings at the bottom. Text translation, Listen &
   translate and Language packs are greyed out as "Planned" and cannot be opened yet. Click an
-  entry, move with Up/Down and press Space or Enter, or press **Ctrl+1** … **Ctrl+6**. Below 1000 px window
+  entry, move with Up/Down and press Space or Enter, or press **Ctrl+1** … **Ctrl+7**. Below 1000 px window
   width the sidebar becomes an icon rail with the labels in the tooltips.
 - **Session strip.** While a session starts, runs or stops, a strip below the workspace shows
   "Conversation running" (or "Call Bridge running") and **Stop (F9)**, in every workspace. Only

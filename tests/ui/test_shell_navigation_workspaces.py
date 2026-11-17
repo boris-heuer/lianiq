@@ -2,8 +2,8 @@
 
 Split from ``test_shell_navigation.py`` (spec §2.3.1, §2.3.3, §6.1): AC-05 (Call Bridge
 page), AC-08 (navigating away and back changes nothing), the icon rail below 1000 px and the
-< 100 ms navigation timing (§6.1, Should). The shared helpers are in
-``_navigation_helpers.py``.
+< 100 ms navigation timing (§6.1, Should), over the seven entries of CAP-0177 (Meeting
+second). The shared helpers are in ``_navigation_helpers.py``.
 """
 
 from __future__ import annotations
@@ -91,7 +91,8 @@ def test_ac08_navigating_away_and_back_keeps_turns_scroll_selection_and_pair(
         len(window.history),
     )
 
-    for workspace in (WorkspaceId.SETTINGS, WorkspaceId.CALL_BRIDGE, WorkspaceId.CONVERSATION):
+    workspaces = (WorkspaceId.SETTINGS, WorkspaceId.MEETING, WorkspaceId.CALL_BRIDGE)
+    for workspace in (*workspaces, WorkspaceId.CONVERSATION):
         click(window.navigation.buttons[workspace])
         assert window.current_workspace() is workspace
 
