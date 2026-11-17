@@ -11,6 +11,11 @@ Requirement table (IS §7; rows 4 and 6 are compositions of confirmed rows):
 | 5 | microphone / bidirectional / text | STT ``a``, ``b``, MT ``a>b``, ``b>a``, microphone |
 | 6 | microphone / bidirectional / spoken | row 5 + voice ``a``, ``b``, playback |
 | 7 | Call Bridge | STT ``a``, ``b``; MT ``a>b``, ``b>a``; voice ``a``, ``b``; call endpoints |
+| 8 | Meeting | STT ``a``, ``b``; MT ``a>b``, ``b>a``; voice of the table language; meeting endpoints |
+
+Row 8 is the CAP-0177 additive extension (meeting contract.md §6). The table language is
+``pair.other(local_language)``; the local-language voice and its output gate only the optional
+local speech (``meeting_local_speech_requirements``), never row 8.
 
 Typed / bidirectional is rejected by ``SessionPair`` with ``UnsupportedModeError``. Voice
 readiness never makes rows 1, 3 or 5 unavailable.
@@ -34,6 +39,11 @@ CALL_ENDPOINT_ROLES: tuple[str, ...] = (
     "local_headphones",
 )
 
+# The three meeting endpoints row 8 requires (``MeetingRole`` values, meeting contract.md §6).
+MEETING_ENDPOINT_ROLES: tuple[str, ...] = ("table_capture", "table_render", "user_capture")
+# The local-speech output: required only while local speech is on.
+MEETING_LOCAL_RENDER_ROLE = "local_render"
+
 # English defaults of the missing-requirement texts (contract.md §2.4).
 MISSING_RECOGNITION = "speech recognition {language}"
 MISSING_TRANSLATION = "translation {source} → {target}"
@@ -46,6 +56,10 @@ _DEVICE_LABELS = {
     "call_microphone_render": "call microphone endpoint",
     "call_speaker_capture": "call speaker endpoint",
     "local_headphones": "local headphones endpoint",
+    "table_capture": "table microphone",
+    "table_render": "table speaker",
+    "user_capture": "your microphone",
+    MEETING_LOCAL_RENDER_ROLE: "output for {language} speech",
 }
 
 
@@ -56,6 +70,7 @@ class RequirementKind(str, Enum):
     MICROPHONE = "microphone"
     PLAYBACK = "playback"
     CALL_ENDPOINTS = "call_endpoints"
+    MEETING_ENDPOINTS = "meeting_endpoints"
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +89,8 @@ class DeviceReadiness:
     microphone: bool = False
     playback: bool = False
     call_endpoints: frozenset[str] = field(default_factory=frozenset)  # assigned roles
+    # Assigned, non-conflicting meeting roles: a role in an ``EndpointConflict`` is left out.
+    meeting_endpoints: frozenset[str] = field(default_factory=frozenset)
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,12 +111,40 @@ def _voice(language: LanguageId) -> Requirement:
     return Requirement(RequirementKind.VOICE, language)
 
 
+def _meeting_endpoint(role: str) -> Requirement:
+    return Requirement(RequirementKind.MEETING_ENDPOINTS, role)
+
+
+def _local_language(session: SessionPair) -> LanguageId:
+    if not session.mode.meeting or session.local_language is None:
+        raise UnsupportedModeError("Meeting requirements need a meeting session pair")
+    return session.local_language
+
+
+def meeting_local_speech_requirements(session: SessionPair) -> tuple[Requirement, ...]:
+    """What the optional local speech needs; it gates only the speech switch, not row 8."""
+    return (
+        _voice(_local_language(session)),
+        _meeting_endpoint(MEETING_LOCAL_RENDER_ROLE),
+    )
+
+
 def ordered_requirements(session: SessionPair) -> tuple[Requirement, ...]:
     """The requirements of ``session`` in display order (models first, then devices)."""
     mode = session.mode
     if mode.input is InputKind.TYPED and mode.routing is RoutingKind.BIDIRECTIONAL:
         raise UnsupportedModeError("Typed input cannot use bidirectional routing")
     a, b = session.pair.members
+    if mode.meeting:
+        table_language = session.pair.other(_local_language(session))
+        return (
+            _recognition(a),
+            _recognition(b),
+            _translation(a, b),
+            _translation(b, a),
+            _voice(table_language),
+            *(_meeting_endpoint(role) for role in MEETING_ENDPOINT_ROLES),
+        )
     result: list[Requirement] = []
     if mode.routing is RoutingKind.FIXED:
         source = session.fixed_source
@@ -143,6 +188,8 @@ def is_met(requirement: Requirement, catalog: CapabilityCatalog, devices: Device
         return devices.microphone
     if kind is RequirementKind.PLAYBACK:
         return devices.playback
+    if kind is RequirementKind.MEETING_ENDPOINTS:
+        return subject in devices.meeting_endpoints
     return subject in devices.call_endpoints
 
 
@@ -158,8 +205,17 @@ def check(
     return ModeAvailability(available=not missing, missing=missing)
 
 
-def describe(requirement: Requirement, registry: LanguageRegistry) -> str:
-    """English text naming a requirement with registry display names (contract.md §2.4)."""
+def describe(
+    requirement: Requirement,
+    registry: LanguageRegistry,
+    *,
+    local_language: LanguageId | None = None,
+) -> str:
+    """English text naming a requirement with registry display names (contract.md §2.4).
+
+    ``local_language`` names the language of the meeting ``local_render`` output; it is
+    required for that requirement only.
+    """
     kind, subject = requirement.kind, requirement.subject
     if kind is RequirementKind.RECOGNITION:
         return MISSING_RECOGNITION.format(language=registry.display_name(str(subject)))
@@ -171,4 +227,9 @@ def describe(requirement: Requirement, registry: LanguageRegistry) -> str:
     if kind is RequirementKind.VOICE:
         return MISSING_VOICE.format(language=registry.display_name(str(subject)))
     device = kind.value if subject is None else subject
-    return MISSING_DEVICE.format(device=_DEVICE_LABELS.get(device, device))
+    label = _DEVICE_LABELS.get(device, device)
+    if device == MEETING_LOCAL_RENDER_ROLE and kind is RequirementKind.MEETING_ENDPOINTS:
+        if local_language is None:
+            raise ValueError("describe() needs local_language for the local speech output")
+        label = label.format(language=registry.display_name(local_language))
+    return MISSING_DEVICE.format(device=label)
