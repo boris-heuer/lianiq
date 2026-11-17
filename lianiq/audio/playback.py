@@ -28,6 +28,24 @@ def play_wav(path: Path, output_device: int | None = None, *, auto_convert: bool
     audio = np.frombuffer(frames, dtype=np.int16)
     if channels > 1:
         audio = audio.reshape(-1, channels)
+    _play(sd, audio, sample_rate, output_device, auto_convert)
+
+
+def play_pcm(
+    audio: np.ndarray, sample_rate: int, output_device: int | None = None, *, auto_convert=False
+) -> None:
+    """Play in-memory 16-bit PCM (frames or frames-by-channels), blocking; no file is read.
+
+    The CAP-0177 meeting plays synthesised speech this way, so no audio file is written.
+    """
+    try:
+        import sounddevice as sd
+    except ImportError as exc:
+        raise RuntimeError("sounddevice is not installed") from exc
+    _play(sd, np.asarray(audio, dtype=np.int16), sample_rate, output_device, auto_convert)
+
+
+def _play(sd, audio: np.ndarray, sample_rate: int, output_device, auto_convert: bool) -> None:
     if not auto_convert or output_device is None:
         sd.play(audio, sample_rate, device=output_device, blocking=True)
         return
