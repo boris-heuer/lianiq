@@ -1,7 +1,9 @@
 """The workspace registry (CAP-0168 contract.md §1, ``lianiq.shell.workspace-registry.v1``).
 
-Qt-free: six workspaces in the fixed spec §2.3.1 order with Settings last. A workspace is
-enabled, planned (listed, disabled, no page) or experimental (enabled, marked).
+Qt-free: seven workspaces in the fixed spec §2.3.1 order with Settings last; CAP-0177 adds
+Meeting second, after Conversation (``lianiq.shell.workspace-registry.v1``, amended
+additively). A workspace is enabled, planned (listed, disabled, no page) or experimental
+(enabled, marked).
 """
 
 from __future__ import annotations
@@ -14,7 +16,7 @@ from lianiq.ui import strings
 
 class WorkspaceId(StrEnum):
     CONVERSATION = "conversation"
-    MEETING = "meeting"  # CAP-0177; its registry entry and sidebar follow in WI-04
+    MEETING = "meeting"  # CAP-0177
     TEXT_TRANSLATION = "text-translation"
     LISTEN = "listen-and-translate"
     CALL_BRIDGE = "call-bridge"
@@ -42,6 +44,7 @@ class WorkspaceEntry:
 
 DEFAULT_ENTRIES: tuple[WorkspaceEntry, ...] = (
     WorkspaceEntry(WorkspaceId.CONVERSATION, strings.NAV_CONVERSATION, EntryState.ENABLED),
+    WorkspaceEntry(WorkspaceId.MEETING, strings.NAV_MEETING, EntryState.ENABLED),
     WorkspaceEntry(WorkspaceId.TEXT_TRANSLATION, strings.NAV_TEXT_TRANSLATION, EntryState.PLANNED),
     WorkspaceEntry(WorkspaceId.LISTEN, strings.NAV_LISTEN, EntryState.PLANNED),
     WorkspaceEntry(WorkspaceId.CALL_BRIDGE, strings.NAV_CALL_BRIDGE, EntryState.EXPERIMENTAL),
