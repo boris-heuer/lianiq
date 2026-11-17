@@ -14,6 +14,7 @@ from lianiq.ui import strings
 
 class WorkspaceId(StrEnum):
     CONVERSATION = "conversation"
+    MEETING = "meeting"  # CAP-0177; its registry entry and sidebar follow in WI-04
     TEXT_TRANSLATION = "text-translation"
     LISTEN = "listen-and-translate"
     CALL_BRIDGE = "call-bridge"
