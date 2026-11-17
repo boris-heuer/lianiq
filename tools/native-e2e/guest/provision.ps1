@@ -4,19 +4,15 @@
     Offline provisioning of the native-e2e guest at image build (CAP-0174, contract 4.4).
 
 .DESCRIPTION
-    Runs once as the built-in Administrator from the answer file's FirstLogonCommands.
-    New-NativeE2eImage.ps1 has copied every input into C:\ProgramData\lianiq-e2e\setup
-    beforehand; the guest has no network except the activation step. The script installs Python 3.12 for all users,
-    the hash-locked wheels into the image environment, the read-only models, VB-Cable (one
-    cable), the N-01 test phrase, the GitHub Actions runner package (not a service), MinGit
-    (on no system or user PATH; runner-logon.ps1 adds it for the runner process only), the
-    SYSTEM admin helper, the e2e logon task and WFP auditing; it creates the non-admin
-    auto-logon user 'e2e', activates Windows online through the host's build-only
-    activation proxy (WinHTTP proxy set, then reset in a finally path; for the licence
-    source 'key' the PO types the key into the product key window on the VM console),
-    writes image.json, disables the build account, deletes the answer file and shuts the
-    guest down. The host then takes checkpoint 'clean'.
-    The outcome is written to setup\provision-result.json for the host to read.
+    Runs once as the built-in Administrator (answer file FirstLogonCommands) on the inputs
+    New-NativeE2eImage.ps1 copied to C:\ProgramData\lianiq-e2e\setup; no network except
+    activation. Installs the VC++ runtime, Python 3.12, the locked wheels, the models,
+    VB-Cable, the test phrase, the runner (not a service), MinGit (on PATH for the runner
+    only), the admin helper, the logon task and WFP auditing; creates the non-admin
+    auto-logon user 'e2e', activates Windows via the host's build-only proxy (WinHTTP proxy
+    reset in finally; for licence 'key' the PO types the key on the VM console), writes
+    image.json, disables the build account, deletes the answer file and shuts down. The
+    host takes checkpoint 'clean' and reads setup\provision-result.json.
 #>
 [CmdletBinding()]
 param(
@@ -53,8 +49,18 @@ function Invoke-Step([string]$Name, [scriptblock]$Body) {
 }
 
 function Invoke-Native([string]$FilePath, [string[]]$Arguments) {
-    & $FilePath @Arguments
-    if ($LASTEXITCODE -ne 0) { throw "$FilePath exited with code $LASTEXITCODE" }
+    Invoke-NativeCaptured $FilePath $FilePath $Arguments | Out-Null
+}
+
+function Invoke-NativeCaptured([string]$Name, [string]$FilePath, [string[]]$Arguments) {
+    # stdout and stderr reach provision.log (5.1 needs Continue).
+    $ErrorActionPreference = 'Continue'
+    $output = @(& $FilePath @Arguments 2>&1 | ForEach-Object { "$_" })
+    $output | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw ("$Name exited with code ${LASTEXITCODE}: " + (($output | Select-Object -Last 4) -join ' | '))
+    }
+    return $output
 }
 
 function Invoke-Netsh([string[]]$Arguments) {
@@ -65,8 +71,7 @@ function Invoke-Netsh([string[]]$Arguments) {
 }
 
 function Get-WindowsLicence {
-    # The installed Windows licence. Only status, channel and grace period are read; the
-    # product key, or any part of it, is never read, logged or recorded.
+    # Status, channel and grace period only; no part of the product key is read or logged.
     $filter = "ApplicationID='$WindowsAppId' AND LicenseIsAddon=False AND PartialProductKey IS NOT NULL"
     $products = @(Get-CimInstance -ClassName SoftwareLicensingProduct -Filter $filter)
     if ($products.Count -ne 1) { throw "Expected one installed Windows licence, found $($products.Count)." }
@@ -137,8 +142,7 @@ function Write-Json([string]$Path, $Value) {
 }
 
 function Get-ActiveEndpointName([string]$Flow) {
-    # Endpoint description (PKEY_Device_DeviceDesc) of every active endpoint of one flow. As
-    # in the app, an endpoint without these values is skipped (a missing value throws).
+    # PKEY_Device_DeviceDesc of each active endpoint; as in the app, one without it is skipped.
     $base = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\$Flow"
     foreach ($endpoint in @(Get-ChildItem -LiteralPath $base -ErrorAction SilentlyContinue)) {
         try {
@@ -179,8 +183,7 @@ try {
     }
 
     Invoke-Step 'default-user-profile' {
-        # New profiles (the e2e user signs in after the revert) copy the default hive:
-        # 100 % scale, no screen saver, no toast notifications or notification centre.
+        # New profiles copy the default hive: 100 % scale, no screen saver, no notifications.
         Invoke-Native 'reg.exe' @('load', 'HKU\E2eDefault', 'C:\Users\Default\NTUSER.DAT')
         try {
             $hive = 'Registry::HKEY_USERS\E2eDefault'
@@ -229,7 +232,7 @@ try {
         foreach ($folder in 'bin', 'models', 'admin\requests', 'admin\results', 'jit', 'state') {
             New-Item -ItemType Directory -Path (Join-Path $Root $folder) -Force | Out-Null
         }
-        # Users read the root; only SYSTEM and Administrators write it (bin, models, image.json).
+        # Users read the root; only SYSTEM and Administrators write it.
         Set-ExclusiveAcl $Root @("${SidSystem}:(OI)(CI)F", "${SidAdministrators}:(OI)(CI)F", "${SidUsers}:(OI)(CI)RX")
         foreach ($writable in 'admin\requests', 'jit', 'state') {
             Invoke-Native 'icacls.exe' @((Join-Path $Root $writable), '/grant', "${TestUser}:(OI)(CI)M", '/q')
@@ -237,6 +240,14 @@ try {
         foreach ($guestScript in 'admin-helper.ps1', 'runner-logon.ps1') {
             Copy-Item -LiteralPath (Join-Path $Setup $guestScript) -Destination $Bin -Force
         }
+    }
+
+    Invoke-Step 'vc-redist' {
+        # For onnxruntime. 3010: restart pending; 1638: newer present.
+        $redist = Join-Path $Setup $inputs.vc_redist.file
+        Assert-Signed $redist
+        $process = Start-Process -FilePath $redist -ArgumentList @('/install', '/quiet', '/norestart') -Wait -PassThru
+        if (@(0, 1638, 3010) -notcontains $process.ExitCode) { throw "VC++ runtime installer exited with $($process.ExitCode)." }
     }
 
     Invoke-Step 'python' {
@@ -253,7 +264,7 @@ try {
             '-r', (Join-Path $Setup 'requirements-lock.txt'),
             '-r', (Join-Path $Setup 'requirements-native-lock.txt'))
         Invoke-Native $venvPython @('-m', 'pip', 'check')
-        # The job installs the checked-out project into this environment (no network).
+        # The job installs the checkout here (no network).
         Invoke-Native 'icacls.exe' @($Venv, '/grant', "${TestUser}:(OI)(CI)M", '/q')
     }
 
@@ -269,8 +280,7 @@ try {
         Assert-Signed $setupExe
         Write-Host 'Installing VB-Cable. If Windows asks to trust the driver publisher, confirm it in the VM console.'
         Start-Process -FilePath $setupExe -ArgumentList @('-i', '-h') -Wait | Out-Null
-        # The endpoint names the app reads (lianiq.audio.windows_endpoints); the Plug and Play
-        # name can differ ("Speakers (VB-Audio Virtual Cable)" for CABLE Input).
+        # Names the app reads (lianiq.audio.windows_endpoints), not PnP names.
         $deadline = (Get-Date).AddMinutes(5)
         do {
             $render = @(Get-ActiveEndpointName 'Render')
@@ -289,9 +299,9 @@ try {
         $venvPython = Join-Path $Venv 'Scripts\python.exe'
         $voice = Join-Path $Models 'piper\de_DE-thorsten-medium.onnx'
         $wav = Join-Path $Root 'test-phrase.wav'
-        $output = & $venvPython -I (Join-Path $Setup 'make_test_phrase.py') --voice $voice --output $wav
-        if ($LASTEXITCODE -ne 0) { throw 'make_test_phrase.py failed.' }
-        $script:phrase = ($output | Select-Object -Last 1) | ConvertFrom-Json
+        $output = @(Invoke-NativeCaptured 'make_test_phrase.py' $venvPython @('-I',
+                (Join-Path $Setup 'make_test_phrase.py'), '--voice', $voice, '--output', $wav))
+        $script:phrase = ($output | Where-Object { $_ -like '{*' } | Select-Object -Last 1) | ConvertFrom-Json
         if ($script:phrase.sha256 -ne (Get-FileSha256 $wav)) { throw 'Test phrase hash mismatch.' }
     }
 
@@ -301,8 +311,7 @@ try {
     }
 
     Invoke-Step 'mingit' {
-        # Offline and on no system or user PATH. The folder inherits the root ACL, so the
-        # test user can read and run it but not change it.
+        # Offline, on no PATH; the inherited root ACL lets the test user run, not change, it.
         $package = Join-Path $Setup $inputs.mingit.file
         if ((Get-FileSha256 $package) -cne $inputs.mingit.sha256) {
             throw 'The MinGit package does not match the SHA-256 in build-inputs.json.'
@@ -338,8 +347,7 @@ try {
 
     $licence = $null
     Invoke-Step 'activation' {
-        # Build-only egress (contract 7.4): the host proxy relays only to the activation
-        # hosts now. Activation reads the WinHTTP proxy, not https_proxy.
+        # Build-only egress (contract 7.4), activation hosts only; activation reads WinHTTP.
         $winhttpProxy = '{0}:{1}' -f $inputs.network.host_address, $inputs.network.proxy_port
         try {
             Invoke-Netsh @('winhttp', 'set', 'proxy', "proxy-server=$winhttpProxy")
@@ -382,7 +390,7 @@ try {
     }
 
     Invoke-Step 'cleanup' {
-        foreach ($item in 'wheels', 'models', 'vbcable', $inputs.python_installer.file,
+        foreach ($item in 'wheels', 'models', 'vbcable', $inputs.python_installer.file, $inputs.vc_redist.file,
             $inputs.vb_cable.file, $inputs.runner.file, $inputs.mingit.file) {
             Remove-Item -LiteralPath (Join-Path $Setup $item) -Recurse -Force -ErrorAction SilentlyContinue
         }
