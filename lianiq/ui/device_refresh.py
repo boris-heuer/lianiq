@@ -82,6 +82,7 @@ class DeviceRefresh:
     def after_full_refresh(self) -> None:
         self.fill()
         self.host.conversation.refresh_availability()
+        self.host.meeting.load_endpoints()  # the Meeting panel lists the same inventory
         panel = self.host.call_bridge_panel
         selected = {role: combo.currentData() for role, combo in panel.endpoint_combos.items()}
         self.host.call_bridge.load_endpoints()
