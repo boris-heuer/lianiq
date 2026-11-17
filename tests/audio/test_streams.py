@@ -72,3 +72,26 @@ def test_playback_never_uses_default_endpoint(monkeypatch) -> None:
     playback.play(Path("probe.wav"))
 
     assert calls == [(Path("probe.wav"), 7)]
+
+
+def test_playback_reports_start_and_end_around_the_audio_also_on_failure(monkeypatch) -> None:
+    """CAP-0177 WI-03: the optional playback start/end callback for the feedback guard."""
+    states: list[object] = []
+
+    def play(path, output_device):
+        states.append(("play", output_device))
+        if str(path) == "broken.wav":
+            raise RuntimeError("device gone")
+
+    monkeypatch.setattr("lianiq.audio.playback_stream.play_wav", play)
+    playback = EndpointPlaybackStream(
+        endpoint(EndpointFlow.RENDER), on_playback_state=states.append
+    )
+
+    playback.play(Path("probe.wav"))
+    try:
+        playback.play("broken.wav")
+    except RuntimeError:
+        pass
+
+    assert states == [True, ("play", 7), False, True, ("play", 7), False]

@@ -4,6 +4,8 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Protocol
 
+import numpy as np
+
 from lianiq.languages.errors import CapabilityMissingError
 from lianiq.languages.registry import BUILTIN_REGISTRY, LanguageId, LanguageRegistry
 from lianiq.languages.requirements import Requirement, RequirementKind
@@ -63,3 +65,8 @@ class VoiceRouter:
     def synthesize(self, text: str, language: str) -> Path:
         language_id, engine = self._engine(language)
         return engine.synthesize(text, language_id)
+
+    def synthesize_pcm(self, text: str, language: str) -> tuple[np.ndarray, int]:
+        """In-memory synthesis (``PcmSynthesizer``): PCM16 mono samples and sample rate."""
+        language_id, engine = self._engine(language)
+        return engine.synthesize_pcm(text, language_id)

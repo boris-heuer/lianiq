@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import io
 import tempfile
 import wave
 from collections.abc import Iterable, Mapping
 from pathlib import Path
+
+import numpy as np
 
 from lianiq.hardware import resolve_onnx_device
 from lianiq.languages.errors import CapabilityMissingError
@@ -79,17 +82,34 @@ class PiperEngine:
             output = Path(handle.name)
         try:
             with wave.open(str(output), "wb") as wav_file:
-                if hasattr(voice, "synthesize_wav"):
-                    from piper import SynthesisConfig
-
-                    voice.synthesize_wav(
-                        text,
-                        wav_file,
-                        syn_config=SynthesisConfig(length_scale=self.length_scale),
-                    )
-                else:  # Compatibility with piper-tts 1.2.
-                    voice.synthesize(text, wav_file, length_scale=self.length_scale)
+                self._synthesize_into(voice, text, wav_file)
             return output
         except Exception:
             output.unlink(missing_ok=True)
             raise
+
+    def synthesize_pcm(self, text: str, language: str) -> tuple[np.ndarray, int]:
+        """Synthesize ``text`` in memory: PCM16 mono samples and rate; no file is written."""
+        voice = self._load(language)
+        buffer = io.BytesIO()
+        with wave.open(buffer, "wb") as wav_file:
+            self._synthesize_into(voice, text, wav_file)
+        buffer.seek(0)
+        with wave.open(buffer, "rb") as wav_file:
+            if wav_file.getnchannels() != 1 or wav_file.getsampwidth() != 2:
+                raise RuntimeError("Piper must produce PCM16 mono audio")
+            sample_rate = wav_file.getframerate()
+            frames = wav_file.readframes(wav_file.getnframes())
+        return np.frombuffer(frames, dtype="<i2").copy(), sample_rate
+
+    def _synthesize_into(self, voice, text: str, wav_file: wave.Wave_write) -> None:
+        if hasattr(voice, "synthesize_wav"):
+            from piper import SynthesisConfig
+
+            voice.synthesize_wav(
+                text,
+                wav_file,
+                syn_config=SynthesisConfig(length_scale=self.length_scale),
+            )
+        else:  # Compatibility with piper-tts 1.2.
+            voice.synthesize(text, wav_file, length_scale=self.length_scale)

@@ -4,7 +4,9 @@ Qt-free: no PySide6 import anywhere in this package. See
 ``docs/products/lianiq/capabilities/meeting-dual-mic-translation/contract.md`` §1-§4 in
 ``boris-heuer/app-shared``: roles and endpoints (``contracts``), the per-input language gate
 (``language_gate``), the no-drop turn queue (``turn_queue``) and the cross-device feedback
-guard (``feedback_guard``).
+guard (``feedback_guard``). Contract §5: the controller (``controller``, with ``events``,
+``capture`` and ``processing``) and the transcript text and writer (``transcript``), imported
+from their modules.
 """
 
 from lianiq.meeting.contracts import (
