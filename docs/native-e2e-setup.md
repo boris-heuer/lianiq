@@ -57,7 +57,9 @@ What the script does:
 
 1. Checks elevation, Hyper-V, `.venv` (Python 3.12, 64-bit), `git` and your `gh` login.
 2. Downloads every input on the host: the Python 3.12.10 installer (size and Python Software
-   Foundation signature checked), the wheels of `requirements-lock.txt` and
+   Foundation signature checked), the Microsoft Visual C++ x64 runtime
+   `vc_redist.x64.exe` from `aka.ms/vs/17/release` (Microsoft signature checked; its SHA-256
+   and version go into `image.json`), the wheels of `requirements-lock.txt` and
    [`native_e2e/requirements-native-lock.txt`](../native_e2e/requirements-native-lock.txt)
    with `pip download --require-hashes`, the models with `scripts\download_models.py`, and the
    latest GitHub Actions runner package for Windows x64 (checked against its release digest),
@@ -75,7 +77,8 @@ What the script does:
    adapter ACLs (deny all, allow only TCP to the proxy port on the host).
 6. Starts the VM. The guest signs in once as the build account and runs
    [`provision.ps1`](../tools/native-e2e/guest/provision.ps1) with no network except the
-   activation hosts (step 7): Python 3.12 for all users, the image environment from the
+   activation hosts (step 7): the Visual C++ runtime (`onnxruntime`, and with it the Piper
+   test phrase, needs `MSVCP140.dll`, which a clean Windows lacks), Python 3.12 for all users, the image environment from the
    wheels, the models (read-only), VB-Cable, the test phrase, the runner package (not a service), MinGit in `C:\ProgramData\lianiq-e2e\mingit` (on no machine `PATH`; the logon task puts its `cmd` folder on `PATH` for the runner process only), the SYSTEM admin helper, the logon task, WFP
    auditing, the machine-wide `https_proxy`, the non-admin auto-logon user `e2e` and
    `C:\ProgramData\lianiq-e2e\image.json`. It disables the build account, deletes the answer
@@ -273,6 +276,7 @@ stops the build or the run instead of passing silently.
 | The build stops at "guest provisioning" | Open the VM console. A visible VB-Cable prompt needs your confirmation. Otherwise read `C:\ProgramData\lianiq-native-e2e\logs\<image-id>\provision.log` after the timeout; the script names the failed step. Fix the cause and rebuild with `-Replace`. |
 | The build stops in step `activation` | Read `activation-proxy.log` under `logs\<image-id>`. A refused activation host or a plain-HTTP CRL/OCSP request is the usual cause (see [Assumptions checked at first build](#assumptions-checked-at-first-build)). For `key`, check that the key matches the ISO's edition. Fix it and rebuild with `-Replace`. |
 | "Infrastructure fault: the evaluation licence expired" | Follow [The 90-day rebuild](#the-90-day-rebuild). |
+| The build stops in step `test-phrase` | The message gives the exit code and the last output lines of `make_test_phrase.py`; `provision.log` holds the full stdout and stderr of every native step. `DLL load failed` means the Visual C++ runtime is missing (step `vc-redist`); a missing voice means `scripts\download_models.py` did not run on the host. Fix it and rebuild with `-Replace`. |
 | `pip download` fails | A locked wheel is missing for Windows x64 / Python 3.12, or the network failed. Rerun the build; a changed lock is fixed by pull request, never by unpinning. |
 | "The VM adapter ACLs differ" or "A NetNat covers …" | The network no longer matches the recipe. Remove the extra NAT or rebuild the image; never run with a routed or opened network. |
 | "the runner did not come online within 10 minutes" | Infrastructure fault. Check the proxy log for refusals and the guest log `C:\ProgramData\lianiq-e2e\state\runner-logon.log`. You may start the host script once more. If GitHub rejects an outdated runner version, rebuild the image. |

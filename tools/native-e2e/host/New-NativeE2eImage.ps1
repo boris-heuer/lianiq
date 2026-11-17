@@ -7,7 +7,7 @@
     PO step, run as administrator once and again before the 90-day evaluation ends
     (docs/native-e2e-setup.md; with -LicenceSource key only once). The host downloads every
     input first: the Python 3.12
-    installer, the hash-locked wheels of requirements-lock.txt and
+    installer, the Microsoft Visual C++ x64 runtime, the hash-locked wheels of requirements-lock.txt and
     native_e2e/requirements-native-lock.txt, the models (scripts/download_models.py) and the
     GitHub Actions runner package and the pinned MinGit; the PO supplies the ISO and the VB-Cable package. The
     image is applied offline to a new VHDX together with these inputs and
@@ -70,6 +70,11 @@ $MinGitAsset = 'MinGit-2.56.0.4-64-bit.zip'
 $MinGitUrl = 'https://github.com/git-for-windows/git/releases/download/v2.56.0.windows.4/MinGit-2.56.0.4-64-bit.zip'
 $MinGitSha256 = 'e3bf78351fe777fba47ddee5950082f8a98bb0f02604fdc7ba3ee2cb68ffa877'
 
+# onnxruntime (Piper, the test phrase) needs MSVCP140.dll, which a clean Windows lacks. The
+# evergreen Microsoft URL has no published SHA-256: the download must carry a valid Microsoft
+# Authenticode signature, and its SHA-256 and file version are recorded in image.json.
+$VcRedistUrl = 'https://aka.ms/vs/17/release/vc_redist.x64.exe'
+
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $RepoPython = Join-Path $RepoRoot '.venv\Scripts\python.exe'
 $GuestDir = Join-Path $RepoRoot 'tools\native-e2e\guest'
@@ -103,6 +108,17 @@ function Get-PythonInstaller([string]$Payload) {
         throw 'The Python installer failed its size or signature check.'
     }
     return [ordered]@{ file = Split-Path $file -Leaf; version = $PythonVersion; sha256 = Get-NativeE2eSha256 $file }
+}
+
+function Get-VcRedist([string]$Payload) {
+    $file = Join-Path $Payload 'vc_redist.x64.exe'
+    Invoke-WebRequest -Uri $VcRedistUrl -OutFile $file -UseBasicParsing
+    $signature = Get-AuthenticodeSignature -LiteralPath $file
+    if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notlike 'CN=Microsoft Corporation,*') {
+        throw 'The Visual C++ runtime installer failed its signature check.'
+    }
+    $version = [string](Get-Item -LiteralPath $file).VersionInfo.FileVersion
+    return [ordered]@{ file = Split-Path $file -Leaf; version = $version; sha256 = Get-NativeE2eSha256 $file }
 }
 
 function Get-RunnerPackage([string]$Payload) {
@@ -175,8 +191,9 @@ if ($LASTEXITCODE -ne 0) { throw "icacls failed on $StateRoot." }
 New-Item -ItemType Directory -Path $payload, $vmRoot -Force | Out-Null
 Write-NativeE2eStep "Image $imageId; inputs go to $payload"
 
-Write-NativeE2eStep 'Downloading Python, wheels, models, the runner and MinGit on the host'
+Write-NativeE2eStep 'Downloading Python, the VC++ runtime, wheels, models, the runner and MinGit on the host'
 $python = Get-PythonInstaller $payload
+$vcRedist = Get-VcRedist $payload
 Get-Wheels $payload
 $modelsSha = Get-Models $payload
 $runner = Get-RunnerPackage $payload
@@ -200,6 +217,7 @@ $inputs = [ordered]@{
     source_commit    = $commit
     licence_source   = $LicenceSource
     python_installer = $python
+    vc_redist        = $vcRedist
     runner           = $runner
     mingit           = $minGit
     vb_cable         = [ordered]@{ file = $vbFile; sha256 = Get-NativeE2eSha256 (Join-Path $payload $vbFile) }
@@ -208,6 +226,8 @@ $inputs = [ordered]@{
     inputs           = [ordered]@{
         iso_sha256             = Get-NativeE2eSha256 $IsoPath
         python_sha256          = $python.sha256
+        vc_redist_version      = $vcRedist.version
+        vc_redist_sha256       = $vcRedist.sha256
         runner_version         = $runner.version
         runner_sha256          = $runner.sha256
         mingit_version         = $minGit.version
