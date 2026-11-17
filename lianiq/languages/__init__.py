@@ -26,6 +26,7 @@ from lianiq.languages.errors import (
 )
 from lianiq.languages.modes import (
     CALL_BRIDGE_MODE,
+    MEETING_MODE,
     InputKind,
     OutputKind,
     RoutingKind,
@@ -62,6 +63,7 @@ __all__ = [
     "BUILTIN_LANGUAGES",
     "BUILTIN_REGISTRY",
     "CALL_BRIDGE_MODE",
+    "MEETING_MODE",
     "TRANSCRIPT_V2_HEADER",
     "Availability",
     "CapabilityCatalog",
