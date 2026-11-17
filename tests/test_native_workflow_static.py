@@ -184,10 +184,14 @@ def test_the_canary_and_optional_inputs_reach_the_row_runner_through_env() -> No
 def test_git_skips_only_the_unreachable_revocation_lookup() -> None:
     # The first VM run failed at checkout: CRYPT_E_REVOCATION_OFFLINE, because schannel asks
     # CRL/OCSP servers the guest cannot reach. Only that check is off, for every step's git.
+    # The second run failed the same way: git ignores schannelCheckRevoke unless
+    # http.sslBackend is set, so the backend is named too.
     env = JOB["env"]
-    assert env["GIT_CONFIG_COUNT"] == "1"
-    assert env["GIT_CONFIG_KEY_0"] == "http.schannelCheckRevoke"
-    assert env["GIT_CONFIG_VALUE_0"] == "false"
+    assert env["GIT_CONFIG_COUNT"] == "2"
+    assert env["GIT_CONFIG_KEY_0"] == "http.sslBackend"
+    assert env["GIT_CONFIG_VALUE_0"] == "schannel"
+    assert env["GIT_CONFIG_KEY_1"] == "http.schannelCheckRevoke"
+    assert env["GIT_CONFIG_VALUE_1"] == "false"
     assert "sslVerify" not in TEXT and "GIT_SSL_NO_VERIFY" not in TEXT
 
 
