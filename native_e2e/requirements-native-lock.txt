@@ -10,8 +10,9 @@
 # newest release that was at least two weeks old when this lock was written. 1.5.0
 # (2026-11-09) is a new minor line not yet proven with pywinauto 0.6.9 in the VM.
 # six: a runtime requirement of pywinauto 0.6.9 that requirements-lock.txt does not contain.
-comtypes==1.4.17 \
-    --hash=sha256:4e0a221dde2c589b82977bed802efd71cd5eb67a380347b732e02735e597f586
+comtypes==1.5.0 \
+    --hash=sha256:831ddb867bc17bc89cac525b4f32132ebd4bef1ffe6432406ec9f5d858c1a122 \
+    --hash=sha256:c648ed3b243b1eb3b7cb893a873d1b35104ca1c8922061f4b1efafeb255bacb5
     # via pywinauto
 psutil==7.2.2 \
     --hash=sha256:eb7e81434c8d223ec4a219b5fc1c47d0417b12be7ea866e24fb5ad6e84b3d988
