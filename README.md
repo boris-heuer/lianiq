@@ -24,13 +24,11 @@ application screenshot or a performance claim.
 
 ![Sanitized lianiq application window with the experimental Call Bridge disabled](docs/assets/application-ui.png)
 
-This screenshot was captured from the Windows application by
-`scripts/capture_readme_screenshot.py` with generic device selections, empty transcript panels, a
-synthetic held turn in the held-turn bar, and the experimental Call Bridge disabled. It predates the
-sidebar shell described under [Run](#run): it still shows the device selectors, *Model profile*,
-**CUDA GPU** and the Call Bridge panel in one window. Recapture it on Windows with the same script
-to show the shell. It is not evidence that the hardware, latency, reconnect, or real-call acceptance
-gates passed.
+This screenshot was captured by `scripts/capture_readme_screenshot.py` in the native test VM
+(see [Native E2E VM setup](docs/native-e2e-setup.md)) with empty transcript panels, a synthetic
+held turn in the held-turn bar, and the experimental Call Bridge disabled. It shows the sidebar
+shell described under [Run](#run). It is not evidence that the hardware, latency, reconnect, or
+real-call acceptance gates passed.
 
 ## Reference system and portability
 
@@ -344,7 +342,8 @@ code.
 Most automated tests use deterministic fakes and do not require a microphone, virtual cables, or
 WeChat. See the [engineering case study](docs/engineering-case-study.md) for the evidence ladder
 and the gates that still require a human operator. The phased publication evidence is tracked in
-the [publication-readiness checklists](docs/publication-readiness-checklists.md).
+the [publication-readiness checklists](docs/publication-readiness-checklists.md). The automated
+native rows run in a disposable Windows 11 VM; see [Native E2E VM setup](docs/native-e2e-setup.md).
 
 ## Windows build
 
