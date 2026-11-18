@@ -85,6 +85,34 @@ without leaking audio into another lane. Evidence shared outside the operator re
 must remain sanitized: no PCM, speech transcript, prompt content, endpoint display
 name, or endpoint identifier.
 
+## Automated native rows
+
+The `native-e2e` workflow (CAP-0174) runs a defined set of native rows automatically in a
+disposable Windows 11 VM; see [Native E2E VM setup](../native-e2e-setup.md) and
+[Native E2E UIA rows](../native-e2e-rows.md). A run counts as evidence for a row only when it
+meets all of the following:
+
+- **Defined image.** The run names its image id (`win11-native-e2e@<date>-<suffix>`), built
+  by the scripted image build and rebuilt within 90 days. The receipt records the image id,
+  the Windows build and the models manifest hash.
+- **Exact commit.** The run checks out one commit, and its receipt `native-evidence.json`
+  names that commit and the workflow run. `SHA256SUMS` must verify and
+  `python -m native_e2e verify <artifact-dir>` must pass.
+- **Methods.** Each row records its method: `automated-native` (the real window driven by UI
+  Automation, or a script run in the VM) or `automated-virtual-device` (audio through a
+  virtual cable instead of a real microphone). A row with any other method is not counted
+  here.
+
+**Equivalence rule.** An automated row replaces its manual counterpart only after two
+consecutive green runs on one image and one further run on the same commit as a manual run,
+where every compared row has the same verdict. The capability's `verification-report.md`
+records the run ids, receipt hashes and the per-row verdict table. Only then does the PO mark
+the row as droppable from the manual run.
+
+**Human-only rows.** These always stay manual, whatever the automated runs show: design
+acceptance of the delivered UI (including the screenshot sign-off), listening with Windows
+Narrator, and the first test with a real audio device.
+
 ## Current baseline
 
 This document defines required evidence; it records no completed runtime evidence.
