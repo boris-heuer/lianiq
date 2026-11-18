@@ -50,6 +50,9 @@ Documentation = "https://github.com/boris-heuer/lianiq#readme"
 [tool.setuptools.packages.find]
 include = ["lianiq*"]
 
+[tool.setuptools.package-data]
+"lianiq.ui" = ["assets/*.svg"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
