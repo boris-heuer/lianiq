@@ -145,6 +145,9 @@ All notable user-visible changes are documented here.
   chosen by a click in the expanded list, controls below a scroll area's fold pressed with the
   keyboard, the save dialog's file-name field (1001), the notice history's text field and
   unscrolled panels; `scripts/ui_self_test.py` gives model loading its own 600 s budget.
+- Native E2E E-10 tests the failed export on a write-protected file in a writable folder and
+  answers the "replace?" prompt, because the save dialog refuses a write-protected folder
+  itself; E-03 waits up to 300 s for the models.
 - Closing the window without a ready language pair no longer replaces the saved or migrated
   routing with Automatic.
 - At the default window width the held-turn buttons and the *Language pair* and *Conversation
