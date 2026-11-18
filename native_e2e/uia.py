@@ -195,7 +195,10 @@ def snapshot(root: Any) -> list[Node]:
 
     def walk(element: Any, parents: tuple[str, ...]) -> None:
         for child in _quiet(element.children) or ():
-            node = read_node(child, parents)
+            try:
+                node = read_node(child, parents)
+            except Exception:  # noqa: BLE001, S112 - gone while read (a closing dialog)
+                continue
             nodes.append(node)
             walk(child, (*parents, node.name))
 
