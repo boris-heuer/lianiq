@@ -45,6 +45,7 @@ try {
             --windowed `
             --name lianiq `
             --add-data "$PiperData;piper/espeak-ng-data" `
+            --add-data "lianiq/ui/assets;lianiq/ui/assets" `
             --collect-all ctranslate2 `
             --collect-all tokenizers `
             run_app.py
