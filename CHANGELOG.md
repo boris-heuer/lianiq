@@ -139,6 +139,12 @@ All notable user-visible changes are documented here.
 
 ### Fixed
 
+- Combo boxes keep their rounded right corners: the Windows drop-down button no longer covers
+  the frame's right end (Language pair, Conversation direction and every other combo box).
+- Native E2E UIA rows read the real window: sidebar entries as UIA check boxes, combo items
+  chosen by a click in the expanded list, controls below a scroll area's fold pressed with the
+  keyboard, the save dialog's file-name field (1001), the notice history's text field and
+  unscrolled panels; `scripts/ui_self_test.py` gives model loading its own 600 s budget.
 - Closing the window without a ready language pair no longer replaces the saved or migrated
   routing with Automatic.
 - At the default window width the held-turn buttons and the *Language pair* and *Conversation
