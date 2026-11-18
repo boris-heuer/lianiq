@@ -16,6 +16,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from native_e2e.uia import Node
+from tests import _native_real_tree as real
 
 CABLE = "CABLE Output (VB-Audio Virtual Cable)"
 PLANNED = "Planned — not available yet"
@@ -115,7 +116,7 @@ class FakeApp:
         out = [
             Node(
                 label,
-                "Button",
+                real.NAV_ENTRY,
                 enabled=enabled,
                 selected=label == self.page,
                 description=desc,
@@ -144,7 +145,6 @@ class FakeApp:
         back = bool(self.original) and not self.running
         on = {k for k in ("changed", "scroll", "pair", "direction") if self.knobs.get(k)}
         on = on if back else set()
-        first = None if self.knobs.get("no_scroll") else 0.0
         pair = "German ↔ English" if "pair" in on else "German ↔ Mandarin (Simplified)"
         way = "German → Mandarin" if "direction" in on else "Automatic"
         return [
@@ -154,10 +154,11 @@ class FakeApp:
             Node("Conversation direction", "ComboBox", value=way, parents=top),
             Node("Original", "Text", parents=top),
             Node("Original", "Edit", value=self.original + (" x" if "changed" in on else ""),
-                 scroll=first, rect=PANEL_RECTS[0], parents=top),
+                 rect=PANEL_RECTS[0], parents=top),
             Node("Translation", "Text", parents=top),
             Node("Translation", "Edit", value=self.translation, rect=PANEL_RECTS[1],
-                 scroll=1.0 if "scroll" in on else 0.0, parents=top),
+                 parents=top),
+            *real.panel_bars(top, bool(self.knobs.get("no_scroll")), "scroll" in on),
         ]  # fmt: skip
 
     def _call(self, top) -> list[Node]:
@@ -169,7 +170,7 @@ class FakeApp:
         return [
             Node("Microphone", "ComboBox", value=self.mic, rect=COMBO_RECT, parents=top),
             Node("Export…", "Button", parents=top),
-            Node("Notice history", "Edit", value=self.log, parents=top),
+            *real.history(top, self.log),
         ]
 
     # Actions -------------------------------------------------------------------------------
@@ -203,13 +204,10 @@ class FakeApp:
     def window_nodes(self, title: str) -> list[Node] | None:
         if not self.dialog or title != "Export diagnostics":
             return None
-        return [
-            Node("File name:", "ComboBox", automation_id="1148"),
-            Node("File name:", "Edit", automation_id="1148"),
-            Node("Cancel", "Button", automation_id="2"),
-        ]
+        return list(real.SAVE_DIALOG)
 
     def type_into(self, node: Node, text: str) -> None:
+        assert (node.control_type, node.automation_id) == ("Edit", "1001")
         path = Path(text)
         readonly = path.parent in self.readonly
         if readonly and self.knobs.get("dialog_stuck"):
