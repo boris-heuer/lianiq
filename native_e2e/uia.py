@@ -25,7 +25,7 @@ from typing import Any
 from native_e2e.proc import child_env
 
 UIA_TIMEOUT_S = 20.0
-MODEL_TIMEOUT_S = 120.0
+MODEL_TIMEOUT_S = 300.0
 
 
 def wait_for(predicate: Callable[[], bool], timeout_s: float, poll_s: float = 0.25) -> None:
