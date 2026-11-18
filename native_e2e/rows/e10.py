@@ -3,7 +3,7 @@
 The row uses the app E-03 left open (so the log holds that session), or starts one. It
 creates ``%TEMP%\\lianiq-e2e\\ro\\`` and denies the test user write access with ``icacls``
 (proved by a refused probe file). **Export…** opens the save dialog; the row types the path
-into the dialog's file-name field (``AutomationId`` 1148) and presses Enter:
+into the dialog's file-name ``Edit`` (``AutomationId`` 1001) and presses Enter:
 ``%TEMP%\\lianiq-e2e\\diagnostics-E10.txt`` is written and contains none of the forbidden
 patterns (``forbidden_classes``; only the class names are stored). The second export into
 ``ro\\`` shows a notice without "Saved", writes nothing and the event list stays. Only the
@@ -32,7 +32,10 @@ from native_e2e.rows.ui import transcript_needles
 from native_e2e.uia import Node
 
 EXPORT_NAME = "diagnostics-E10.txt"
-FILE_NAME_FIELD = "1148"  # AutomationId of the save dialog's file-name field
+# AutomationId of the file-name Edit: 1001 in the Windows save dialog (inside the
+# "FileNameControlHost" combo box); 1148, the former id, is kept for an Edit that carries it.
+# A toolbar of the save dialog also carries 1001, so only an Edit counts.
+FILE_NAME_FIELDS = ("1001", "1148")
 CANCEL_BUTTON = "2"  # AutomationId of the dialog's Cancel button (IDCANCEL)
 SCREEN = "screens/e10-export-failed.png"
 _DRIVE_PATH = re.compile(r"[A-Za-z]:\\")
@@ -91,9 +94,13 @@ def deny_write(folder: Path) -> bool:
 
 
 def _field(nodes: list[Node] | None) -> Node | None:
-    fields = [node for node in nodes or () if node.automation_id == FILE_NAME_FIELD]
-    return next((node for node in fields if node.control_type == "Edit"), None) or (
-        fields[0] if fields else None
+    return next(
+        (
+            node
+            for node in nodes or ()
+            if node.automation_id in FILE_NAME_FIELDS and node.control_type == "Edit"
+        ),
+        None,
     )
 
 
@@ -113,8 +120,10 @@ def export(app: Any, s: Any, path: Path) -> bool:
 
 
 def _history(nodes: list[Node], s: Any) -> list[str]:
+    # The group box carries the same name and an empty value; the text is in its Edit field.
     field = next(
-        (n for n in nodes if n.visible and n.name == s.DIAG_HISTORY and n.value is not None), None
+        (n for n in nodes if n.visible and n.name == s.DIAG_HISTORY and n.control_type == "Edit"),
+        None,
     )
     return [line for line in (field.value or "").splitlines() if line] if field else []
 

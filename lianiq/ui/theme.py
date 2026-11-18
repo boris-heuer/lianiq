@@ -17,6 +17,7 @@ set, so the system palette and the native focus rectangle are used.
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QGuiApplication
@@ -51,6 +52,10 @@ TYPE_PX = {"body": 15, "small": 12, "title": 19, "transcript": 22}
 SYSTEM_FONT_PX = 12  # a 9 pt system font at 96 dpi
 FOCUS_WIDTH = 2
 FONT_FAMILIES = ("Segoe UI", "Microsoft YaHei UI")
+# The combo box arrow: once ``::drop-down`` is styled (so the native drop-down button no
+# longer covers the rounded right corners), Qt draws no arrow without an image.
+COMBO_ARROW = Path(__file__).with_name("assets") / "combo-arrow.svg"
+ARROW_BOX = 24  # px: the drop-down area at the right end of a combo box
 
 # Text on its background (≥ 4.5:1) and boundaries on their surface (≥ 3:1), AC-31.
 TEXT_PAIRS = (
@@ -134,6 +139,9 @@ QPlainTextEdit {{ background: {c["well"]}; border: 1px solid {c["muted"]}; borde
 QPlainTextEdit#diagnosticsText {{ font-size: {pt["small"]}pt; }}
 QComboBox, QPushButton {{ background: {c["panel"]}; border: 1px solid {c["muted"]};
     border-radius: {r}px; padding: {SPACING[1]}px {SPACING[2]}px; }}
+QComboBox::drop-down {{ subcontrol-origin: padding; subcontrol-position: center right;
+    width: {ARROW_BOX}px; border: 0; background: transparent; }}
+QComboBox::down-arrow {{ image: url("{COMBO_ARROW.as_posix()}"); width: 12px; height: 12px; }}
 QComboBox QAbstractItemView {{ background: {c["panel"]};
     selection-background-color: {c["primary"]}; }}
 QComboBox:hover, QPushButton:hover {{ border-color: {c["accent"]}; background: {c["hover"]}; }}

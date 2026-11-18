@@ -2,9 +2,10 @@
 
 ``launch`` starts ``python -m lianiq`` from the checkout in the real window and connects
 pywinauto (``backend="uia"``). ``App`` is the only surface the rows E-01, E-11, E-03 and E-10
-touch: ``nodes()`` (one ``uia.snapshot``), ``press`` (a real mouse click: a UIA Invoke on a
-button that opens a modal dialog would not return until the dialog closes), ``keys``
-(SendInput to the focused window), ``choose`` (an item of a combo box), ``window_nodes``
+touch: ``nodes()`` (one ``uia.snapshot``), ``press`` (a real mouse click, or focus and Space
+below a scroll area's fold: a UIA Invoke on a button that opens a modal dialog would not
+return until the dialog closes), ``keys``
+(SendInput to the focused window), ``choose`` (expand a combo box, click an item), ``window_nodes``
 (a top-level window of the app such as the export dialog), ``type_into``, ``processes``
 (psutil, for the E-01 model-file check) and ``close``. E-03 keeps its app in ``ctx.state["app"]`` for E-10; ``close_open`` closes whatever
 is left after the UIA rows, before the S-04 window closes.
@@ -50,17 +51,57 @@ class App:
         return uia.snapshot(self.window)
 
     def press(self, node: Node) -> None:
+        """Click ``node``; one outside the window (below a scroll area's fold) gets Space.
+
+        Qt reports such an element visible and on screen, so a click would land outside the
+        window: it is focused through UIA and activated with the keyboard instead.
+        """
         self.window.set_focus()
-        node.handle.click_input()
+        if self.within(node):
+            node.handle.click_input()
+        else:
+            node.handle.set_focus()
+            uia.send_keys("{SPACE}")
+
+    def within(self, node: Node) -> bool:
+        """Whether the centre of ``node`` lies inside the window."""
+        left, top, right, bottom = self.rect
+        x = (node.rect[0] + node.rect[2]) / 2
+        y = (node.rect[1] + node.rect[3]) / 2
+        return left <= x < right and top <= y < bottom
 
     def keys(self, text: str) -> None:
         self.window.set_focus()
         uia.send_keys(text)
 
     def choose(self, node: Node, item: str) -> None:
-        """Select the item whose text is ``item`` in the combo box ``node``."""
+        """Select the item whose text is ``item`` in the combo box ``node``.
+
+        Qt lists a combo box's items only while it is expanded, and a UIA Select or Invoke on
+        a listed item does not commit it; a real click does. ``TimeoutError`` when the item
+        is not listed (the combo box is collapsed again).
+        """
         self.window.set_focus()
-        node.handle.select(item)
+        node.handle.expand()
+        found: list[Any] = []
+
+        def listed() -> bool:
+            try:
+                entries = node.handle.descendants(control_type="ListItem")
+                found[:] = [entry for entry in entries if entry.element_info.name == item]
+            except Exception:  # noqa: BLE001 - the popup is still opening: poll again
+                found.clear()
+            return bool(found)
+
+        try:
+            uia.wait_for(listed, uia.UIA_TIMEOUT_S)
+        except TimeoutError:
+            try:
+                node.handle.collapse()
+            except Exception:  # noqa: BLE001, S110 - already collapsed: the timeout decides
+                pass
+            raise
+        found[0].click_input()
 
     def _top_windows(self) -> list[Any]:
         from pywinauto import Desktop
@@ -93,6 +134,10 @@ def launch(ctx: RunContext) -> App:
     except Exception:
         uia.close_app(process)
         raise
+    try:
+        window.set_focus()  # in front of anything open at sign-in, such as the Start menu
+    except Exception:  # noqa: BLE001, S110 - every press and key focuses the window again
+        pass
     return App(process, window)
 
 
