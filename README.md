@@ -359,6 +359,25 @@ Do not redistribute that output unless the corresponding model notices and sourc
 satisfied. A directory build is used intentionally because it starts faster and handles large model
 files more predictably than a single executable.
 
+### Local release install
+
+To use a tagged release on your own laptop, run from any checkout (no administrator rights needed):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-release.ps1 -Version v0.2.0
+```
+
+The script clones the tag into its own build folder (default
+`%LOCALAPPDATA%\lianiq-release\build\<version>`, change it with `-BuildRoot`), runs
+`scripts\setup.ps1`, `scripts\build.ps1 -IncludeModels` and `scripts\doctor.py` there, and copies
+`dist\lianiq` to `%LOCALAPPDATA%\Programs\lianiq\<version>`. The Desktop and Start-menu shortcuts
+**Lianiq** then point at the newest installed version. Older versions stay installed, and your
+`config\settings.local*.json` is carried over to the new version. To update, run the same command
+with the newer version. An installed version or an existing build folder is replaced only with
+`-Force`. The result contains model weights and is for your own use only. Each build folder keeps
+its `.venv` and downloaded models (several GB); delete a version's build folder once it is
+installed. Close Lianiq before replacing the version it runs from.
+
 ## Privacy and diagnostics
 
 - Runtime code makes no network requests; all model loaders use local paths only.
