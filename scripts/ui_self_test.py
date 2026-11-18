@@ -24,7 +24,11 @@ from lianiq.domain import TranslationResult
 from lianiq.languages.registry import LanguageId
 from lianiq.logging_setup import configure_logging
 
-TIMEOUT_MS = 90_000
+# Loading the models (torch is imported then) has its own budget: on a cold 4-vCPU VM it
+# took longer than the whole former 90 s (native run 44267851808, C-03). The turn keeps 90 s
+# from the moment the models are ready.
+WARM_UP_TIMEOUT_MS = 600_000
+TURN_TIMEOUT_MS = 90_000
 
 
 def main() -> int:
@@ -47,6 +51,7 @@ def main() -> int:
     window.show()
 
     outcome = {"code": 1}
+    stage = {"ready": False}
 
     def submit_probe() -> None:
         try:
@@ -67,6 +72,8 @@ def main() -> int:
             application.exit(2)
             return
         print("Models for the selected mode ready; UI pipeline is listening", flush=True)
+        stage["ready"] = True
+        QTimer.singleShot(TURN_TIMEOUT_MS, on_timeout)
         threading.Thread(target=submit_probe, name="ui-self-test-input", daemon=True).start()
 
     def check_navigation() -> None:
@@ -126,10 +133,15 @@ def main() -> int:
         print("FAIL UI pipeline: timed out", flush=True)
         application.exit(4)
 
+    def on_warm_up_timeout() -> None:
+        if not stage["ready"]:
+            print("FAIL model warm-up: timed out", flush=True)
+            application.exit(10)
+
     window.bridge.session_ready.connect(on_session_ready)
     window.bridge.result.connect(on_result)
     window.bridge.error.connect(on_error)
-    QTimer.singleShot(TIMEOUT_MS, on_timeout)
+    QTimer.singleShot(WARM_UP_TIMEOUT_MS, on_warm_up_timeout)
     # Models load on Start, for the selected mode only.
     window.mode_combo.setCurrentIndex(window.mode_combo.findData(LanguageId("de")))
     QTimer.singleShot(0, window.start_listening)
