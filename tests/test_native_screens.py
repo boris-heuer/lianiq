@@ -14,7 +14,7 @@ import pytest
 
 from native_e2e import audio, screens, uia
 from native_e2e.uia import Node
-from tests._native_fake_app import red_png
+from tests._native_png import red_png
 
 NAMES = ["CABLE Input (VB-Audio Virtual Cable)", "CABLE Output (VB-Audio Virtual Cable)"]
 

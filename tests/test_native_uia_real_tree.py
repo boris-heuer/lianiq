@@ -10,6 +10,8 @@ commits one.
 from __future__ import annotations
 
 import ast
+import os
+import stat
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -18,6 +20,7 @@ import pytest
 from native_e2e import uia, uia_app
 from native_e2e.rows import e03, e10, ui
 from native_e2e.uia import Node
+from tests import _native_real_tree as real
 
 ROOT = Path(__file__).resolve().parents[1]
 TOP = ("lianiq",)
@@ -203,3 +206,43 @@ def test_press_uses_the_keyboard_for_an_element_below_the_fold(monkeypatch) -> N
     log.clear()
     app.press(Node("Settings", "CheckBox", rect=(170, 700, 360, 740), handle=_Clickable(log)))
     assert log == ["click"]
+
+
+def test_deny_write_writes_the_file_and_proves_the_refused_append(tmp_path, monkeypatch) -> None:
+    """E-10 protects a file in a writable folder (PO decision after native run 44267851808)."""
+    calls: list[list[str]] = []
+
+    def icacls(args, **kwargs):
+        calls.append(args)
+        os.chmod(args[1], stat.S_IREAD)
+
+    monkeypatch.setenv("USERNAME", "e2e")
+    monkeypatch.setattr(e10.subprocess, "run", icacls)
+    path = tmp_path / "ro" / "diagnostics-E10.txt"
+    try:
+        assert e10.deny_write(path) is True
+    finally:
+        os.chmod(path, stat.S_IREAD | stat.S_IWRITE)
+    assert calls == [["icacls", str(path), "/deny", "e2e:(WD,AD,WEA,WA)"]]
+    assert path.read_text(encoding="utf-8") == e10.PROTECTED_CONTENT
+    assert e10._unchanged(path)
+
+
+def test_deny_write_fails_when_the_file_stays_writable(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("USERNAME", "e2e")
+    monkeypatch.setattr(e10.subprocess, "run", lambda args, **kwargs: None)
+    path = tmp_path / "ro" / "diagnostics-E10.txt"
+    assert e10.deny_write(path) is False
+    assert not e10._unchanged(path)  # the probe appended
+
+
+def test_replace_yes_is_the_task_dialog_yes_button() -> None:
+    """In the real save dialog "Ja" is CommandButton_6 inside "Speichern unter bestätigen"."""
+    assert e10._replace_yes(list(real.SAVE_DIALOG)) is None
+    yes = e10._replace_yes([*real.SAVE_DIALOG, *real.REPLACE_PROMPT])
+    assert (yes.control_type, yes.automation_id) == ("Button", "CommandButton_6")
+
+
+def test_model_readiness_waits_300_seconds() -> None:
+    """E-03 contract after native run 44267851808: the cold VM needs more than 120 s."""
+    assert uia.MODEL_TIMEOUT_S == ui.MODEL_TIMEOUT_S == 300.0

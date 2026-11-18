@@ -1,15 +1,19 @@
-"""E-10: Settings › Diagnostics › Export… to a file and to a read-only folder (contract §5).
+"""E-10: Settings › Diagnostics › Export… to a file and onto a write-protected file (contract §5).
 
 The row uses the app E-03 left open (so the log holds that session), or starts one. It
-creates ``%TEMP%\\lianiq-e2e\\ro\\`` and denies the test user write access with ``icacls``
-(proved by a refused probe file). **Export…** opens the save dialog; the row types the path
-into the dialog's file-name ``Edit`` (``AutomationId`` 1001) and presses Enter:
-``%TEMP%\\lianiq-e2e\\diagnostics-E10.txt`` is written and contains none of the forbidden
-patterns (``forbidden_classes``; only the class names are stored). The second export into
-``ro\\`` shows a notice without "Saved", writes nothing and the event list stays. Only the
-notice elements are read for that: the notice history logs every posted notice title, so
-the first export's "saved" line is always in it. A dialog still open is cancelled before
-the masked screenshot and the close. T-03 resets the ACL and deletes the folder.
+writes ``%TEMP%\\lianiq-e2e\\ro\\diagnostics-E10.txt`` (a writable folder) and denies the
+test user writes to that file with ``icacls`` (proved by a refused append). **Export…** opens
+the save dialog; the row types the path into the dialog's file-name ``Edit``
+(``AutomationId`` 1001) and presses Enter: ``%TEMP%\\lianiq-e2e\\diagnostics-E10.txt`` is
+written and contains none of the forbidden patterns (``forbidden_classes``; only the class
+names are stored). The second export targets the protected file: the dialog asks whether to
+replace it, the row answers **Yes** (``CommandButton_6``), and Lianiq shows its own
+"Export failed" notice without "Saved", the file keeps its content and the event list stays.
+A write-protected *folder* cannot be used: the save dialog itself refuses it, so the path
+never reaches Lianiq (PO decision after native run 44267851808). Only the notice elements
+are read for the failure: the notice history logs every posted notice title, so the first
+export's "saved" line is always in it. A dialog still open is cancelled before the masked
+screenshot and the close. T-03 resets the ACLs and deletes the folder.
 """
 
 from __future__ import annotations
@@ -36,6 +40,13 @@ EXPORT_NAME = "diagnostics-E10.txt"
 # "FileNameControlHost" combo box); 1148, the former id, is kept for an Edit that carries it.
 # A toolbar of the save dialog also carries 1001, so only an Edit counts.
 FILE_NAME_FIELDS = ("1001", "1148")
+# AutomationId of "Yes" in the save dialog's "already exists, replace?" prompt: the task
+# dialog's CommandButton_6 (IDYES); 6 is the classic message box's id.
+REPLACE_YES = ("CommandButton_6", "6")
+# Write data, append, write (extended) attributes; plain (W) also denies SYNCHRONIZE, which
+# blocks reading the file back.
+WRITE_RIGHTS = "(WD,AD,WEA,WA)"
+PROTECTED_CONTENT = "lianiq-e2e write-protected\n"
 CANCEL_BUTTON = "2"  # AutomationId of the dialog's Cancel button (IDCANCEL)
 SCREEN = "screens/e10-export-failed.png"
 _DRIVE_PATH = re.compile(r"[A-Za-z]:\\")
@@ -71,26 +82,34 @@ def forbidden_classes(
     return sorted(found)
 
 
-def deny_write(folder: Path) -> bool:
-    """Deny the test user writes to ``folder`` (``icacls``); true iff a probe file is refused."""
+def deny_write(path: Path) -> bool:
+    """Write ``path``, deny the test user writes to it (``icacls``); true iff an append fails."""
     user = os.environ.get("USERNAME", "")
     if not user:
         return False
     try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(PROTECTED_CONTENT, encoding="utf-8")
         subprocess.run(
-            ["icacls", str(folder), "/deny", f"{user}:(OI)(CI)W"],
+            ["icacls", str(path), "/deny", f"{user}:{WRITE_RIGHTS}"],
             capture_output=True,
             check=False,
         )
     except OSError:
         return False
-    probe = folder / "write-probe.tmp"
     try:
-        probe.write_text("x", encoding="utf-8")
+        with path.open("a", encoding="utf-8") as probe:
+            probe.write("x")
     except PermissionError:
         return True
-    probe.unlink(missing_ok=True)
     return False
+
+
+def _unchanged(path: Path) -> bool:
+    try:
+        return path.read_text(encoding="utf-8") == PROTECTED_CONTENT
+    except OSError:
+        return False
 
 
 def _field(nodes: list[Node] | None) -> Node | None:
@@ -104,19 +123,35 @@ def _field(nodes: list[Node] | None) -> Node | None:
     )
 
 
-def export(app: Any, s: Any, path: Path) -> bool:
-    """**Export…**, type ``path`` into the file-name field, Enter; true once the dialog closed."""
+def _replace_yes(nodes: list[Node] | None) -> Node | None:
+    return next(
+        (
+            node
+            for node in nodes or ()
+            if node.automation_id in REPLACE_YES and node.control_type == "Button"
+        ),
+        None,
+    )
+
+
+def export(app: Any, s: Any, path: Path, *, replace: bool = False) -> tuple[bool, bool]:
+    """**Export…**, type ``path`` into the file-name field, Enter; with ``replace`` answer the
+    "replace?" prompt with Yes. Returns (the dialog closed, the prompt was answered)."""
     button = ui.find(app.nodes(), s.DIAG_EXPORT, "Button")
     if button is None:
-        return False
+        return False, False
     app.press(button)
+    answered = False
     try:
         field = ui.wait(lambda: _field(app.window_nodes(s.DIAG_EXPORT_TITLE)))
         app.type_into(field, str(path))
+        if replace:
+            app.press(ui.wait(lambda: _replace_yes(app.window_nodes(s.DIAG_EXPORT_TITLE))))
+            answered = True
         ui.wait(lambda: app.window_nodes(s.DIAG_EXPORT_TITLE) is None)
     except TimeoutError:
-        return False
-    return True
+        return False, answered
+    return True, answered
 
 
 def _history(nodes: list[Node], s: Any) -> list[str]:
@@ -157,14 +192,13 @@ def _failure(nodes: list[Node], s: Any, prefix: str) -> str | None:
 
 def _checks(ctx: RunContext, app: Any) -> tuple[list[Check], list]:
     s = ui.strings()
-    target, ro = ctx.temp / EXPORT_NAME, ctx.temp / "ro"
-    ro.mkdir(parents=True, exist_ok=True)
-    checks = [check("ro-folder-denies-write", deny_write(ro))]
+    target, protected = ctx.temp / EXPORT_NAME, ctx.temp / "ro" / EXPORT_NAME
+    checks = [check("ro-file-denies-write", deny_write(protected))]
     if checks[-1].result is not Status.PASS:
         return checks, []
     if not ui.select(app, s.NAV_SETTINGS, s.NAV_REGION):
         return [*checks, check("file-written", False, "settings-not-shown")], []
-    written = export(app, s, target)
+    written, _ = export(app, s, target)
     try:
         ui.wait(target.is_file)
     except TimeoutError:
@@ -182,7 +216,7 @@ def _checks(ctx: RunContext, app: Any) -> tuple[list[Check], list]:
     )
     checks.append(check("no-forbidden-pattern", not found, ", ".join(found) or None))
     before = _history(app.nodes(), s)
-    closed = export(app, s, ro / EXPORT_NAME)
+    closed, answered = export(app, s, protected, replace=True)
     prefix = s.EXPORT_FAILED.split("{reason}")[0]
     try:
         notice = ui.wait_nodes(app, lambda nodes: _failure(nodes, s, prefix))
@@ -190,11 +224,12 @@ def _checks(ctx: RunContext, app: Any) -> tuple[list[Check], list]:
         notice = None
     nodes = app.nodes()
     saved = s.DIAG_EXPORT_SAVED.split("{name}")[0]
-    shown = notice is not None and not (ro / EXPORT_NAME).exists()
+    shown = notice is not None and _unchanged(protected)
     without = notice is not None and "saved" not in notice.casefold()
     without = without and not any(saved in text for text in _notice_texts(nodes, s))
     after = _history(nodes, s)
     checks += [
+        check("overwrite-confirmed", answered),
         check("failure-notice-shown", shown, f"dialog-closed: {str(closed).lower()}"),
         check("notice-without-saved", without),
         check("event-list-kept", bool(before) and all(line in after for line in before)),

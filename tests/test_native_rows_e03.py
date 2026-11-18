@@ -113,13 +113,14 @@ def run_e10_after_e03(ctx, monkeypatch, **knobs):
     return e10.run(ctx), app
 
 
-def test_e10_exports_after_e03_and_the_read_only_attempt_fails_visibly(ctx, monkeypatch) -> None:
+def test_e10_exports_after_e03_and_the_protected_file_attempt_fails_visibly(ctx, monkeypatch):
     row, app = run_e10_after_e03(ctx, monkeypatch)
     assert row.status is Status.PASS, row.checks
     assert [check.name for check in row.checks] == [
-        "ro-folder-denies-write",
+        "ro-file-denies-write",
         "file-written",
         "no-forbidden-pattern",
+        "overwrite-confirmed",
         "failure-notice-shown",
         "notice-without-saved",
         "event-list-kept",
@@ -127,8 +128,10 @@ def test_e10_exports_after_e03_and_the_read_only_attempt_fails_visibly(ctx, monk
     ]
     assert app.launches == 1 and app.closed and "app" not in ctx.state
     assert (ctx.temp / "diagnostics-E10.txt").is_file()
-    assert not (ctx.temp / "ro" / "diagnostics-E10.txt").exists()
-    assert ctx.temp / "ro" in app.readonly
+    protected = ctx.temp / "ro" / "diagnostics-E10.txt"
+    assert protected in app.readonly
+    assert protected.read_text(encoding="utf-8") == e10.PROTECTED_CONTENT  # not replaced
+    assert app.prompt is None  # the "replace?" prompt was answered
 
 
 def test_e10_starts_its_own_app_when_e03_left_none(ctx, monkeypatch) -> None:
@@ -160,6 +163,7 @@ def test_e10_fails_when_the_export_holds_a_forbidden_pattern(ctx, monkeypatch, k
     ("knobs", "check"),
     [
         ({"ro_writable": True}, "failure-notice-shown"),
+        ({"no_prompt": True}, "overwrite-confirmed"),
         ({"failure": "Export failed: Saved partially."}, "notice-without-saved"),
     ],
 )
@@ -169,12 +173,12 @@ def test_e10_fails_without_a_failure_notice_or_with_saved(ctx, monkeypatch, knob
     assert app.closed
 
 
-def test_e10_fails_when_the_folder_is_not_read_only(ctx, monkeypatch) -> None:
+def test_e10_fails_when_the_file_is_not_write_protected(ctx, monkeypatch) -> None:
     app = FakeApp()
     install(monkeypatch, app)
     monkeypatch.setattr(e10, "deny_write", lambda path: False)
     row = e10.run(ctx)
-    assert failed(row)[0] == "ro-folder-denies-write"
+    assert failed(row)[0] == "ro-file-denies-write"
 
 
 # The E-10 forbidden-pattern list (contract §5) ----------------------------------------------

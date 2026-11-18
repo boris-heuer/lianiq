@@ -18,6 +18,16 @@ SAVE_DIALOG = (
     Node("File name:", "Edit", automation_id="1001"),
     Node("Cancel", "Button", automation_id="2"),
 )
+# The "already exists, replace?" task dialog inside the save dialog (a German UI shows
+# "Speichern unter bestätigen" with "Ja" and "Nein"; the AutomationIds do not change).
+_PROMPT = ("Export diagnostics", "Confirm Save As")
+REPLACE_PROMPT = (
+    Node("Confirm Save As", "Window", parents=_PROMPT[:1]),
+    Node("diagnostics-E10.txt already exists.", "Text", automation_id="ContentText",
+         parents=_PROMPT),
+    Node("Yes", "Button", automation_id="CommandButton_6", parents=_PROMPT),
+    Node("No", "Button", automation_id="CommandButton_7", parents=_PROMPT),
+)  # fmt: skip
 
 
 def history(top: tuple[str, ...], log: str) -> list[Node]:
