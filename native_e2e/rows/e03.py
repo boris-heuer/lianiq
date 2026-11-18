@@ -57,8 +57,14 @@ def _scroll(nodes: list[Node], field: Node | None) -> float | None:
         return None
     if field.scroll is not None:
         return round(field.scroll, 3)
-    bars = [n for n in nodes if n.control_type == "ScrollBar" and field.name in n.parents]
-    return round(bars[0].scroll, 3) if bars and bars[0].scroll is not None else None
+    # Qt offers no UIA Scroll pattern on the panels; the scroll bar shows only once the text
+    # overflows, so no shown bar means nothing is scrolled (position 0).
+    bars = [
+        n for n in nodes if n.control_type == "ScrollBar" and n.visible and field.name in n.parents
+    ]
+    if not bars:
+        return 0.0
+    return round(bars[0].scroll, 3) if bars[0].scroll is not None else None
 
 
 def view(nodes: list[Node], s: Any) -> dict[str, Any]:
