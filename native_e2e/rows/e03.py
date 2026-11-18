@@ -4,7 +4,7 @@ VoR-02 path (spec §1.5): the N-01 WAV is checked against its SHA-256 in ``image
 before any app starts. Settings › Audio devices: "CABLE Output" is selected as Microphone
 (compared with the cable's WASAPI name; only ``name_matches`` is stored); Conversation:
 *Voice output* is unticked. Then **Start** (F8), wait for "Conversation running" (model
-readiness, 120 s), play the WAV into "CABLE Input" with ``sounddevice`` and wait for a turn
+readiness, 300 s), play the WAV into "CABLE Input" with ``sounddevice`` and wait for a turn
 in *Original* and *Translation*, recorded once two consecutive reads agree. During the
 session every enabled workspace is visited: the strip shows "Conversation running" in each,
 and in Call Bridge its Start is disabled with the help text "Stop the Conversation session
