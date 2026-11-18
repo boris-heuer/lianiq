@@ -2,8 +2,8 @@ cff-version: 1.2.0
 message: "If you use this prototype in research, please cite it using this metadata."
 title: "lianiq"
 type: software
-version: "0.1.0"
-date-released: 2026-10-06
+version: "0.2.0"
+date-released: 2026-11-18
 authors:
   - family-names: "Heuer"
     given-names: "Boris"
