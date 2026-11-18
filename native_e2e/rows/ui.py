@@ -23,6 +23,9 @@ MODEL_TIMEOUT_S = uia.MODEL_TIMEOUT_S
 POLL_S = 0.25
 _LABEL = re.compile(r"^[^:\n]{1,40}:\s+(.+)$")  # "German: <text>" → "<text>"
 MIN_NEEDLE = 4  # shorter transcript lines are not useful needles
+# Qt exposes the checkable sidebar QToolButtons as UIA CheckBox, not Button (native run
+# 44267851808 found "0 entries"); Button stays accepted for a plain push button.
+NAV_CONTROL_TYPES = ("CheckBox", "Button")
 
 
 def strings() -> Any:
@@ -84,7 +87,7 @@ def sidebar(nodes: Iterable[Node], region: str) -> list[Node]:
     return [
         node
         for node in nodes
-        if node.visible and node.control_type == "Button" and region in node.parents
+        if node.visible and node.control_type in NAV_CONTROL_TYPES and region in node.parents
     ]
 
 
