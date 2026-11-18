@@ -6,6 +6,10 @@ All notable user-visible changes are documented here.
 
 ### Added
 
+- `scripts/install-release.ps1 -Version vX.Y.Z` builds a tagged release in its own folder and
+  installs it per user under `%LOCALAPPDATA%\Programs\lianiq\<version>`, with **Lianiq** Desktop
+  and Start-menu shortcuts to the newest installed version; older versions and local settings
+  are kept, and an installed version is replaced only with `-Force`.
 - A **Meeting** workspace, the second sidebar entry (**Ctrl+2**; the shortcuts are now
   **Ctrl+1** … **Ctrl+7** by position): choose the table speakerphone's microphone and speaker
   (the other half of the same device is suggested), *Your microphone* (follows the Windows
