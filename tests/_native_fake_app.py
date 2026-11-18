@@ -4,7 +4,7 @@ pywinauto, the real window and the virtual cable exist only in the VM image, so 
 tests drive this fake through the ``App`` surface the rows use. It models the sidebar, the
 session strip, the Conversation panels, combos and Voice output, the Call Bridge Start,
 Settings with the device combo, **Export…** and the notice history, the notice banner and
-the export dialog. As in the real app (``_notice_changed``) every posted notice title is
+the export dialog with its "replace?" prompt. As in the real app (``_notice_changed``) every posted notice title is
 logged into the history. Knobs remove elements or change behaviour, so each pass rule can
 be shown to fail.
 """
@@ -17,6 +17,7 @@ from types import SimpleNamespace
 
 from native_e2e.uia import Node
 from tests import _native_real_tree as real
+from tests._native_png import red_png
 
 CABLE = "CABLE Output (VB-Audio Virtual Cable)"
 PLANNED = "Planned — not available yet"
@@ -61,7 +62,7 @@ class FakeApp:
         self.original = self.translation = ""
         self.notices: list[str] = []
         self.log = "2026-11-14T10:00:00+01:00 [session] Conversation started\n"
-        self.dialog = False
+        self.dialog, self.prompt = False, None
         self.mic, self.voice = DEFAULT_MIC, True
         self.readonly: set[Path] = set()
         self.closed = False
@@ -182,6 +183,9 @@ class FakeApp:
             self.dialog = True
         elif node.name == "Cancel":
             self.dialog = False
+        elif node.automation_id == "CommandButton_6" and self.prompt:
+            path, self.prompt = self.prompt, None
+            self.save(path)
         elif node.name == "Voice output" and not self.knobs.get("voice_stuck"):
             self.voice = not self.voice
 
@@ -204,16 +208,21 @@ class FakeApp:
     def window_nodes(self, title: str) -> list[Node] | None:
         if not self.dialog or title != "Export diagnostics":
             return None
-        return list(real.SAVE_DIALOG)
+        return [*real.SAVE_DIALOG, *(real.REPLACE_PROMPT if self.prompt else ())]
 
     def type_into(self, node: Node, text: str) -> None:
         assert (node.control_type, node.automation_id) == ("Edit", "1001")
         path = Path(text)
-        readonly = path.parent in self.readonly
-        if readonly and self.knobs.get("dialog_stuck"):
-            return  # e.g. a prompt over the dialog: nothing happens
+        if path in self.readonly and not self.knobs.get("no_prompt"):
+            self.prompt = path  # "already exists, replace?"
+        else:
+            self.save(path)
+
+    def save(self, path: Path) -> None:
+        if path in self.readonly and self.knobs.get("dialog_stuck"):
+            return  # e.g. an error box over the dialog: nothing happens
         self.dialog = False
-        if readonly and not self.knobs.get("ro_writable"):
+        if path in self.readonly and not self.knobs.get("ro_writable"):
             self.log += "2026-11-14T10:01:00+01:00 [export] Diagnostics export failed\n"
             self.log += "2026-11-14T10:01:00+01:00 [notice] resolved settings.export-result\n"
             failure = self.knobs.get("failure", "Export failed: Permission denied.")
@@ -223,21 +232,6 @@ class FakeApp:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
         self.post(f"Diagnostics saved as '{path.name}'.", "settings.export-result")
-
-
-def red_png(rect) -> bytes:
-    """A solid red screen capture of ``rect`` (left, top, right, bottom), PNG in memory."""
-    from PySide6.QtCore import QBuffer, QByteArray, QIODevice
-    from PySide6.QtGui import QColor, QImage
-
-    image = QImage(rect[2] - rect[0], rect[3] - rect[1], QImage.Format.Format_RGB32)
-    image.fill(QColor(255, 0, 0))
-    data = QByteArray()
-    buffer = QBuffer(data)
-    buffer.open(QIODevice.OpenModeFlag.WriteOnly)
-    image.save(buffer, "PNG")
-    buffer.close()
-    return bytes(data)
 
 
 def make_ctx(tmp_path: Path, phrase: bytes = b"RIFF\x00\x00\x00\x00WAVEfake"):
@@ -276,7 +270,13 @@ def install(monkeypatch, app: FakeApp) -> None:
     monkeypatch.setattr(audio, "endpoint_names", lambda: names)
     ids = ["windows-mmdevice:v1:capture:{abc-123}", "{abc-123}"]
     monkeypatch.setattr(audio, "cable_endpoint_ids", lambda: ids)
-    monkeypatch.setattr(e10, "deny_write", lambda path: app.readonly.add(path) or True)
+
+    def protect(path: Path) -> bool:  # E-10's protected file
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(e10.PROTECTED_CONTENT, encoding="utf-8")
+        return app.readonly.add(path) or True
+
+    monkeypatch.setattr(e10, "deny_write", protect)
     monkeypatch.setattr(ui, "TIMEOUT_S", 0.3)
     monkeypatch.setattr(ui, "MODEL_TIMEOUT_S", 0.3)
     monkeypatch.setattr(ui, "POLL_S", 0.01)
