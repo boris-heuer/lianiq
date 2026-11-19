@@ -182,10 +182,11 @@ selected.
   entry, move with Up/Down and press Space or Enter, or press **Ctrl+1** … **Ctrl+7**. Below 1000 px window
   width the sidebar becomes an icon rail with the labels in the tooltips.
 - **Session strip.** While a session starts, runs or stops, a strip below the workspace shows
-  "Conversation running" (or "Call Bridge running") and **Stop (F9)**, in every workspace. Only
-  one session runs at a time: while a conversation runs, the Call Bridge's Start is disabled with
-  "Stop the Conversation session first", and the reverse. Opening a workspace never starts or
-  stops audio.
+  "Conversation running" (or "Meeting running", "Call Bridge running") and **Stop (F9)**, in
+  every workspace. Only one session runs at a time: while a conversation runs, the Call Bridge's
+  Start is disabled with "Stop the Conversation session first", and the reverse; **Start
+  meeting** is refused the same way while another session runs, and theirs while a meeting runs
+  or still finishes its contributions. Opening a workspace never starts or stops audio.
 - **Notices.** A failure appears as a notice at the top of its workspace. It says what failed,
   for which mode, lane and language, whether recording and playback continue, and offers its
   action (**Retry**, **Reconnect**, **Choose device**). A blocking notice stays until its cause is
@@ -224,6 +225,29 @@ German** or **Translate as Mandarin (Simplified)** to recognize the turn again i
 and translate it, or **Discard** it. Later turns keep flowing while a turn is held, and **Stop**
 discards any turn that is still held. **Export transcript** writes the `# lianiq transcript v2`
 format with the language IDs of every turn, in capture order.
+
+### Meeting
+
+**Meeting** (sidebar, second entry, **Ctrl+2**) translates a face-to-face meeting with two
+microphones at once: the customers speak Mandarin (Simplified) into a USB speakerphone on the
+table, you speak German into your own microphone.
+
+- Under *Table speakerphone* choose the *Table microphone* and *Table speaker* (choosing one
+  suggests the other half of the same device). *Your microphone* follows the Windows default or
+  a chosen microphone; it must not be the table microphone.
+- The table's contributions appear as German "Table" lines, yours as German "You" lines, in
+  speech-end order; Lianiq speaks your contributions in Mandarin (Simplified) on the table
+  speaker. **Speak German for me** also speaks the table's contributions on *Output for German
+  speech*; mark it *This output is a headset (no sound reaches the room)* only for a headset.
+- While Lianiq speaks, the microphones that could hear it are muted and show *Muted while
+  speaking …*; *Table microphone while Lianiq speaks Mandarin (Simplified)* chooses *Muted
+  (recommended)* or *Open* for the table microphone. Contributions in the other language on an
+  input are ignored and counted; nothing formed is dropped.
+- **End meeting** offers to save a text transcript in both languages, only if something was
+  translated. Audio is never saved, and the meeting runs fully offline.
+
+See [`docs/meeting-architecture.md`](docs/meeting-architecture.md) for the roles, the feedback
+guard, the privacy statement, the speakerphone setup (Jabra Speak2 75) and the known limits.
 
 ### Audio devices
 
