@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Iterable, Mapping, Sequence
 
 from lianiq.audio.windows_endpoints import (
@@ -18,6 +19,7 @@ def enumerate_endpoint_refs(
     *,
     require_native_identity: bool = False,
     ambiguous: str = "raise",
+    suffix_match: bool = False,
 ) -> list[AudioEndpointRef]:
     """One reference per device and flow with channels.
 
@@ -28,6 +30,12 @@ def enumerate_endpoint_refs(
     number of same-named entries, so a positional ID resolves only while that number is
     unchanged. With ``require_native_identity`` an entry without any native match (stale
     after unplug) is then dropped instead of raising.
+
+    With ``suffix_match`` an entry whose name matches no alias but differs from one only by
+    its trailing parenthesised suffix (a Bluetooth or driver suffix, issue #136) is matched
+    by ``_suffix_matches`` while that pairing is one-to-one. Only callers whose PortAudio list
+    was read right after its (re-)initialisation pass it (the Conversation inventory): in a
+    stale list a gone device's entry could pair with a new device of the same description.
     """
     if ambiguous not in ("raise", "positional"):
         raise ValueError(f"Unsupported ambiguous policy: {ambiguous!r}")
@@ -35,6 +43,7 @@ def enumerate_endpoint_refs(
     endpoints: list[AudioEndpointRef] = []
     duplicates = _duplicate_counts(devices) if positional else {}
     seen: dict[str, int] = {}
+    by_suffix = _suffix_matches(_entries(devices), native_identities) if suffix_match else {}
     for position, raw in enumerate(devices):
         runtime_index = int(raw.get("index", position))
         host_api_index = int(raw["hostapi"])
@@ -55,6 +64,8 @@ def enumerate_endpoint_refs(
                 if not positional:
                     raise
                 native, ambiguous_name = None, True
+            if native is None and not ambiguous_name:
+                native = by_suffix.get((_normalize_name(display_name), flow))
             if require_native_identity and native is None and not ambiguous_name:
                 if positional:
                     continue  # a stale PortAudio entry: dropped, never an error
@@ -94,18 +105,77 @@ def enumerate_endpoint_refs(
     return endpoints
 
 
-def _duplicate_counts(devices: Sequence[Mapping[str, object]]) -> dict[tuple[str, str], int]:
-    """How many PortAudio entries share each (normalized name, flow)."""
-    counts: dict[tuple[str, str], int] = {}
-    for raw in devices:
+def _entries(devices: Sequence[Mapping[str, object]]) -> list[tuple[str, EndpointFlow]]:
+    """(display name, flow) of every PortAudio entry and flow with channels."""
+    return [
+        (str(raw["name"]), flow)
+        for raw in devices
         for flow, channel_key in (
             (EndpointFlow.CAPTURE, "max_input_channels"),
             (EndpointFlow.RENDER, "max_output_channels"),
-        ):
-            if int(raw[channel_key]) > 0:
-                key = (_normalize_name(str(raw["name"])), flow.value)
-                counts[key] = counts.get(key, 0) + 1
+        )
+        if int(raw[channel_key]) > 0
+    ]
+
+
+def _duplicate_counts(devices: Sequence[Mapping[str, object]]) -> dict[tuple[str, str], int]:
+    """How many PortAudio entries share each (normalized name, flow)."""
+    counts: dict[tuple[str, str], int] = {}
+    for name, flow in _entries(devices):
+        key = (_normalize_name(name), flow.value)
+        counts[key] = counts.get(key, 0) + 1
     return counts
+
+
+def _suffix_matches(
+    entries: Sequence[tuple[str, EndpointFlow]],
+    identities: Sequence[NativeEndpointIdentity],
+) -> dict[tuple[str, EndpointFlow], NativeEndpointIdentity]:
+    """Identities for entries that differ from an alias only by a trailing ``(...)`` suffix.
+
+    PortAudio may name an endpoint ``<description> (<model>)`` while Windows stores only
+    ``<description>`` and ``<description> (<driver> ...)`` (issue #136). Such an entry (keyed
+    by normalized name and flow) gets the identity whose alias base, the alias without its
+    suffix, equals the entry's base, only when the pairing is one-to-one: exactly one entry
+    without an alias match and exactly one identity not matched by any entry's name share
+    that base and flow. Anything else (duplicate names, two unmatched identities, an identity
+    already named by another entry) yields no match, so the entry stays unmapped.
+    """
+    unmatched: dict[tuple[str, EndpointFlow], list[str]] = {}
+    claimed: set[str] = set()
+    for name, flow in entries:
+        normalized = _normalize_name(name)
+        named = _alias_candidates(normalized, flow, identities)
+        claimed.update(identity.endpoint_id for identity in named)
+        base = _strip_suffix(normalized)
+        if not named and base != normalized:
+            unmatched.setdefault((base, flow), []).append(normalized)
+    free: dict[tuple[str, EndpointFlow], list[NativeEndpointIdentity]] = {}
+    for identity in identities:
+        if identity.endpoint_id in claimed:
+            continue
+        for base in dict.fromkeys(
+            _strip_suffix(_normalize_name(alias)) for alias in identity.aliases
+        ):
+            free.setdefault((base, identity.flow), []).append(identity)
+    result: dict[tuple[str, EndpointFlow], NativeEndpointIdentity] = {}
+    for (base, flow), names in unmatched.items():
+        candidates = free.get((base, flow), [])
+        if len(names) == 1 and len(candidates) == 1:
+            result[(names[0], flow)] = candidates[0]
+    used: dict[str, int] = {}
+    for identity in result.values():
+        used[identity.endpoint_id] = used.get(identity.endpoint_id, 0) + 1
+    return {key: i for key, i in result.items() if used[i.endpoint_id] == 1}
+
+
+_SUFFIX = re.compile(r"^(.*\S)\s*\([^()]*\)$")
+
+
+def _strip_suffix(normalized: str) -> str:
+    """``normalized`` without one trailing parenthesised group: ``"a (b)"`` -> ``"a"``."""
+    match = _SUFFIX.match(normalized)
+    return match.group(1) if match else normalized
 
 
 def _match_native_identity(
@@ -113,18 +183,25 @@ def _match_native_identity(
     flow: EndpointFlow,
     identities: Sequence[NativeEndpointIdentity],
 ) -> NativeEndpointIdentity | None:
-    normalized = _normalize_name(display_name)
-    candidates = [
-        identity
-        for identity in identities
-        if identity.flow is flow
-        and any(_names_match(normalized, _normalize_name(alias)) for alias in identity.aliases)
-    ]
+    candidates = _alias_candidates(_normalize_name(display_name), flow, identities)
     if len(candidates) > 1:
         raise ValueError(
             f"Windows audio endpoint identity is ambiguous for {display_name!r} ({flow.value})"
         )
     return candidates[0] if candidates else None
+
+
+def _alias_candidates(
+    normalized: str,
+    flow: EndpointFlow,
+    identities: Sequence[NativeEndpointIdentity],
+) -> list[NativeEndpointIdentity]:
+    return [
+        identity
+        for identity in identities
+        if identity.flow is flow
+        and any(_names_match(normalized, _normalize_name(alias)) for alias in identity.aliases)
+    ]
 
 
 def _normalize_name(value: str) -> str:
