@@ -59,6 +59,26 @@ def test_ac22a_refresh_while_stopped_lists_a_hot_plugged_headset() -> None:
     assert resolved.endpoint == HEADSET
 
 
+def test_refresh_after_a_failed_start_up_load_reinitializes_portaudio() -> None:
+    fake = FakeDevices(DESK, SPEAKERS)
+    reads = iter([OSError("registry"), None])
+
+    def read():
+        error = next(reads)
+        if error is not None:
+            raise error
+        return fake.read()
+
+    state = DeviceState(read, fake.reinitialize, fake.read_native)
+    try:
+        state.load()
+    except OSError:
+        pass
+    assert not state.loaded
+    state.refresh(streams_open=False)
+    assert fake.reinitialized == 1 and state.loaded  # never a stale list (#136)
+
+
 def test_ac13_while_a_stream_is_open_only_identities_are_compared() -> None:
     fake = FakeDevices(HEADSET, DESK, SPEAKERS)
     state = state_for(fake)
