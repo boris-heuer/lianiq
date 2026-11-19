@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from lianiq.languages import CapabilityMissingError, LanguageId, RequirementKind
@@ -21,8 +22,33 @@ def record_synthesis(engine: PiperEngine, tmp_path: Path, monkeypatch) -> list[t
         output.touch()
         return output
 
+    def fake_synthesize_pcm(text, language):
+        calls.append((text, language))
+        return np.zeros(1, dtype=np.int16), 22050
+
     monkeypatch.setattr(engine, "synthesize", fake_synthesize)
+    monkeypatch.setattr(engine, "synthesize_pcm", fake_synthesize_pcm)
     return calls
+
+
+def test_ac17_warm_up_synthesizes_in_memory_and_writes_no_wav(tmp_path, monkeypatch) -> None:
+    # A meeting start warms up the voices; AC-17 allows no audio file, not even a temp WAV.
+    engine = PiperEngine({ZH: tmp_path / "zh.onnx"}, device="cpu")
+    calls: list[tuple[str, str]] = []
+
+    def no_file(text, language):
+        raise AssertionError("warm_up must not write a WAV file")
+
+    def in_memory(text, language):
+        calls.append((text, language))
+        return np.zeros(1, dtype=np.int16), 22050
+
+    monkeypatch.setattr(engine, "synthesize", no_file)
+    monkeypatch.setattr(engine, "synthesize_pcm", in_memory)
+
+    engine.warm_up((ZH,))
+
+    assert calls == [("普通话（简体）", ZH)]
 
 
 def test_warm_up_runs_real_synthesis_only_for_required_voices(tmp_path, monkeypatch) -> None:

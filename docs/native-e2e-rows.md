@@ -65,3 +65,49 @@ and both transcript panels are black rectangles. Run `python -m native_e2e verif
 | E-10 `failure-notice-shown` fails with `dialog-closed: false` | The save dialog stayed open after **Yes** (an error box over it); the row cancels it before the screenshot |
 | E-10 `failure-notice-shown` fails with `dialog-closed: true` | Lianiq wrote the protected file or showed no "Export failed" notice |
 | E-10 `file-written` fails | The save dialog did not close after Enter (a prompt is open), or the file-name field was not found |
+
+## Meeting operator rows (CAP-0177)
+
+The Meeting rows are operator hardware rows, not VM rows: the row IDs below are those of the
+CAP-0177
+[e2e validation plan](https://github.com/boris-heuer/app-shared/blob/main/docs/products/lianiq/capabilities/meeting-dual-mic-translation/e2e-validation-plan.md)
+and are unrelated to the `python -m native_e2e` rows of the same names above. The operator runs
+them at the real window of the source build (`python run_app.py`) of the exact commit, with the
+Jabra Speak2 75 on USB, the laptop microphone and speakers, one USB headset, a helper (or a
+second device) speaking the plan's Mandarin phrases at the table, and Narrator for E-12. The
+plan holds the full steps, data D-01..D-07 and pass rules; setup and the headset mark are in
+[meeting-architecture.md](meeting-architecture.md#operator-setup).
+
+| Row | Steps | Evidence |
+|---|---|---|
+| S-01 | Check out the exact commit; record commit, Windows build, Python version, start time | Values in `verification-report.md` |
+| S-02 | `python scripts/doctor.py` | Recognition, both edges and both voices ready |
+| S-03 | Back up `config/settings.local.json` to `%TEMP%\lianiq-e2e\`; place settings without a `meeting` block | Backup exists |
+| S-04 | Airplane mode for every following row | No adapter connected |
+| S-05 | Connect the Jabra; Windows default input = laptop microphone, default output = laptop speakers | Defaults recorded by role, not by endpoint ID |
+| S-06 | Helper or second device at the table position | Position recorded |
+| E-01 | Launch; Meeting is the second sidebar entry; **Ctrl+2**; defaults of *Your microphone*, the table-microphone option and **Speak German for me** | Screenshot SHA-256 (AC-01, AC-25, AC-29) |
+| E-02 | Jabra as *Table microphone*; check the suggested *Table speaker*; make the Jabra the Windows default input and back | Screenshots of the conflict and its clearing (AC-03) |
+| E-03 | **Start meeting** (`mute`); one Mandarin phrase, one German phrase | Exactly two lines; Mandarin speech only from the Jabra; both inputs muted during it (AC-04, AC-06, AC-11, AC-20, AC-24) |
+| E-04 | German phrase; the helper speaks during its output, then 2 s after it | No line for the muted phrase, one for the later one (AC-24) |
+| E-05 | Three overlapping phrase pairs within 1 s | Six lines in speech-end order, none missing (AC-13) |
+| E-06 | Unplug the Jabra for 5 s, replug | Persistent notice; no substitute device; nothing restarts on its own (AC-15) |
+| E-07 | **End meeting** → **Save…** to `%TEMP%\lianiq-e2e\meeting-E07.txt`; search for new `*.wav` files | File SHA-256 only (file stays local); `.wav` search result count (AC-16, AC-17, AC-18) |
+| E-08 | Empty meeting for 10 s, **End meeting** | No save dialog (AC-27) |
+| E-09 | *Open*; ten Mandarin outputs, nobody at the table speaks | Line counts: ten "You", zero "Table" (AC-23, AC-25); a fail is recorded, not hidden |
+| E-10 | **Speak German for me** on a marked headset, then on the laptop speakers unmarked | Speech on the chosen output; speaker output mutes both inputs and forms no line (AC-05, AC-26) |
+| E-11 | *Output for German speech* = the Jabra speaker | Switch disabled with the conflict; **Start meeting** enabled (AC-28) |
+| E-12 | Keyboard and Narrator: devices → options → Start → running view → End | Announced names and order noted; no unnamed Tab stop (AC-20) |
+| T-01 | Restore the S-03 settings backup | Settings as before |
+| T-02 | Restore the S-05 Windows defaults; devices as before | Device state as before |
+| T-03 | Delete `%TEMP%\lianiq-e2e` after copying the E-07 SHA-256 | Folder absent |
+| T-04 | Stop Narrator; reconnect the network | Normal workstation state |
+
+Evidence follows the [Native Windows Evidence Profile](sdlc/native-windows-evidence-profile.md):
+commit, Windows build, Jabra display name and firmware, operator, line counts and pass or fail
+per row. Never record transcript text, PCM or endpoint IDs; the E-07 file and every screenshot
+(they show device names and German lines) stay in the local evidence folder, and only their
+SHA-256 is recorded. The run also records the design-intent comparison of the Meeting page
+against spec §2; each deviation needs the operator's recorded acceptance. A row without native evidence is
+blocked, never passed. The code rows C-01..C-03 of the plan are re-read for the same commit and
+never satisfy a native row.

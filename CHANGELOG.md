@@ -2,6 +2,22 @@
 
 All notable user-visible changes are documented here.
 
+## Unreleased
+
+### Added
+
+- `docs/meeting-architecture.md`: how a **Meeting** works (the four device roles, the language
+  filter, the no-drop queue, which microphones are muted while Lianiq speaks with *Muted* or
+  *Open*), the offline and privacy statement (no audio file is ever written; a transcript only
+  after **Save…**), the setup of the Jabra Speak2 75 speakerphone and the headset mark, and the
+  known limits. The README has a Meeting section, and `docs/native-e2e-rows.md` lists the
+  Meeting operator rows.
+
+### Fixed
+
+- The voice warm-up at the start of a session, including **Start meeting**, now synthesises
+  in memory and no longer writes a temporary WAV file.
+
 ## 0.2.0 - 2026-11-18
 
 ### Added
