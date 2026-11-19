@@ -39,6 +39,13 @@ class ConversationAvailability:
             playback=setup.resolved(EndpointFlow.RENDER).ready,
         )
 
+    def show_microphone(self) -> None:
+        """Name the microphone a Start opens, as Settings › Audio devices shows it (#137)."""
+        label = self.host.device_setup.resolved(EndpointFlow.CAPTURE).label
+        self.microphone_label.setText(label)
+        self.microphone_label.setToolTip(label)
+        self.microphone_label.setAccessibleDescription(label)
+
     conversation_session = staticmethod(conversation_session)
 
     def populate_pairs(self) -> None:
@@ -54,6 +61,7 @@ class ConversationAvailability:
 
     def refresh_availability(self) -> None:
         """Drive the routing entries, *Voice output* and **Start** from ``check()``."""
+        self.show_microphone()
         if self.host.session_locked():
             return
         try:
