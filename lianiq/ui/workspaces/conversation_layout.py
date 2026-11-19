@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QProgressBar,
     QPushButton,
+    QSizePolicy,
     QSplitter,
     QVBoxLayout,
     QWidget,
@@ -103,7 +104,17 @@ class ConversationLayout:
         self.level_bar.setMaximumWidth(180)
         self.state_label = QLabel("Ready")
         self.latency_label = QLabel("Latency: –")
-        activity_row.addWidget(QLabel("Microphone"))
+        caption = QLabel(strings.NOTICE_MICROPHONE)
+        # The microphone chosen in Settings › Audio devices, as its combo names it (#137).
+        self.microphone_label = QLabel()
+        self.microphone_label.setAccessibleName(strings.NOTICE_MICROPHONE)
+        self.microphone_label.setWordWrap(True)  # a long name wraps, never widens the row
+        policy = self.microphone_label.sizePolicy()
+        policy.setHorizontalPolicy(QSizePolicy.Policy.Ignored)  # no minimum width of its own
+        self.microphone_label.setSizePolicy(policy)
+        caption.setBuddy(self.microphone_label)
+        activity_row.addWidget(caption)
+        activity_row.addWidget(self.microphone_label, 1)
         activity_row.addWidget(self.level_bar)
         activity_row.addWidget(self.state_label)
         activity_row.addStretch()

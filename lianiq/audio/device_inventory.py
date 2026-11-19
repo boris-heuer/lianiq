@@ -70,7 +70,12 @@ def conversation_inventory(
     rows = [dict(raw, index=int(raw.get("index", i))) for i, raw in enumerate(devices)]
     wasapi = [row for row in rows if "wasapi" in _host_api(row, host_apis).casefold()]
     usable = enumerate_endpoint_refs(
-        wasapi, host_apis, native_identities, require_native_identity=True, ambiguous="positional"
+        wasapi,
+        host_apis,
+        native_identities,
+        require_native_identity=True,
+        ambiguous="positional",
+        suffix_match=True,  # the list is read right after PortAudio's (re-)initialisation
     )
     endpoints: list[ConversationEndpoint] = list(usable)
     known = {endpoint.endpoint_id for endpoint in usable}
