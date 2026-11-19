@@ -17,6 +17,15 @@ All notable user-visible changes are documented here.
 
 - The voice warm-up at the start of a session, including **Start meeting**, now synthesises
   in memory and no longer writes a temporary WAV file.
+- A Bluetooth headset whose PortAudio name carries a suffix that Windows does not store, such
+  as `Headphones (<model>)` for the Windows names `Headphones` and `Headphones (<driver> …)`,
+  is listed again as microphone and speakers in Settings › Audio devices, Conversation and
+  Meeting, and *Follow Windows default* resolves to it. The suffix is matched only one-to-one
+  in a freshly read device list: duplicate or ambiguous names stay unmatched and are never
+  guessed, and the Call Bridge keeps its exact name match (#136).
+- Conversation names the microphone chosen in Settings › Audio devices next to its level, as
+  the Settings list shows it (also *Follow Windows default (now: …)* and
+  *`<name>` — unavailable*), and updates it after a choice or a device refresh (#137).
 
 ## 0.2.0 - 2026-11-18
 
