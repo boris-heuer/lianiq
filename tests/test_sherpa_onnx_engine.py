@@ -164,6 +164,21 @@ def test_warm_up_synthesizes_the_native_name_once_and_caches_the_voice(sherpa, t
     assert sherpa.calls[0][1] == 0  # default speaker without settings
 
 
+def test_ac17_warm_up_writes_no_temporary_wav(sherpa, tmp_path, monkeypatch) -> None:
+    # A meeting start warms up the voices; AC-17 allows no audio file, not even a temp WAV.
+    import lianiq.tts.sherpa_onnx_engine as module
+
+    def no_file(*_args, **_kwargs):
+        raise AssertionError("warm_up must not create a temporary file")
+
+    monkeypatch.setattr(module.tempfile, "NamedTemporaryFile", no_file)
+    engine = SherpaOnnxEngine({ZH: voice_dir(tmp_path)})
+
+    engine.warm_up((ZH,))
+
+    assert [text for text, _sid, _speed in sherpa.calls] == ["普通话（简体）"]
+
+
 def test_concurrent_synthesize_calls_are_serialised_and_load_once(sherpa, tmp_path) -> None:
     # The pipeline thread and the Call Bridge lanes share one engine; sherpa-onnx
     # generate() must never run twice at once, and the voice must be built only once.
