@@ -31,6 +31,8 @@ class DeviceState:
         self._read_native = read_native
         self.inventory = ConversationInventory()
         self.loaded = False
+        # A read was attempted, so PortAudio's list may be stale; set even if the read failed.
+        self.read_attempted = False
         self.refresh_pending = False
         self.full_refreshes = 0
         # Native ID -> name of the last observation; ``None`` when Windows cannot be read.
@@ -38,6 +40,7 @@ class DeviceState:
 
     def load(self) -> None:
         """The first read at start-up: PortAudio is freshly initialised, no re-init."""
+        self.read_attempted = True
         self.inventory = self._read()
         self.known_native = self._native()
         self.loaded = True
@@ -50,8 +53,10 @@ class DeviceState:
             self.refresh_pending = True
             return change
         before = self.inventory
-        if self.loaded:
-            self._reinitialize()  # spec §9 T5; never while a stream is open
+        if self.read_attempted:
+            # Spec §9 T5; never while a stream is open. Also after a failed start-up load:
+            # the inventory's suffix match needs a fresh list (#136).
+            self._reinitialize()
         self.full_refreshes += 1
         self.load()
         change = diff_inventory(before.endpoints, self.inventory.endpoints)
