@@ -71,10 +71,12 @@ class PiperEngine:
         return voice
 
     def warm_up(self, languages: Iterable[str]) -> None:
-        """Run one real synthesis per required voice; the sample is the native name."""
+        """Run one real in-memory synthesis per required voice; the sample is the native name.
+
+        No file is written, not even a temporary WAV (CAP-0177 AC-17: a meeting start warms up).
+        """
         for language in languages:
-            output = self.synthesize(self.registry.get(language).native_name, language)
-            output.unlink(missing_ok=True)
+            self.synthesize_pcm(self.registry.get(language).native_name, language)
 
     def synthesize(self, text: str, language: str) -> Path:
         voice = self._load(language)
