@@ -8,7 +8,6 @@ the filesystem and ``models/model-manifest.json`` schema 1 as written by
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -17,8 +16,10 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
+from lianiq.languages import pack_readiness
 from lianiq.languages.errors import SameLanguagePairError
 from lianiq.languages.registry import LanguageId, LanguageRegistry, normalize_language_id
+from lianiq.packs.verify import PackVerifier, sha256_file
 
 if TYPE_CHECKING:
     from lianiq.config import AppConfig
@@ -93,17 +94,33 @@ class ReadinessProbe:
     Paths in the manifest are repository-relative POSIX paths below ``root``. A capability's
     records are the artifacts whose path equals its configured file or lies under its
     configured directory. Digests are computed only when a capability is probed and are
-    cached by (path, size, mtime).
+    cached by (path, size, mtime). Keys of ``pack_files`` follow ``pack_readiness.py``.
     """
 
-    def __init__(self, root: Path, manifest_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        root: Path,
+        manifest_path: Path | None = None,
+        pack_files: pack_readiness.PackFiles | None = None,
+    ) -> None:
         self.root = Path(root)
         self.manifest_path = (
             Path(manifest_path) if manifest_path is not None else self.root / MANIFEST_RELATIVE_PATH
         )
+        self.pack_rule = pack_readiness.PackRule(pack_files)
+        self._verifier = PackVerifier(lambda path: self._hash_file(path))
+        self.invalidate()
+
+    def invalidate(self) -> None:
+        """Forget the manifest and every cached digest (after a pack job)."""
         self._records: dict[str, str] | None = None
         self._manifest_problem: str | None = None
-        self._digests: dict[tuple[str, int, int], str] = {}
+        self.pack_rule.load(None)
+        self._verifier.invalidate()
+
+    @property
+    def verifier(self) -> PackVerifier:
+        return self._verifier
 
     @property
     def manifest_problem(self) -> str | None:
@@ -115,7 +132,13 @@ class ReadinessProbe:
         path = Path(value).expanduser()
         return path if path.is_absolute() else self.root / path
 
+    def _pack_status(self, path: Path) -> str | None:
+        rule = self.pack_rule
+        return rule.status(path, self._relative, self._load_manifest, self.root, self._verifier)
+
     def probe_file(self, path: Path) -> ReadinessStatus:
+        if status := self._pack_status(path):
+            return ReadinessStatus(status)
         if not path.is_file():
             return ReadinessStatus.MISSING
         relative = self._relative(path)
@@ -125,6 +148,8 @@ class ReadinessProbe:
         return self._status_of({relative: records[relative]})
 
     def probe_directory(self, path: Path) -> ReadinessStatus:
+        if status := self._pack_status(path):
+            return ReadinessStatus(status)
         if not path.is_dir():
             return ReadinessStatus.MISSING
         relative = self._relative(path)
@@ -144,7 +169,7 @@ class ReadinessProbe:
     def _status_of(self, records: Mapping[str, str]) -> ReadinessStatus:
         for record_path, expected in records.items():
             file_path = self.root / Path(record_path)
-            if not file_path.is_file() or self._digest(file_path) != expected.lower():
+            if not file_path.is_file() or self._verifier.digest(file_path) != expected.lower():
                 return ReadinessStatus.INVALID
         return ReadinessStatus.VALIDATED
 
@@ -154,22 +179,9 @@ class ReadinessProbe:
         except ValueError:
             return None
 
-    def _digest(self, path: Path) -> str:
-        stat = path.stat()
-        cache_key = (str(path.resolve()), stat.st_size, stat.st_mtime_ns)
-        cached = self._digests.get(cache_key)
-        if cached is None:
-            cached = self._hash_file(path)
-            self._digests[cache_key] = cached
-        return cached
-
     @staticmethod
     def _hash_file(path: Path) -> str:
-        digest = hashlib.sha256()
-        with path.open("rb") as stream:
-            for block in iter(lambda: stream.read(1024 * 1024), b""):
-                digest.update(block)
-        return digest.hexdigest()
+        return sha256_file(path)
 
     def _load_manifest(self) -> dict[str, str]:
         if self._records is not None:
@@ -188,6 +200,7 @@ class ReadinessProbe:
             version = payload.get("schema_version") if isinstance(payload, dict) else None
             self._manifest_problem = f"unsupported model manifest schema_version: {version!r}"
             return self._records
+        self.pack_rule.load(payload)
         artifacts = payload.get("artifacts")
         for item in artifacts if isinstance(artifacts, list) else ():
             if not isinstance(item, dict):
@@ -254,6 +267,10 @@ class CapabilityCatalog:
         }
         voices = {language: Path(path) for language, path in config.tts.voices.items() if path}
         return cls(registry, probe, recognition=recognition, translation=translation, voices=voices)
+
+    @property
+    def probe(self) -> ReadinessProbe:
+        return self._probe
 
     # Configured paths without probing readiness; adapters are built from these.
     def translation_paths(self) -> Mapping[DirectedEdge, Path]:

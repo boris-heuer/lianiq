@@ -1,0 +1,311 @@
+{
+  "format": "lianiq-catalog/v1",
+  "packs": [
+    {
+      "id": "stt-faster-whisper-small",
+      "version": "1",
+      "kind": "recognition",
+      "provides": [
+        "de",
+        "zh-Hans"
+      ],
+      "root": "models/faster-whisper-small",
+      "files": [
+        {
+          "path": ".gitattributes",
+          "size": 1477,
+          "sha256": "db7c0371f46f0840b8f25794c1e3321c9b5820a8cb6ba9694a46fc64b8fae5a6",
+          "url": "https://huggingface.co/Systran/faster-whisper-small/resolve/536b0662742c02347bc0e980a01041f333bce120/.gitattributes"
+        },
+        {
+          "path": "README.md",
+          "size": 1998,
+          "sha256": "329373481008c7c38654aff8ecdcf0163c211557cc7ba8e2ef6f2f84b4f75ec8",
+          "url": "https://huggingface.co/Systran/faster-whisper-small/resolve/536b0662742c02347bc0e980a01041f333bce120/README.md"
+        },
+        {
+          "path": "config.json",
+          "size": 2370,
+          "sha256": "b55496ac7940a7ae47d2c01eab40edfd8701feec1229d9cce3b40014383fb828",
+          "url": "https://huggingface.co/Systran/faster-whisper-small/resolve/536b0662742c02347bc0e980a01041f333bce120/config.json"
+        },
+        {
+          "path": "model.bin",
+          "size": 483546902,
+          "sha256": "3e305921506d8872816023e4c273e75d2419fb89b24da97b4fe7bce14170d671",
+          "url": "https://huggingface.co/Systran/faster-whisper-small/resolve/536b0662742c02347bc0e980a01041f333bce120/model.bin"
+        },
+        {
+          "path": "tokenizer.json",
+          "size": 2203239,
+          "sha256": "fb7b63191e9bb045082c79fd742a3106a12c99513ab30df4a0d47fa6cb6fd0ab",
+          "url": "https://huggingface.co/Systran/faster-whisper-small/resolve/536b0662742c02347bc0e980a01041f333bce120/tokenizer.json"
+        },
+        {
+          "path": "vocabulary.txt",
+          "size": 459861,
+          "sha256": "34ce3fe1c5041027b3f8d42912270993f986dbc4bb34cf27f951e34a1e453913",
+          "url": "https://huggingface.co/Systran/faster-whisper-small/resolve/536b0662742c02347bc0e980a01041f333bce120/vocabulary.txt"
+        }
+      ],
+      "archive": null,
+      "publisher": "Systran",
+      "source_url": "https://huggingface.co/Systran/faster-whisper-small",
+      "model": "faster-whisper-small",
+      "upstream_revision": "536b0662742c02347bc0e980a01041f333bce120",
+      "licence": "MIT",
+      "use_constraints": ""
+    },
+    {
+      "id": "mt-de-zh-hans",
+      "version": "1",
+      "kind": "translation",
+      "provides": [
+        "de>zh-Hans"
+      ],
+      "root": "models/opus-mt-de-zh",
+      "files": [
+        {
+          "path": "README.md",
+          "size": 1298,
+          "sha256": "4ccfc39353dd5cf6eac45a3c9c5fa2b940427ae3439d7f838ac96bdff3ec6e61",
+          "url": "https://huggingface.co/Helsinki-NLP/opus-mt-de-zh/resolve/cf77098253bb466b05d2beafd3a3c3dea92ed23b/README.md"
+        },
+        {
+          "path": "config.json",
+          "size": 1361,
+          "sha256": "d07d7fd92079888c5c7aa26df38f284b9e6a7b22f14c7c38ea1f08d59ac60cc1",
+          "url": "https://huggingface.co/Helsinki-NLP/opus-mt-de-zh/resolve/cf77098253bb466b05d2beafd3a3c3dea92ed23b/config.json"
+        },
+        {
+          "path": "generation_config.json",
+          "size": 293,
+          "sha256": "0a6738f1478a9a75d547661fdf6f4d53ea5ee2635c3f8126c87f04b70a06d25c",
+          "url": "https://huggingface.co/Helsinki-NLP/opus-mt-de-zh/resolve/cf77098253bb466b05d2beafd3a3c3dea92ed23b/generation_config.json"
+        },
+        {
+          "path": "pytorch_model.bin",
+          "size": 305756589,
+          "sha256": "0361096f827da22a87c5fb14e809fcecd76c2a2d4a69f3edb3af2084e2c0c47c",
+          "url": "https://huggingface.co/Helsinki-NLP/opus-mt-de-zh/resolve/cf77098253bb466b05d2beafd3a3c3dea92ed23b/pytorch_model.bin"
+        },
+        {
+          "path": "source.spm",
+          "size": 816201,
+          "sha256": "b4133b71df5764b5567a9c0df8a17931bbe0299d2c77a7420f0c6c8efa630778",
+          "url": "https://huggingface.co/Helsinki-NLP/opus-mt-de-zh/resolve/cf77098253bb466b05d2beafd3a3c3dea92ed23b/source.spm"
+        },
+        {
+          "path": "target.spm",
+          "size": 710619,
+          "sha256": "eb1a4b79ddd8f762289f5c92d352c1f499cccfa93ba2ee7e30ee1c4077e557b2",
+          "url": "https://huggingface.co/Helsinki-NLP/opus-mt-de-zh/resolve/cf77098253bb466b05d2beafd3a3c3dea92ed23b/target.spm"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "size": 104,
+          "sha256": "e8e79841951302b9a677525aa1dc78b4ab7ac090f344615dfd9ab81b5e0d35e7",
+          "url": "https://huggingface.co/Helsinki-NLP/opus-mt-de-zh/resolve/cf77098253bb466b05d2beafd3a3c3dea92ed23b/tokenizer_config.json"
+        },
+        {
+          "path": "vocab.json",
+          "size": 1399675,
+          "sha256": "2d2023bdd779d09e6fa962586e18a4e42ad2757c38c158be5e3facbcb9c459a5",
+          "url": "https://huggingface.co/Helsinki-NLP/opus-mt-de-zh/resolve/cf77098253bb466b05d2beafd3a3c3dea92ed23b/vocab.json"
+        }
+      ],
+      "archive": null,
+      "publisher": "Helsinki-NLP",
+      "source_url": "https://huggingface.co/Helsinki-NLP/opus-mt-de-zh",
+      "model": "opus-mt-de-zh",
+      "upstream_revision": "cf77098253bb466b05d2beafd3a3c3dea92ed23b",
+      "licence": "Apache-2.0",
+      "use_constraints": ""
+    },
+    {
+      "id": "mt-zh-hans-de",
+      "version": "1",
+      "kind": "translation",
+      "provides": [
+        "zh-Hans>de"
+      ],
+      "root": "models/opus-mt-zh-de",
+      "files": [
+        {
+          "path": "README.md",
+          "size": 2575,
+          "sha256": "0e3c47c5bbad1b940a195e851104e865b20efcd71fdac796f49999e76a9c8d7a",
+          "url": "https://huggingface.co/Helsinki-NLP/opus-mt-zh-de/resolve/799162f10e25405aaa5088ca013295596a4ca517/README.md"
+        },
+        {
+          "path": "config.json",
+          "size": 1394,
+          "sha256": "18846218a3b6c2e4ee15e832cb9d2861b2b6cf1caf63ffe38746491c31039260",
+          "url": "https://huggingface.co/Helsinki-NLP/opus-mt-zh-de/resolve/799162f10e25405aaa5088ca013295596a4ca517/config.json"
+        },
+        {
+          "path": "generation_config.json",
+          "size": 293,
+          "sha256": "81f06422302b9f4666f20c6f20f43b904e38ccce9326a208f82ff97c2c9699e5",
+          "url": "https://huggingface.co/Helsinki-NLP/opus-mt-zh-de/resolve/799162f10e25405aaa5088ca013295596a4ca517/generation_config.json"
+        },
+        {
+          "path": "metadata.json",
+          "size": 1476,
+          "sha256": "4d15ea0e5127ce15be09c7001e96eb171209305c4116977090861114fab3ae56",
+          "url": "https://huggingface.co/Helsinki-NLP/opus-mt-zh-de/resolve/799162f10e25405aaa5088ca013295596a4ca517/metadata.json"
+        },
+        {
+          "path": "pytorch_model.bin",
+          "size": 312087009,
+          "sha256": "69ac87fdd17f74fa1ae30f8b750b36b54b4697622bed52ca8af9733329f8a658",
+          "url": "https://huggingface.co/Helsinki-NLP/opus-mt-zh-de/resolve/799162f10e25405aaa5088ca013295596a4ca517/pytorch_model.bin"
+        },
+        {
+          "path": "source.spm",
+          "size": 748969,
+          "sha256": "2e84dbd9a2d0e8366bde5d911310f2fb1b52c92d135681241c59f91bc11a5155",
+          "url": "https://huggingface.co/Helsinki-NLP/opus-mt-zh-de/resolve/799162f10e25405aaa5088ca013295596a4ca517/source.spm"
+        },
+        {
+          "path": "target.spm",
+          "size": 823304,
+          "sha256": "8a2ec4c936fc560710891109f3211082074dd0990265e2fe5df1c5d4d56b5308",
+          "url": "https://huggingface.co/Helsinki-NLP/opus-mt-zh-de/resolve/799162f10e25405aaa5088ca013295596a4ca517/target.spm"
+        },
+        {
+          "path": "tokenizer_config.json",
+          "size": 44,
+          "sha256": "f3afacb32dd0f32af19b89a843918cbc6bff0b7becb6aed1b61995b0aa64f748",
+          "url": "https://huggingface.co/Helsinki-NLP/opus-mt-zh-de/resolve/799162f10e25405aaa5088ca013295596a4ca517/tokenizer_config.json"
+        },
+        {
+          "path": "vocab.json",
+          "size": 1544996,
+          "sha256": "c559d931f882df50bf67bd9c37fd6306b15416a45ff537edb1060146c7c970ef",
+          "url": "https://huggingface.co/Helsinki-NLP/opus-mt-zh-de/resolve/799162f10e25405aaa5088ca013295596a4ca517/vocab.json"
+        }
+      ],
+      "archive": null,
+      "publisher": "Helsinki-NLP",
+      "source_url": "https://huggingface.co/Helsinki-NLP/opus-mt-zh-de",
+      "model": "opus-mt-zh-de",
+      "upstream_revision": "799162f10e25405aaa5088ca013295596a4ca517",
+      "licence": "Apache-2.0",
+      "use_constraints": ""
+    },
+    {
+      "id": "tts-de-thorsten-medium",
+      "version": "1",
+      "kind": "voice",
+      "provides": [
+        "de"
+      ],
+      "root": "models/piper",
+      "files": [
+        {
+          "path": "de_DE-thorsten-medium.onnx",
+          "size": 63201294,
+          "sha256": "7e64762d8e5118bb578f2eea6207e1a35a8e0c30595010b666f983fc87bb7819",
+          "url": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx"
+        },
+        {
+          "path": "de_DE-thorsten-medium.onnx.json",
+          "size": 4819,
+          "sha256": "974adee790533adb273a1ac88f49027d2a1b8f0f2cf4905954a4791e79264e85",
+          "url": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx.json"
+        },
+        {
+          "path": "de_DE-thorsten-medium.MODEL_CARD.md",
+          "size": 285,
+          "sha256": "5196b5ab0794e6056263a1f37c18bec407b61ac187529bee29d1c366871e5c9e",
+          "url": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/de/de_DE/thorsten/medium/MODEL_CARD"
+        }
+      ],
+      "archive": null,
+      "publisher": "rhasspy",
+      "source_url": "https://huggingface.co/rhasspy/piper-voices/tree/c10ece1aade47bb51c153c893d14e5bf8e5b7117/de/de_DE/thorsten/medium",
+      "model": "de_DE-thorsten-medium",
+      "upstream_revision": "c10ece1aade47bb51c153c893d14e5bf8e5b7117",
+      "licence": "MIT (repository); CC0 (Thorsten dataset, see the model card)",
+      "use_constraints": "Keep the model card with the voice files."
+    },
+    {
+      "id": "tts-zh-hans-aishell3",
+      "version": "1",
+      "kind": "voice",
+      "provides": [
+        "zh-Hans"
+      ],
+      "root": "models/sherpa/vits-icefall-zh-aishell3",
+      "files": [
+        {
+          "path": "model.onnx",
+          "size": 30482262,
+          "sha256": "5511d651b7840c0a93a6bbfd4afd070a2c7f39ca1ec3ff2ecd73191519bbb852",
+          "url": null
+        },
+        {
+          "path": "lexicon.txt",
+          "size": 2042943,
+          "sha256": "ab2e61d357551e7b24ddd965d924aca784c20165ff58c150794e539c6b5e9e35",
+          "url": null
+        },
+        {
+          "path": "tokens.txt",
+          "size": 1671,
+          "sha256": "50b45a7b7de1752fd3c7b4755661c285f1547f59186eca2281089a81307ad953",
+          "url": null
+        },
+        {
+          "path": "phone.fst",
+          "size": 88630,
+          "sha256": "1ac2b6fa56b1442320c4de7db08353bab8963a2b57f365eebcdd3a2d3562f8d7",
+          "url": null
+        },
+        {
+          "path": "date.fst",
+          "size": 59154,
+          "sha256": "eb8aa079ae3cb81d8f4404992f39d61a0cb990947512b5b8d1e54d1f6980e718",
+          "url": null
+        },
+        {
+          "path": "number.fst",
+          "size": 64482,
+          "sha256": "743f402181fcfebf76cc2f0546b71fa26476e626fbe4e460fb7b4c3a7a8bd5bd",
+          "url": null
+        },
+        {
+          "path": "new_heteronym.fst",
+          "size": 21974,
+          "sha256": "ca14b2127e27baa571664e4bb791e143e7425f56a6bc29db08d74f97e6aa4e29",
+          "url": null
+        },
+        {
+          "path": "rule.far",
+          "size": 180717014,
+          "sha256": "b090ed05e333fe125b62d8b1de5f1a1d4579fb237c606e7ac0b84707c863a01f",
+          "url": null
+        },
+        {
+          "path": "speakers.txt",
+          "size": 1392,
+          "sha256": "50a825fc9a89172eee04a4d68869d933d0eca0d847f3b6fcffff9514cc72442d",
+          "url": null
+        }
+      ],
+      "archive": {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-icefall-zh-aishell3.tar.bz2",
+        "size": 31559701,
+        "sha256": "ab468db3a3308cdd861495e0db2f25d79418a0c00639f74944c7cdf5dd8c6ec1",
+        "top_level": "vits-icefall-zh-aishell3"
+      },
+      "publisher": "k2-fsa",
+      "source_url": "https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models",
+      "model": "vits-icefall-zh-aishell3",
+      "upstream_revision": "ab468db3a3308cdd861495e0db2f25d79418a0c00639f74944c7cdf5dd8c6ec1",
+      "licence": "Apache-2.0 (icefall VITS recipe; AISHELL-3 dataset)",
+      "use_constraints": "The archive contains no licence file; the provenance of the lexicon and the text-normalisation rules is still open (lianiq#81)."
+    }
+  ]
+}
