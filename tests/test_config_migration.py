@@ -116,6 +116,19 @@ def test_ac16_v1_default_and_v1_overlay_are_migrated_separately_then_merged(
         ({"languages": {"pair": ["de", "en"]}}, "languages"),
         ({"tts": "off"}, "tts"),
         ({"schema_version": 3}, "schema_version"),
+        # CAP-0167 AC-20: ``tts.output`` keys must be registry IDs and values in range.
+        ({"schema_version": 2, "tts": {"output": []}}, "tts.output"),
+        ({"schema_version": 2, "tts": {"output": {"qaa": {}}}}, "tts.output.qaa"),
+        ({"schema_version": 2, "tts": {"output": {"zh-hans": {}}}}, "tts.output.zh-hans"),
+        ({"schema_version": 2, "tts": {"output": {"de": "on"}}}, "tts.output.de"),
+        ({"schema_version": 2, "tts": {"output": {"de": {"pitch": 1}}}}, "tts.output.de.pitch"),
+        ({"schema_version": 2, "tts": {"output": {"de": {"rate": 2.0}}}}, "tts.output.de.rate"),
+        ({"schema_version": 2, "tts": {"output": {"de": {"volume": 0}}}}, "tts.output.de.volume"),
+        (
+            {"schema_version": 2, "tts": {"output": {"de": {"speaker": -1}}}},
+            "tts.output.de.speaker",
+        ),
+        ({"schema_version": 2, "tts": {"output": {"de": {"enabled": 1}}}}, "tts.output.de.enabled"),
     ],
 )
 def test_ac16_unmappable_value_raises_naming_the_key_and_leaves_files_unchanged(
@@ -150,3 +163,58 @@ def test_partial_legacy_overlay_adds_no_v2_defaults() -> None:
     overlay = {"call_bridge": {"enabled": True, "local_microphone_endpoint_id": "id"}}
 
     assert migrate_settings(overlay) == {"schema_version": 2, **overlay}
+
+
+@pytest.mark.parametrize("legacy_output", ["text", "spoken", None])
+def test_ac20_file_without_tts_output_ignores_the_legacy_output_value(
+    settings_dir: Path, legacy_output: str | None
+) -> None:
+    # PO decision 2026-11-19 ("A: neue Regel"): every switch starts at its default (on when
+    # the voice is ready); a stored ``languages.output`` is never carried into ``tts.output``.
+    from lianiq.config_voice import VoiceOutputPreference, VoicePreferences
+    from lianiq.languages import BUILTIN_REGISTRY
+
+    default = json.loads(REPO_DEFAULT.read_text(encoding="utf-8"))
+    del default["tts"]["output"]
+    languages = {"pair": default["languages"]["pair"]}
+    if legacy_output is not None:
+        languages["output"] = legacy_output
+    (settings_dir / "settings.json").write_text(json.dumps(default), encoding="utf-8")
+    local_path = settings_dir / "settings.local.json"
+    local_path.write_text(
+        json.dumps({"schema_version": 2, "languages": languages}), encoding="utf-8"
+    )
+    local_bytes = local_path.read_bytes()
+
+    config = AppConfig.load()
+
+    assert config.tts.output == {}
+    preferences = VoicePreferences(config, BUILTIN_REGISTRY)
+    for language in config.languages.pair:
+        assert preferences.get(language) == VoiceOutputPreference(enabled=None)
+    assert local_path.read_bytes() == local_bytes
+
+
+def test_ac20_valid_tts_output_entries_load(settings_dir: Path) -> None:
+    from lianiq.config_voice import VoiceOutputPreference
+
+    pair = json.loads(REPO_DEFAULT.read_text(encoding="utf-8"))["languages"]["pair"]
+    first, second = pair
+    output = {
+        first: {"enabled": None, "speaker": None, "rate": 1.0, "volume": 1.0},
+        second: {"enabled": False, "speaker": 31, "rate": 1.1, "volume": 1.0},
+    }
+    (settings_dir / "settings.json").write_bytes(REPO_DEFAULT.read_bytes())
+    (settings_dir / "settings.local.json").write_text(
+        json.dumps({"schema_version": 2, "tts": {"output": output}}), encoding="utf-8"
+    )
+
+    config = AppConfig.load()
+
+    assert config.tts.output == {
+        first: VoiceOutputPreference(),
+        second: VoiceOutputPreference(enabled=False, speaker=31, rate=1.1),
+    }
+    assert migrate_settings({"schema_version": 2, "tts": {"output": output}})["tts"] == {
+        "output": output
+    }
