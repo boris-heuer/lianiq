@@ -17,6 +17,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from lianiq.config_voice import validate_output_settings
 from lianiq.languages.errors import SettingsMigrationError
 
 __all__ = [
@@ -130,15 +131,19 @@ def migrate_settings(raw: object) -> dict[str, Any]:
 
     A v2 document is returned as a copy. A document without ``schema_version`` is v1
     and is mapped key by key (contract.md §4.2). Raises :class:`SettingsMigrationError`
-    naming the first key that cannot be mapped.
+    naming the first key that cannot be mapped, or an unknown language key or
+    out-of-range value of ``tts.output`` (CAP-0167 contract.md §6).
     """
     if not isinstance(raw, Mapping):
         raise SettingsMigrationError("(root)")
     if "schema_version" in raw:
         if not _is_schema_version(raw["schema_version"]):
             raise SettingsMigrationError("schema_version")
-        return _migrate_voice_engines(copy.deepcopy(dict(raw)))
-    return _migrate_voice_engines(_migrate_v1(raw))
+        settings = _migrate_voice_engines(copy.deepcopy(dict(raw)))
+    else:
+        settings = _migrate_voice_engines(_migrate_v1(raw))
+    validate_output_settings(settings)
+    return settings
 
 
 def read_settings_file(path: Path) -> dict[str, Any]:
