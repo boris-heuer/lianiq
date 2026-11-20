@@ -12,6 +12,7 @@ from lianiq.config_migration import (
     backup_legacy_settings,
     read_settings_file,
 )
+from lianiq.config_voice import VoiceOutputPreference, output_preferences
 
 PROJECT_ROOT = (
     Path(sys.executable).resolve().parent
@@ -167,8 +168,10 @@ class TtsConfig:
     )
     length_scale: float = 1.0
     device: str = "auto"
+    output: dict[str, VoiceOutputPreference] = field(default_factory=dict)  # CAP-0167
 
     def __post_init__(self) -> None:
+        self.output = output_preferences(self.output)
         self.engines = {
             key: value if isinstance(value, VoiceEngineConfig) else VoiceEngineConfig(**value)
             for key, value in self.engines.items()
