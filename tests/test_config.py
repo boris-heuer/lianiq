@@ -208,3 +208,12 @@ def test_engine_selection_round_trips(tmp_path: Path) -> None:
     config.save(path)
 
     assert AppConfig.load(path).tts.engines["zh-Hans"].speaker_id == 33
+
+
+def test_repository_default_has_an_empty_voice_output_block() -> None:
+    # CAP-0167 contract.md §6: no preference is stored until the user changes one.
+    shipped = json.loads(config_module.DEFAULT_CONFIG_PATH.read_text(encoding="utf-8"))
+
+    assert shipped["tts"]["output"] == {}
+    assert AppConfig.load(config_module.DEFAULT_CONFIG_PATH).tts.output == {}
+    assert AppConfig().tts.output == {}
