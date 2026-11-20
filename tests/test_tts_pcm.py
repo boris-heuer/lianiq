@@ -21,9 +21,11 @@ from lianiq.call_bridge.contracts import AudioEndpointRef, EndpointFlow
 from lianiq.languages import LanguageId
 from lianiq.tts.piper_engine import PiperEngine
 from lianiq.tts.sherpa_onnx_engine import SherpaOnnxEngine, SherpaVoiceSettings
+from lianiq.tts.voice_controls import VoiceOptions
 from lianiq.tts.voice_router import VoiceRouter
 from tests.audio.test_device_opening import fake_sounddevice
 from tests.test_sherpa_onnx_engine import FakeSherpa, read_wav, voice_dir
+from tests.test_voice_controls import SynthesisConfig18
 
 DE = LanguageId("de")
 ZH = LanguageId("zh-Hans")
@@ -58,7 +60,7 @@ class OldApiVoice:
 @pytest.fixture
 def piper_module(monkeypatch):
     module = types.ModuleType("piper")
-    module.SynthesisConfig = lambda **kwargs: types.SimpleNamespace(**kwargs)
+    module.SynthesisConfig = SynthesisConfig18
     monkeypatch.setitem(sys.modules, "piper", module)
 
 
@@ -82,6 +84,18 @@ def test_piper_synthesize_pcm_matches_the_wav_without_a_file(
     assert samples.tobytes() == expected == FRAMES.tobytes()
 
 
+@pytest.mark.parametrize("voice", [NewApiVoice(), OldApiVoice()])
+def test_piper_in_memory_synthesis_takes_voice_options(piper_module, voice, tmp_path) -> None:
+    # CAP-0167 AC-15: the options apply per call; the cached voice is not reloaded.
+    engine = PiperEngine({DE: tmp_path / "de.onnx"}, device="cpu")
+    engine._loaded[DE] = voice
+
+    samples, rate = engine.synthesize_pcm("Hallo", DE, VoiceOptions(rate=1.25, volume=0.5))
+
+    assert (samples.tobytes(), rate) == (FRAMES.tobytes(), 22_050)
+    assert engine._loaded[DE] is voice
+
+
 def test_sherpa_synthesize_pcm_matches_the_wav_without_a_file(monkeypatch, tmp_path) -> None:
     fake = FakeSherpa()
     monkeypatch.setitem(sys.modules, "sherpa_onnx", fake.module())
@@ -103,13 +117,16 @@ def test_the_router_delegates_in_memory_synthesis_per_language() -> None:
     calls = []
 
     class Engine:
-        def synthesize_pcm(self, text, language):
-            calls.append((text, language))
+        def synthesize_pcm(self, text, language, options=None):
+            calls.append((text, language, options))
             return FRAMES, 16_000
 
     router = VoiceRouter({"de": Engine()})
     assert router.synthesize_pcm("Hallo", DE) == (FRAMES, 16_000)
-    assert calls == [("Hallo", DE)]
+    options = VoiceOptions(rate=1.1)
+    assert router.bound({"DE": options}).synthesize_pcm("Hallo", "de") == (FRAMES, 16_000)
+    assert router.bound({}).synthesize_pcm("Hallo", DE) == (FRAMES, 16_000)
+    assert calls == [("Hallo", DE, None), ("Hallo", DE, options), ("Hallo", DE, VoiceOptions())]
 
 
 def test_play_pcm_opens_the_index_like_play_wav(monkeypatch) -> None:
