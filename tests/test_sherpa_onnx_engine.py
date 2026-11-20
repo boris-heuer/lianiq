@@ -278,3 +278,18 @@ def test_voices_use_normalized_ids_and_the_given_registry(sherpa, tmp_path) -> N
 def test_invalid_settings_are_rejected(build) -> None:
     with pytest.raises(ValueError):
         build()
+
+
+def test_default_voice_options_reproduce_todays_generate_call(sherpa, tmp_path) -> None:
+    # CAP-0167 contract.md §1: ``VoiceOptions()`` changes nothing; speaker 0 is a real choice.
+    from lianiq.tts.voice_controls import VoiceOptions
+
+    engine = SherpaOnnxEngine({ZH: voice_dir(tmp_path)}, {ZH: SherpaVoiceSettings(speaker_id=20)})
+
+    plain = engine.synthesize_pcm("你好", ZH)
+    default = engine.synthesize_pcm("你好", ZH, VoiceOptions())
+    engine.synthesize_pcm("你好", ZH, VoiceOptions(speaker=0))
+
+    assert plain[0].tolist() == default[0].tolist()
+    assert sherpa.calls == [("你好", 20, 1.0), ("你好", 20, 1.0), ("你好", 0, 1.0)]
+    assert len(sherpa.configs) == 1
