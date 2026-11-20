@@ -19,6 +19,7 @@ from lianiq.languages.errors import LanguageContractError
 from lianiq.languages.registry import Availability, LanguageRegistry
 from lianiq.languages.requirements import Requirement, RequirementKind
 from lianiq.packs.errors import PackCatalogError, UnknownPackError
+from lianiq.packs.paths import is_safe_relative  # re-exported for pack_file and callers
 
 BUILTIN_CATALOG_PATH = Path(__file__).resolve().with_name("builtin_catalog.json")
 CATALOG_FORMAT = "lianiq-catalog/v1"
@@ -98,13 +99,6 @@ class PackDefinition:
     @property
     def download_bytes(self) -> int:
         return self.archive.size if self.archive is not None else self.installed_bytes
-
-
-def is_safe_relative(path: object) -> bool:
-    """A non-empty POSIX path without drive, leading "/", backslash, "." or ".." segments."""
-    if not isinstance(path, str) or not path or "\\" in path or ":" in path:
-        return False
-    return path[0] != "/" and all(part not in ("", ".", "..") for part in path.split("/"))
 
 
 def is_sha256(value: object) -> bool:
