@@ -12,6 +12,7 @@ import numpy as np
 from lianiq.languages.errors import CapabilityMissingError
 from lianiq.languages.registry import BUILTIN_REGISTRY, LanguageId, LanguageRegistry
 from lianiq.languages.requirements import Requirement, RequirementKind
+from lianiq.tts.voice_controls import VoiceControls, VoiceOptions, check_speaker
 
 # Files of a sherpa-onnx VITS voice directory (the k2-fsa ``vits-icefall-*`` layout).
 MODEL_FILE = "model.onnx"
@@ -99,6 +100,18 @@ class SherpaOnnxEngine:
                 f"{paths}. Provision the pinned voice with scripts/download_models.py first."
             )
 
+    def controls(self, language: str) -> VoiceControls:
+        """Voice and Rate; ``speakers`` is ``None`` until the voice is loaded (contract §2)."""
+        language_id, _voice_path = self._voice_path(language)
+        loaded = self._loaded.get(language_id)
+        speakers = None if loaded is None else _speaker_count(loaded)
+        return VoiceControls(speakers, rate=True, volume=False)
+
+    def load_controls(self, language: str) -> VoiceControls:
+        """Load the voice if needed (worker thread only), then return its controls."""
+        self._load(language)
+        return self.controls(language)
+
     def _load(self, language: str):
         language_id, voice_path = self._voice_path(language)
         with self._load_lock:
@@ -148,9 +161,9 @@ class SherpaOnnxEngine:
         for language in languages:
             self.synthesize_pcm(self.registry.get(language).native_name, language)
 
-    def synthesize(self, text: str, language: str) -> Path:
+    def synthesize(self, text: str, language: str, options: VoiceOptions | None = None) -> Path:
         """Synthesize ``text`` to a PCM16 mono WAV temp file, peak-normalised to 0.9."""
-        pcm, sample_rate = self.synthesize_pcm(text, language)
+        pcm, sample_rate = self.synthesize_pcm(text, language, options)
         with tempfile.NamedTemporaryFile(prefix="lianiq-", suffix=".wav", delete=False) as handle:
             output = Path(handle.name)
         try:
@@ -164,12 +177,23 @@ class SherpaOnnxEngine:
             output.unlink(missing_ok=True)
             raise
 
-    def synthesize_pcm(self, text: str, language: str) -> tuple[np.ndarray, int]:
-        """Synthesize ``text`` in memory: PCM16 mono samples, peak-normalised to 0.9, and rate."""
+    def synthesize_pcm(
+        self, text: str, language: str, options: VoiceOptions | None = None
+    ) -> tuple[np.ndarray, int]:
+        """Synthesize ``text`` in memory: PCM16 mono samples, peak-normalised to 0.9, and rate.
+
+        ``options.speaker`` (0 included) replaces the configured ``speaker_id``; ``options.rate``
+        is the ``speed``; ``options.volume`` is not supported (no gain parameter).
+        """
+        options = options or VoiceOptions()
         tts = self._load(language)
-        language_id = self.registry.get(language).id
+        language_id, voice_path = self._voice_path(language)
+        if getattr(tts, "num_speakers", 0):
+            check_speaker(options, _speaker_count(tts), voice_path)
+        settings = self._settings(language_id)
+        sid = settings.speaker_id if options.speaker is None else options.speaker
         with self._lock:
-            audio = tts.generate(text, sid=self._settings(language_id).speaker_id, speed=1.0)
+            audio = tts.generate(text, sid=sid, speed=options.rate)
         samples = np.asarray(audio.samples, dtype=np.float32)
         if samples.size == 0:
             raise RuntimeError("sherpa-onnx produced no audio for the given text")
@@ -178,3 +202,7 @@ class SherpaOnnxEngine:
             samples = samples * (PEAK_LEVEL / peak)
         pcm = (np.clip(samples, -1.0, 1.0) * 32767.0).astype("<i2")
         return pcm, int(audio.sample_rate)
+
+
+def _speaker_count(tts: object) -> int:
+    return max(1, int(getattr(tts, "num_speakers", 0) or 0))
