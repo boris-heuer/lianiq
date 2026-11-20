@@ -175,3 +175,30 @@ def test_router_delegates_per_language_and_names_a_missing_voice(tmp_path, monke
         with pytest.raises(CapabilityMissingError) as raised:
             action()
         assert raised.value.requirement.subject == "zh-Hans"
+
+
+# --- CAP-0167: voice controls of the repository default voices ------------------------------
+
+
+def test_ac14_default_voices_offer_rate_and_volume_or_voice_and_rate(tmp_path, monkeypatch) -> None:
+    # German (Piper, single speaker): Rate and, per the 1.8.0 fields, Volume; Mandarin
+    # (sherpa-onnx, multi-speaker): Voice once loaded, and Rate, never Volume.
+    import sys
+
+    from lianiq.app import build_synthesizer
+    from lianiq.config import TtsConfig
+    from lianiq.tts.voice_controls import VoiceControls
+    from tests.test_sherpa_onnx_engine import FakeSherpa, voice_dir
+    from tests.test_voice_controls import FakePiper, piper_voice
+
+    piper, sherpa = FakePiper(), FakeSherpa()
+    monkeypatch.setitem(sys.modules, "piper", piper.module())
+    monkeypatch.setitem(sys.modules, "sherpa_onnx", sherpa.module())
+    router = build_synthesizer(
+        TtsConfig(device="cpu"), {DE: piper_voice(tmp_path), ZH: voice_dir(tmp_path)}
+    )
+
+    assert router.controls(DE) == VoiceControls(speakers=1, rate=True, volume=True)
+    assert router.controls(ZH) == VoiceControls(speakers=None, rate=True, volume=False)
+    assert router.load_controls(ZH) == VoiceControls(speakers=174, rate=True, volume=False)
+    assert (piper.loads, len(sherpa.configs)) == ([], 1)
