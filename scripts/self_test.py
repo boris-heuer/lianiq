@@ -6,12 +6,15 @@ import wave
 from pathlib import Path
 
 from lianiq.app import build_pipeline
+from lianiq.audio.playback import stop_playback
 from lianiq.audio.wav import read_pcm16_mono
 from lianiq.config import AppConfig
 from lianiq.conversation.routing import HeldTurn
+from lianiq.conversation.spoken_output import SpokenOutput, output_languages
 from lianiq.languages.modes import InputKind, OutputKind, RoutingKind, SessionPair, UsageMode
 from lianiq.languages.registry import LanguageId
-from lianiq.pipeline import bind_utterance
+from lianiq.pipeline import PipelineEvent, bind_utterance
+from lianiq.tts.voice_controls import VoiceOptions
 
 MAX_PROCESSING_SECONDS = 3.0
 
@@ -26,9 +29,18 @@ def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     config = AppConfig.load()
-    config.voice_output = True
     pipeline = build_pipeline(config)
-    pipeline.playback = validate_wav
+    # Each translation is spoken after its result, as in Conversation; the WAV is validated
+    # instead of played.
+    events: list[PipelineEvent] = []
+    spoken = SpokenOutput(
+        pipeline.voice_synthesizer,
+        validate_wav,
+        stop_playback,
+        lambda _language: VoiceOptions(),
+        lambda _state: None,
+        events.append,
+    )
     # Conversation with spoken output needs every model the two fixed cases use.
     session = SessionPair(
         pipeline.registry.pair(*config.languages.pair),
@@ -60,20 +72,29 @@ def main() -> int:
             utterance = read_pcm16_mono(source_wav)
         finally:
             source_wav.unlink(missing_ok=True)
+        started = time.perf_counter()
         result = pipeline.process(bind_utterance(utterance, fixed))
         if result is None or isinstance(result, HeldTurn):
             print(f"FAIL {label}: no speech recognized")
             passed = False
             continue
-        case_passed = bool(result.source_text and result.translated_text)
-        case_passed = case_passed and result.total_seconds <= MAX_PROCESSING_SECONDS
+        spoken.open(output_languages(fixed), None)
+        tts_started = time.perf_counter()
+        spoken.speak(result)
+        tts_seconds = time.perf_counter() - tts_started
+        total_seconds = time.perf_counter() - started
+        case_passed = bool(result.source_text and result.translated_text) and not events
+        case_passed = case_passed and total_seconds <= MAX_PROCESSING_SECONDS
         passed = passed and case_passed
         marker = "PASS" if case_passed else "FAIL"
         print(
-            f"{marker} {label}: {result.total_seconds:.3f} s "
+            f"{marker} {label}: {total_seconds:.3f} s "
             f"(STT {result.stt_seconds:.3f}, translation {result.translation_seconds:.3f}, "
-            f"TTS {result.tts_seconds:.3f})"
+            f"TTS {tts_seconds:.3f})"
         )
+        for event in events:
+            print(f"  {event.kind.value}: {event.message}")
+        events.clear()
         print(f"  recognized: {result.source_text}")
         print(f"  translated: {result.translated_text}")
 
