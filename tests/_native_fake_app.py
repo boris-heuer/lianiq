@@ -24,7 +24,7 @@ PLANNED = "Planned — not available yet"
 SIDEBAR = (
     ("Conversation", True, ""),
     ("Meeting", True, ""),
-    ("Text translation", False, PLANNED),
+    ("Text translation", True, ""),
     ("Listen & translate", False, PLANNED),
     ("Call Bridge", True, "Experimental"),
     ("Language packs", True, ""),
