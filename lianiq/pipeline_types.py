@@ -74,6 +74,7 @@ class PipelineEventKind(StrEnum):
     QUEUE_OVERFLOW = "queue_overflow"  # the oldest pending segment was dropped
     TURNS_DROPPED = "turns_dropped"  # queued segments not translated before Stop
     PLAYBACK_FAILED = "playback_failed"  # spoken output failed; the turn stays as text
+    SYNTHESIS_FAILED = "synthesis_failed"  # one turn was not spoken; it stays as text
 
 
 @dataclass(frozen=True, slots=True)
