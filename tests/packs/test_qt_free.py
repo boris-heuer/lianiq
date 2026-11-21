@@ -11,11 +11,20 @@ import pytest
 QT_FREE_MODULES = (
     "lianiq.packs",
     "lianiq.packs.catalog",
+    "lianiq.packs.disk",
     "lianiq.packs.errors",
+    "lianiq.packs.import_source",
+    "lianiq.packs.installer",
     "lianiq.packs.jobs",
+    "lianiq.packs.journal",
     "lianiq.packs.manifest",
     "lianiq.packs.pack_file",
+    "lianiq.packs.paths",
+    "lianiq.packs.protection",
+    "lianiq.packs.recovery",
+    "lianiq.packs.sources",
     "lianiq.packs.state",
+    "lianiq.packs.transfer",
     "lianiq.packs.verify",
     "lianiq.languages.pack_readiness",
 )
@@ -37,7 +46,7 @@ def test_pack_core_imports_no_pyside6() -> None:
 def test_pack_sources_name_no_pyside6() -> None:
     root = Path(__file__).resolve().parents[2] / "lianiq"
     sources = [*sorted((root / "packs").glob("*.py")), root / "languages/pack_readiness.py"]
-    assert len(sources) == 9
+    assert len(sources) == 18
     for source in sources:
         assert "PySide6" not in source.read_text(encoding="utf-8"), source.name
 
@@ -56,3 +65,11 @@ def test_job_values_for_state() -> None:
     )
     with pytest.raises(AttributeError):  # frozen
         view.done = 4  # type: ignore[misc]
+
+
+def test_pack_sources_use_only_the_standard_library_for_transfers() -> None:
+    """Spec §8: runtime ``lianiq/`` keeps no ``huggingface_hub`` import; ``urllib`` only."""
+    root = Path(__file__).resolve().parents[2] / "lianiq"
+    for source in sorted((root / "packs").glob("*.py")):
+        text = source.read_text(encoding="utf-8")
+        assert "huggingface_hub" not in text and "import requests" not in text, source.name
