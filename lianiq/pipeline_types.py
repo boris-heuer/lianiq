@@ -15,6 +15,7 @@ import numpy as np
 from lianiq.conversation.routing import HeldTurn
 from lianiq.domain import AudioUtterance, Transcript
 from lianiq.languages.capabilities import DirectedEdge
+from lianiq.languages.errors import CapabilityMissingError
 from lianiq.languages.modes import SessionPair
 from lianiq.languages.registry import LanguageId
 
@@ -75,6 +76,30 @@ class PipelineEventKind(StrEnum):
     TURNS_DROPPED = "turns_dropped"  # queued segments not translated before Stop
     PLAYBACK_FAILED = "playback_failed"  # spoken output failed; the turn stays as text
     SYNTHESIS_FAILED = "synthesis_failed"  # one turn was not spoken; it stays as text
+    TURN_FAILED = "turn_failed"  # one turn failed (``report_turn_failures``); CAP-0170 C §7
+
+
+class FailureReason(StrEnum):
+    """Why one turn or text job failed (moved unchanged from ``text_translation.jobs``)."""
+
+    MODEL = "model"
+    MEMORY = "memory"
+    DEVICE = "device"  # playback only: the speakers could not be opened
+    OTHER = "other"
+
+
+def classify_failure(error: BaseException) -> FailureReason:
+    names = {cls.__name__ for cls in type(error).__mro__}
+    if isinstance(error, MemoryError) or "OutOfMemoryError" in names:
+        return FailureReason.MEMORY
+    if isinstance(error, RuntimeError) and "out of memory" in str(error).lower():
+        return FailureReason.MEMORY  # torch CPU allocation failure
+    if (
+        isinstance(error, CapabilityMissingError | OSError | ImportError)
+        or "ModelLoadError" in names
+    ):
+        return FailureReason.MODEL  # OSError covers FileNotFoundError and load I/O errors
+    return FailureReason.OTHER
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +110,9 @@ class PipelineEvent:
     count: int = 1
     language: LanguageId | None = None
     message: str = ""
+    turn_id: UUID | None = None  # QUEUE_OVERFLOW: the dropped item; TURN_FAILED: the turn
+    turn_ids: tuple[UUID, ...] = ()  # TURNS_DROPPED: every dropped item
+    failure: FailureReason | None = None  # TURN_FAILED only
 
 
 @dataclass(frozen=True, slots=True)

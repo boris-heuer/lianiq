@@ -13,6 +13,7 @@ import queue
 import threading
 import time
 from collections.abc import Callable
+from uuid import UUID
 
 from lianiq.conversation.routing import HeldTurn
 from lianiq.domain import AudioUtterance, TranslationResult
@@ -23,6 +24,7 @@ from lianiq.pipeline_types import (
     DEFAULT_DETECTION_MIN_PROBABILITY,  # noqa: F401 - re-export
     AdapterFactories,  # noqa: F401 - re-export
     BoundUtterance,
+    FailureReason,  # noqa: F401 - re-export
     PipelineEvent,
     PipelineEventKind,
     SpeechRecognizer,  # noqa: F401 - re-export
@@ -32,6 +34,7 @@ from lianiq.pipeline_types import (
     _RetainedTurn,  # noqa: F401 - re-export
     _warm_up,  # noqa: F401 - re-export
     bind_utterance,
+    classify_failure,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -55,6 +58,8 @@ class PipelineRunner:
         on_held: Callable[[HeldTurn], None] | None = None,
         max_pending: int = 2,
         on_event: Callable[[PipelineEvent], None] | None = None,
+        *,
+        report_turn_failures: bool = False,
     ) -> None:
         self.pipeline = pipeline
         self.on_result = on_result
@@ -65,6 +70,8 @@ class PipelineRunner:
         # reported through ``on_error`` as text, as before.
         self.on_event = on_event
         self.max_pending = max_pending
+        # Listen (CAP-0170 C §7): a failed turn is a ``TURN_FAILED`` event, not ``on_error``.
+        self.report_turn_failures = report_turn_failures
         self._queue: queue.Queue[BoundUtterance | None] = queue.Queue(maxsize=max_pending)
         self._thread: threading.Thread | None = None
         self._session: SessionPair | None = None
@@ -92,19 +99,27 @@ class PipelineRunner:
         session = self._session
         if not self._accepting or session is None:
             return
-        item = bind_utterance(utterance, session)
+        self.submit_bound(bind_utterance(utterance, session))
+
+    def submit_bound(self, item: BoundUtterance) -> None:
+        """Queue an already bound item; ignored unless it belongs to the current session."""
+        session = self._session
+        if not self._accepting or session is None or item.session != session:
+            return
         try:
             self._queue.put_nowait(item)
         except queue.Full:
             # Drop the oldest waiting utterance: stale speech is worse than a visible warning.
+            dropped: BoundUtterance | None = None
             try:
-                self._queue.get_nowait()
+                dropped = self._queue.get_nowait()
                 self._queue.task_done()
                 self._queue.put_nowait(item)
             except queue.Empty:
                 pass
             if self.on_event is not None:
-                self.on_event(PipelineEvent(PipelineEventKind.QUEUE_OVERFLOW))
+                turn_id = dropped.turn_id if dropped is not None else None
+                self.on_event(PipelineEvent(PipelineEventKind.QUEUE_OVERFLOW, turn_id=turn_id))
             else:
                 self.on_error("The audio queue was full; the oldest pending segment was dropped.")
 
@@ -162,21 +177,32 @@ class PipelineRunner:
         if thread.is_alive():
             with self._take_lock:
                 self._abort.set()
-                dropped = self._drain()
+                turn_ids = self._drain_ids()
+                dropped = len(turn_ids)
             LOGGER.warning(
                 "Pipeline worker did not finish within %.1f seconds; %d queued item(s) dropped",
                 timeout,
                 dropped,
             )
             if dropped:
-                self._report_dropped(dropped)
+                self._report_dropped(dropped, turn_ids)
             return dropped
         self._thread = None
         return 0
 
-    def _report_dropped(self, dropped: int) -> None:
+    def wait_idle(self, timeout: float) -> bool:
+        """Join the worker; True when it has ended (at once if it already had)."""
+        thread = self._thread
+        if thread is None or not thread.is_alive():
+            return True
+        thread.join(timeout=max(0.0, timeout))
+        return not thread.is_alive()
+
+    def _report_dropped(self, dropped: int, turn_ids: tuple[UUID, ...] = ()) -> None:
         if self.on_event is not None:
-            self.on_event(PipelineEvent(PipelineEventKind.TURNS_DROPPED, count=dropped))
+            self.on_event(
+                PipelineEvent(PipelineEventKind.TURNS_DROPPED, count=dropped, turn_ids=turn_ids)
+            )
             return
         self.on_error(
             f"{dropped} queued speech segment(s) were not translated before the "
@@ -184,15 +210,18 @@ class PipelineRunner:
         )
 
     def _drain(self) -> int:
-        dropped = 0
+        return len(self._drain_ids())
+
+    def _drain_ids(self) -> tuple[UUID, ...]:
+        dropped: list[UUID] = []
         while True:
             try:
                 item = self._queue.get_nowait()
             except queue.Empty:
-                return dropped
+                return tuple(dropped)
             self._queue.task_done()
             if item is not None:
-                dropped += 1
+                dropped.append(item.turn_id)
 
     def _deliver(self, result: TranslationResult) -> None:
         """Show the text first, then speak it (CAP-0167 C §5): text never waits for speech."""
@@ -226,8 +255,19 @@ class PipelineRunner:
                 elif outcome is not None:
                     self._deliver(outcome)
             except Exception as exc:
-                LOGGER.exception("Translation pipeline failed")
-                self.on_error(str(exc))
+                if self.report_turn_failures and self.on_event is not None:
+                    # The message stays in the local log only (CAP-0170 C §7).
+                    LOGGER.warning("Turn failed (%s)", type(exc).__name__)
+                    self.on_event(
+                        PipelineEvent(
+                            PipelineEventKind.TURN_FAILED,
+                            turn_id=item.turn_id,
+                            failure=classify_failure(exc),
+                        )
+                    )
+                else:
+                    LOGGER.exception("Translation pipeline failed")
+                    self.on_error(str(exc))
             finally:
                 if self.on_busy and item is not None:
                     self.on_busy(False)
