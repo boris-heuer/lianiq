@@ -16,9 +16,10 @@ from lianiq.languages.requirements import (
     MISSING_VOICE,
 )
 from lianiq.languages.session import LOCKED_MESSAGE
-from lianiq.ui import strings_meeting, strings_packs
+from lianiq.ui import strings_meeting, strings_packs, strings_text
 from lianiq.ui.strings_meeting import *
 from lianiq.ui.strings_packs import *
+from lianiq.ui.strings_text import *
 
 PAIR_LABEL = "Language pair"
 PAIR_PLANNED_SUFFIX = "– planned, unavailable"
@@ -313,4 +314,5 @@ __all__ = [
     "WINDOW_TITLE",
 ]
 __all__ += strings_meeting.__all__  # the Meeting strings (CAP-0177 contract.md §7)
+__all__ += strings_text.__all__  # the Text translation strings (CAP-0172 contract.md §10)
 __all__ += strings_packs.__all__  # the language-pack strings (CAP-0171 contract.md §11)
