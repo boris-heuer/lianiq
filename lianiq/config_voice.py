@@ -21,6 +21,33 @@ if TYPE_CHECKING:
     from lianiq.config import AppConfig
 
 
+VOICE_ENGINES = frozenset({"piper", "sherpa-onnx"})
+
+
+@dataclass(slots=True)
+class VoiceEngineConfig:
+    """Engine of one language's voice; a language without an entry uses Piper.
+
+    ``speaker_id``, ``length_scale`` and ``num_threads`` apply to sherpa-onnx voices only;
+    Piper voices use ``tts.length_scale``.
+    """
+
+    engine: str = "piper"
+    speaker_id: int = 0
+    length_scale: float = 1.0
+    num_threads: int = 4
+
+    def __post_init__(self) -> None:
+        if self.engine not in VOICE_ENGINES:
+            raise ValueError(f"Unsupported tts engine: {self.engine!r}")
+        if self.speaker_id < 0:
+            raise ValueError("tts speaker_id must not be negative")
+        if self.length_scale <= 0:
+            raise ValueError("tts length_scale must be positive")
+        if self.num_threads <= 0:
+            raise ValueError("tts num_threads must be positive")
+
+
 @dataclass(slots=True)
 class VoiceOutputPreference:
     """One language's switch and voice options; values an engine lacks are kept but ignored."""

@@ -217,3 +217,36 @@ def test_repository_default_has_an_empty_voice_output_block() -> None:
     assert shipped["tts"]["output"] == {}
     assert AppConfig.load(config_module.DEFAULT_CONFIG_PATH).tts.output == {}
     assert AppConfig().tts.output == {}
+
+
+def test_provisioning_defaults_and_round_trip(tmp_path: Path) -> None:
+    """CAP-0171 contract.md §9: an absent section loads as the defaults; lists become tuples."""
+    from lianiq.config_provisioning import ProvisioningConfig
+
+    assert AppConfig.from_mapping({}).provisioning == ProvisioningConfig("pending", (), ())
+    assert AppConfig.load(config_module.DEFAULT_CONFIG_PATH).provisioning == ProvisioningConfig()
+    path = tmp_path / "settings.json"
+    raw = {"provisioning": {"first_run": "skipped", "usages": ["meeting"], "languages": ["de"]}}
+    path.write_text(json.dumps({"schema_version": 2, **raw}), encoding="utf-8")
+    config = AppConfig.load(path)
+    assert config.provisioning == ProvisioningConfig("skipped", ("meeting",), ("de",))
+    config.save(path)
+    assert json.loads(path.read_text(encoding="utf-8"))["provisioning"] == raw["provisioning"]
+
+
+@pytest.mark.parametrize(
+    ("section", "message"),
+    [
+        ({"first_run": "done"}, "provisioning.first_run"),
+        ({"usages": "meeting"}, "provisioning.usages must be a list"),
+        ({"languages": {"de": 1}}, "provisioning.languages must be a list"),
+        ({"usages": ["meeting", 3]}, "provisioning.usages must list strings"),
+    ],
+)
+def test_invalid_provisioning_values_fail_the_load(
+    tmp_path: Path, section: dict, message: str
+) -> None:
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps({"schema_version": 2, "provisioning": section}), encoding="utf-8")
+    with pytest.raises(ValueError, match=message):
+        AppConfig.load(path)

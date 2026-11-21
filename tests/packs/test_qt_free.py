@@ -25,6 +25,7 @@ QT_FREE_MODULES = (
     "lianiq.packs.sources",
     "lianiq.packs.state",
     "lianiq.packs.transfer",
+    "lianiq.packs.usage",
     "lianiq.packs.verify",
     "lianiq.languages.pack_readiness",
 )
@@ -46,7 +47,7 @@ def test_pack_core_imports_no_pyside6() -> None:
 def test_pack_sources_name_no_pyside6() -> None:
     root = Path(__file__).resolve().parents[2] / "lianiq"
     sources = [*sorted((root / "packs").glob("*.py")), root / "languages/pack_readiness.py"]
-    assert len(sources) == 18
+    assert len(sources) == 19
     for source in sources:
         assert "PySide6" not in source.read_text(encoding="utf-8"), source.name
 

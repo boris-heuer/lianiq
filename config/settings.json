@@ -78,5 +78,10 @@
     "local_headphones_endpoint_id": null,
     "failure_policy": "mute",
     "max_pending_age_ms": 4000
+  },
+  "provisioning": {
+    "first_run": "pending",
+    "usages": [],
+    "languages": []
   }
 }

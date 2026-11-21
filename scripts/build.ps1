@@ -46,6 +46,7 @@ try {
             --name lianiq `
             --add-data "$PiperData;piper/espeak-ng-data" `
             --add-data "lianiq/ui/assets;lianiq/ui/assets" `
+            --add-data "lianiq/packs/builtin_catalog.json;lianiq/packs" `
             --collect-all ctranslate2 `
             --collect-all tokenizers `
             run_app.py

@@ -40,9 +40,9 @@ def wait_for(predicate: Callable[[], bool], timeout_s: float, poll_s: float = 0.
 
 
 def launch_app(python: str, repo: Path) -> subprocess.Popen[bytes]:
-    """Start ``python -m lianiq`` from the checkout in the signed-in session."""
+    """Start ``python -m lianiq`` in the signed-in session, without the setup assistant."""
     return subprocess.Popen(
-        [python, "-m", "lianiq"],
+        [python, "-m", "lianiq", "--no-setup-assistant"],
         cwd=repo,
         env=child_env(),
         stdout=subprocess.DEVNULL,
