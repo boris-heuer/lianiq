@@ -3,18 +3,26 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from dataclasses import replace
+from datetime import datetime
 from functools import partial
 from pathlib import Path
 
+# AC-22: no engine may reach the Hugging Face Hub; set before any engine import below.
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+
 from lianiq.audio.playback import play_wav
-from lianiq.config import PROJECT_ROOT, AppConfig, TtsConfig, VoiceEngineConfig
+from lianiq.config import LOCAL_CONFIG_PATH, PROJECT_ROOT, AppConfig, TtsConfig, VoiceEngineConfig
 from lianiq.config_migration import SettingsMigrationError
 from lianiq.conversation.routing import TurnRouter
-from lianiq.languages.capabilities import CapabilityCatalog, ReadinessProbe
+from lianiq.languages.capabilities import MANIFEST_RELATIVE_PATH, CapabilityCatalog, ReadinessProbe
 from lianiq.languages.registry import BUILTIN_REGISTRY, LanguageId, LanguageRegistry
 from lianiq.logging_setup import configure_logging
 from lianiq.meeting.controller import MeetingController, SharedEngines
+from lianiq.packs.installer import PackInstaller
+from lianiq.packs.recovery import RecoveryFailed
 from lianiq.pipeline import AdapterFactories, TranslationPipeline
 from lianiq.stt.faster_whisper_engine import FasterWhisperEngine
 from lianiq.translation.glossary import Glossary
@@ -153,13 +161,48 @@ def report_settings_error(error: SettingsMigrationError) -> None:
     QMessageBox.critical(None, "lianiq settings", message)
 
 
-def main() -> int:
+NO_SETUP_ASSISTANT = "--no-setup-assistant"
+
+
+def load_settings(argv: Sequence[str]) -> tuple[AppConfig, bool]:
+    """Load settings and apply the first-run rule (CAP-0171 contract.md §9).
+
+    Returns the configuration and whether the setup assistant is due. An existing local
+    settings file whose ``provisioning.first_run`` is still pending is an upgrade: it is marked
+    ``completed`` in the loaded configuration, so the next ``save()`` writes it.
+    """
+    local_settings_existed = LOCAL_CONFIG_PATH.is_file()
+    config = AppConfig.load()
+    pending = config.provisioning.first_run == "pending"
+    if local_settings_existed and pending:
+        config.provisioning = replace(config.provisioning, first_run="completed")
+    due = pending and not local_settings_existed and NO_SETUP_ASSISTANT not in argv
+    return config, due
+
+
+def recover_packs(installer: PackInstaller | None = None) -> None:
+    """Undo or finish interrupted pack jobs; a failed recovery never stops start-up."""
+    if installer is None:
+        installer = PackInstaller(
+            PROJECT_ROOT,
+            PROJECT_ROOT / MANIFEST_RELATIVE_PATH,
+            lambda: datetime.now().astimezone(),
+        )
     try:
-        config = AppConfig.load()
+        installer.recover()
+    except RecoveryFailed:
+        pass  # already logged per job; the failed packs stay blocked until a later launch
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    try:
+        # The setup assistant itself is opened by CAP-0171 WI-06 when it is due.
+        config, _setup_assistant_due = load_settings(sys.argv[1:] if argv is None else argv)
     except SettingsMigrationError as error:
         report_settings_error(error)
         return 2
     configure_logging(PROJECT_ROOT / "logs", config.ui.log_level)
+    recover_packs()
     os.environ.setdefault("QT_OPENGL", "software")
     os.environ.setdefault("QT_QUICK_BACKEND", "software")
     try:
