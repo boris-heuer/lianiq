@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
@@ -13,11 +14,17 @@ from lianiq.translation.glossary import Glossary
 LOGGER = logging.getLogger(__name__)
 
 
+class ModelLoadError(RuntimeError):
+    """The translation runtime or a model could not be loaded."""
+
+
 class MarianTranslator:
     """MarianMT models per directed edge, each loaded on first use or by ``warm_up``.
 
     An edge without a configured model raises ``CapabilityMissingError``; no other edge
-    (in particular not the reverse edge) is used instead.
+    (in particular not the reverse edge) is used instead. One lock serialises loading,
+    tokenising and generation, so Text translation segments interleave safely with
+    Conversation turns on another thread (CAP-0172 contract.md §6).
     """
 
     def __init__(
@@ -32,8 +39,13 @@ class MarianTranslator:
         self.cpu_threads = cpu_threads
         self.device = resolve_compute_device(device)
         self._loaded: dict[DirectedEdge, tuple[object, object]] = {}
+        self._lock = threading.Lock()
 
     def _load(self, edge: DirectedEdge):
+        with self._lock:
+            return self._load_locked(edge)
+
+    def _load_locked(self, edge: DirectedEdge):
         if edge in self._loaded:
             return self._loaded[edge]
         path = self.edges.get(edge)
@@ -47,7 +59,7 @@ class MarianTranslator:
             import torch
             from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
         except ImportError as exc:
-            raise RuntimeError("torch/transformers is not installed") from exc
+            raise ModelLoadError("torch/transformers is not installed") from exc
         torch.set_num_threads(self.cpu_threads)
         LOGGER.info("Loading MarianMT for %s from %s", edge.key, path)
         tokenizer = AutoTokenizer.from_pretrained(path, local_files_only=True)
@@ -71,18 +83,25 @@ class MarianTranslator:
         del (
             context
         )  # Marian is sentence-based; history is retained by the pipeline for future engines.
-        tokenizer, model = self._load(edge)
         import torch
 
-        inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=256)
-        inputs = {key: value.to(self.device) for key, value in inputs.items()}
-        with torch.inference_mode():
-            tokens = model.generate(
-                **inputs,
-                num_beams=1,
-                do_sample=False,
-                max_new_tokens=192,
-                renormalize_logits=True,
-            )
-        translated = tokenizer.batch_decode(tokens, skip_special_tokens=True)[0].strip()
+        with self._lock:
+            tokenizer, model = self._load_locked(edge)
+            inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=256)
+            inputs = {key: value.to(self.device) for key, value in inputs.items()}
+            with torch.inference_mode():
+                tokens = model.generate(
+                    **inputs,
+                    num_beams=1,
+                    do_sample=False,
+                    max_new_tokens=192,
+                    renormalize_logits=True,
+                )
+            translated = tokenizer.batch_decode(tokens, skip_special_tokens=True)[0].strip()
         return self.glossary.apply(translated, edge)
+
+    def token_count(self, text: str, edge: DirectedEdge) -> int:
+        """Model input tokens of ``text`` for ``edge``, special tokens included."""
+        with self._lock:
+            tokenizer, _model = self._load_locked(edge)
+            return len(tokenizer(text, truncation=False)["input_ids"])
