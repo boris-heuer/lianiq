@@ -185,10 +185,12 @@ class SpySynthesizer:
 
     calls: list[tuple[str, str]] = field(default_factory=list)
     warmed_languages: list[str] = field(default_factory=list)
+    options: list[object] = field(default_factory=list)  # ``VoiceOptions`` per call
 
     def warm_up(self, languages: Iterable[str]) -> None:
         self.warmed_languages.extend(languages)
 
-    def synthesize(self, text: str, language: str) -> Path:
+    def synthesize(self, text: str, language: str, options=None) -> Path:
         self.calls.append((text, language))
+        self.options.append(options)
         return Path(f"synthetic-{language}.wav")

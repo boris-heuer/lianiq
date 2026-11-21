@@ -69,6 +69,9 @@ class ConversationFlow:
             speakers = setup.resolved(EndpointFlow.RENDER).endpoint
             self.capture.device = None if microphone is None else microphone.runtime_index
             self.pipeline.output_device = None if speakers is None else speakers.runtime_index
+            spoken = self.pipeline.spoken
+            if spoken is not None:  # the languages ``prepare`` bound for this session
+                spoken.open(self.pipeline.spoken_languages, self.pipeline.output_device)
             self.session_controller.start(session)
         except ModeUnavailableError as exc:
             self.owner.mark_idle(self._generation)
@@ -95,7 +98,10 @@ class ConversationFlow:
         self.starting = False
         self._pending_session = None
         self.diagnostic_wav = None
-        # Queued turns finish with their bound pair; unresolved held turns are discarded.
+        # Nothing is spoken after Stop; queued turns finish as text with their bound pair
+        # and unresolved held turns are discarded.
+        if self.pipeline.spoken is not None:
+            self.pipeline.spoken.close()
         report = self.session_controller.stop()
         self.held_turn_bar.clear()
         if self.owner.active is WorkspaceId.CONVERSATION:

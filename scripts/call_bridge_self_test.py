@@ -60,7 +60,6 @@ def run_models(config: AppConfig) -> int:
     from lianiq.app import build_pipeline
     from lianiq.audio.wav import read_pcm16_mono
 
-    config.voice_output = True
     pipeline = build_pipeline(config)
     registry = pipeline.registry
     session = call_bridge_session(config, registry)

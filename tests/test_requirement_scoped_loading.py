@@ -123,6 +123,21 @@ def test_text_mode_never_synthesizes_even_if_voice_output_was_saved_on(tmp_path,
     assert spies.constructed == ["translator"]
 
 
+def test_prepare_warms_the_spoken_plan_and_binds_it_to_a_text_session(tmp_path, spies) -> None:
+    """CAP-0167 C §5: a partial plan keeps row 5 and warms only the planned voice."""
+    config = config_without_stt_and_voices(tmp_path)
+    config.speech_to_text.model_path = str(model_dir(tmp_path, "faster-whisper-small"))
+    pipeline = build_pipeline(config, probe=ReadinessProbe(tmp_path))
+    automatic = session(InputKind.MICROPHONE, RoutingKind.BIDIRECTIONAL, OutputKind.TEXT)
+
+    pipeline.prepare(automatic, frozenset({ZH}))
+
+    assert spies.synthesizer.warmed_languages == [ZH]
+    assert pipeline.spoken_languages == {ZH} and pipeline.voice_output
+    pipeline.set_spoken_languages(frozenset())
+    assert pipeline.voice_output is False
+
+
 def test_adapters_are_constructed_once_across_sessions(tmp_path, spies) -> None:
     pipeline = build_pipeline(
         config_without_stt_and_voices(tmp_path), probe=ReadinessProbe(tmp_path)

@@ -45,6 +45,19 @@ def play_pcm(
     _play(sd, np.asarray(audio, dtype=np.int16), sample_rate, output_device, auto_convert)
 
 
+def stop_playback() -> None:
+    """End a blocking ``play_wav`` or ``play_pcm`` from another thread (CAP-0167 C §4).
+
+    ``sounddevice.stop()`` is global: it ends the current ``sd.play`` stream, which then
+    returns normally. Without ``sounddevice`` there is nothing to stop.
+    """
+    try:
+        import sounddevice as sd
+    except (ImportError, OSError):
+        return
+    sd.stop()
+
+
 def _play(sd, audio: np.ndarray, sample_rate: int, output_device, auto_convert: bool) -> None:
     if not auto_convert or output_device is None:
         sd.play(audio, sample_rate, device=output_device, blocking=True)

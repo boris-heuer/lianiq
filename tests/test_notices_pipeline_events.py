@@ -10,8 +10,10 @@ from pathlib import Path
 
 import pytest
 
+from lianiq.conversation.spoken_output import SpokenOutput
 from lianiq.languages import LanguageId
 from lianiq.pipeline import PipelineEventKind, PipelineRunner, TranslationPipeline
+from lianiq.tts.voice_controls import VoiceOptions
 from tests._pipeline_helpers import (
     AUTOMATIC,
     FakeRecognizer,
@@ -20,6 +22,8 @@ from tests._pipeline_helpers import (
     bound,
     utterance,
 )
+
+ZH = LanguageId("zh-Hans")
 
 
 def test_runner_reports_overflow_as_a_notice_event_instead_of_text() -> None:
@@ -75,28 +79,45 @@ def failing_playback(_path, _device) -> None:
     raise RuntimeError("PortAudio error: device unavailable")
 
 
-def test_playback_failure_keeps_the_text_result_and_stops_spoken_output(tmp_path) -> None:
-    pipeline = TranslationPipeline(
-        FakeRecognizer(), FakeTranslator(), FileSynthesizer(tmp_path), failing_playback
+def spoken_output(folder: Path, play, events: list) -> SpokenOutput:
+    return SpokenOutput(
+        lambda: FileSynthesizer(folder),
+        play,
+        lambda: None,
+        lambda _language: VoiceOptions(),
+        lambda _state: None,
+        events.append,
     )
+
+
+def test_playback_failure_keeps_the_text_result_and_stops_spoken_output(tmp_path) -> None:
+    pipeline = TranslationPipeline(FakeRecognizer(), FakeTranslator())
     events = []
-    pipeline.on_event = events.append
-    assert pipeline.voice_output
+    pipeline.spoken = spoken_output(tmp_path, failing_playback, events)
+    pipeline.spoken.open(frozenset({ZH}), None)
+    pipeline.set_spoken_languages(frozenset({ZH}))
+    results = []
+    runner = PipelineRunner(pipeline, on_result=results.append, on_error=pytest.fail)
+    runner.start(AUTOMATIC)
+    runner.submit(utterance())
+    runner.stop(timeout=5.0)
 
-    result = pipeline.process(bound())
-
-    assert result is not None and result.translated_text == "您好"  # the turn stays as text
-    assert pipeline.voice_output is False  # the session continues text-only
+    assert [result.translated_text for result in results] == ["您好"]  # the turn stays as text
+    assert pipeline.spoken.plan == frozenset()  # the session continues text-only
     assert [(event.kind, event.language) for event in events] == [
-        (PipelineEventKind.PLAYBACK_FAILED, LanguageId("zh-Hans"))
+        (PipelineEventKind.PLAYBACK_FAILED, ZH)
     ]
-    assert "device unavailable" in events[0].message
+    assert events[0].message == "RuntimeError"  # the error class only (CAP-0167 AC-23)
     assert list(tmp_path.iterdir()) == []  # the synthesized file is still removed
 
 
-def test_playback_failure_without_a_listener_raises_as_before(tmp_path) -> None:
+def test_processing_a_turn_never_synthesizes(tmp_path) -> None:
     pipeline = TranslationPipeline(
         FakeRecognizer(), FakeTranslator(), FileSynthesizer(tmp_path), failing_playback
     )
-    with pytest.raises(RuntimeError, match="device unavailable"):
-        pipeline.process(bound())
+    pipeline.set_spoken_languages(frozenset({ZH}))
+
+    result = pipeline.process(bound())
+
+    assert result is not None and result.translated_text == "您好"
+    assert list(tmp_path.iterdir()) == []  # speaking is the runner's step after the result

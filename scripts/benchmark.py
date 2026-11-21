@@ -11,9 +11,11 @@ from pathlib import Path
 import numpy as np
 
 from lianiq.app import build_pipeline
+from lianiq.audio.playback import stop_playback
 from lianiq.call_bridge.contracts import AudioEndpointRef, EndpointFlow
 from lianiq.config import AppConfig, AudioConfig
 from lianiq.conversation.routing import HeldTurn
+from lianiq.conversation.spoken_output import SpokenOutput, output_languages
 from lianiq.domain import AudioUtterance
 from lianiq.languages.modes import (
     MEETING_MODE,
@@ -32,6 +34,7 @@ from lianiq.meeting.controller import (
     SharedEngines,
 )
 from lianiq.pipeline import bind_utterance
+from lianiq.tts.voice_controls import VoiceOptions
 from lianiq.ui.shell.session_owner import ActiveSessionOwner
 
 MEETING_TARGET_SECONDS = 4.0  # spec §1.4: median pause-to-text, utterance <= 8 s
@@ -196,6 +199,24 @@ def main_meeting(args: argparse.Namespace, config: AppConfig) -> int:
     return 0 if median <= MEETING_TARGET_SECONDS else 2
 
 
+def speak(pipeline, session: SessionPair, result) -> float:
+    """Speak ``result`` after it was shown, as Conversation does (CAP-0167); its seconds."""
+    if session.mode.output is not OutputKind.SPOKEN or pipeline.playback is None:
+        return 0.0
+    spoken = SpokenOutput(
+        pipeline.voice_synthesizer,
+        pipeline.playback,
+        stop_playback,
+        lambda _language: VoiceOptions(),
+        lambda _state: None,
+        lambda event: print(f"{event.kind.value}: {event.message}"),
+    )
+    spoken.open(output_languages(session), None)
+    started = time.perf_counter()
+    spoken.speak(result)
+    return time.perf_counter() - started
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Measure local end-to-end processing time.")
     parser.add_argument("wav", type=Path, nargs="?")
@@ -237,18 +258,19 @@ def main() -> int:
     utterance = read_wav(args.wav)
     started = time.perf_counter()
     result = pipeline.process(bind_utterance(utterance, session))
-    elapsed = time.perf_counter() - started
     if result is None:
         print("No speech was recognized.")
         return 1
     if isinstance(result, HeldTurn):
         print(f"Language unclear ({result.reason}); the turn was held and not translated.")
         return 1
+    tts_seconds = speak(pipeline, session, result)
+    elapsed = time.perf_counter() - started
     print(f"Original:    {result.source_text}")
     print(f"Translation: {result.translated_text}")
     print(f"STT:          {result.stt_seconds:.3f} s")
     print(f"Translation: {result.translation_seconds:.3f} s")
-    print(f"TTS+Audio:    {result.tts_seconds:.3f} s")
+    print(f"TTS+Audio:    {tts_seconds:.3f} s")
     print(f"Total:       {elapsed:.3f} s")
     return 0 if elapsed <= 3.0 else 2
 
