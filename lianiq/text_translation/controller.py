@@ -4,11 +4,16 @@ Qt-free and GUI-thread only: worker callbacks arrive through the ``post`` of
 ``TranslationJobs``. The controller never writes the source editor; it renders a
 ``TextSnapshot`` after every change. Playback arrives with WI-04, so ``playback`` stays
 ``"idle"`` and ``replay`` ``False`` here.
+
+One job runs at a time: **Translate** after an edit while a job runs starts the new request
+and the worker cancels the old one at its next segment; a late result of an older request or
+revision is discarded (contract.md §3 rule 2). Failures post a notice through ``notify``
+(``text-translation.failed`` or ``model_failed``), resolved by the next request.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
@@ -23,10 +28,13 @@ from lianiq.text_translation.readiness import (
     text_readiness,
 )
 from lianiq.text_translation.state import DraftState, ResultState, TextResult
+from lianiq.ui import notice_catalog_text as notices
 from lianiq.ui import strings_text as s
+from lianiq.ui.notice_catalog_base import TEXT_TRANSLATION, source
 
 if TYPE_CHECKING:
     from lianiq.languages.capabilities import CapabilityCatalog
+    from lianiq.ui.notices import Notice
 
 REASONS = {
     FailureReason.MODEL: s.TEXT_REASON_MODEL,
@@ -59,14 +67,18 @@ class TextTranslationController:
         speakers: Callable[[], Speakers],
         render: Callable[[TextSnapshot], None],
         languages: tuple[LanguageId, LanguageId],
+        notify: Callable[[Notice], None] = lambda _notice: None,
+        resolve: Callable[[Sequence[str]], None] = lambda _keys: None,
     ) -> None:
         self.registry = registry
         self._catalog, self._packs, self._speakers = catalog, packs, speakers
         self.jobs = jobs
         self._render = render
+        self._notify, self._resolve = notify, resolve
         self.draft = DraftState(*languages)
         self.readiness = self._readiness()
         self.translating = False
+        self._running_revision: int | None = None  # revision of the running request
         self.status: str | None = None
         self.retry_offered = False
         self._closed = False
@@ -88,9 +100,14 @@ class TextTranslationController:
         self.draft.swap()
         self.refresh()
 
+    @property
+    def cancellable(self) -> bool:
+        """A job runs for the shown revision: **Translate** reads **Cancel**."""
+        return self.translating and self._running_revision == self.draft.revision
+
     def can_translate(self) -> bool:
         return (
-            not self.translating
+            not self.cancellable
             and check_source(self.draft.text) is SourceCheck.OK
             and self.readiness.translate is TranslateBlock.NONE
         )
@@ -101,6 +118,8 @@ class TextTranslationController:
             return
         request = self.draft.request()
         self.translating, self.status, self.retry_offered = True, None, False
+        self._running_revision = request.revision
+        self._resolve(notices.TEXT_FAILURE_KEYS)
         self.jobs.start(request, self._done, self._failed, self._cancelled)
         self.render()
 
@@ -134,18 +153,31 @@ class TextTranslationController:
         self._finish(result.result_id, None)
 
     def _failed(self, request_id: int, reason: FailureReason) -> None:
-        if not self._closed:
-            self._finish(request_id, s.TEXT_FAILED.format(reason=REASONS[reason]), retry=True)
+        if self._closed or not self._finish(
+            request_id, s.TEXT_FAILED.format(reason=REASONS[reason]), retry=True
+        ):
+            return
+        build = (
+            notices.model_failed if reason is FailureReason.MODEL else notices.translation_failed
+        )
+        self._notify(build(REASONS[reason], self.where(), self.retry))
 
     def _cancelled(self, request_id: int) -> None:
         if not self._closed:
             self._finish(request_id, s.TEXT_CANCELLED, retry=True)
 
-    def _finish(self, request_id: int, status: str | None, retry: bool = False) -> None:
+    def _finish(self, request_id: int, status: str | None, retry: bool = False) -> bool:
         if request_id != self.draft.latest_request:
-            return  # a superseded job: its outcome is not shown
+            return False  # a superseded job: its outcome is not shown
         self.translating, self.status, self.retry_offered = False, status, retry
+        self._running_revision = None
         self.render()
+        return True
+
+    def where(self) -> str:
+        """The notice source: "Text translation · German → Mandarin (Simplified)"."""
+        name = self.registry.display_name
+        return source(TEXT_TRANSLATION, f"{name(self.draft.source)} → {name(self.draft.target)}")
 
     # Rendering.
 
