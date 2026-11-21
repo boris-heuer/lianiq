@@ -116,6 +116,8 @@ class PipelineRunner:
     ) -> threading.Thread:
         """Resolve a held turn in the background; the result arrives through ``on_result``.
 
+        A resolved turn is then spoken on the same thread, like a processed one.
+
         ``on_done`` runs after every outcome (result, dropped or error).
         """
 
@@ -125,7 +127,7 @@ class PipelineRunner:
             try:
                 result = self.pipeline.resolve(held, source)
                 if result is not None:
-                    self.on_result(result)
+                    self._deliver(result)
             except Exception as exc:
                 LOGGER.exception("Held turn resolution failed")
                 self.on_error(str(exc))
@@ -192,6 +194,13 @@ class PipelineRunner:
             if item is not None:
                 dropped += 1
 
+    def _deliver(self, result: TranslationResult) -> None:
+        """Show the text first, then speak it (CAP-0167 C §5): text never waits for speech."""
+        self.on_result(result)
+        spoken = getattr(self.pipeline, "spoken", None)
+        if spoken is not None:
+            spoken.speak(result)
+
     def _run(self) -> None:
         while True:
             # Taking an item and ``stop``'s abort are atomic: an item taken here is started,
@@ -215,7 +224,7 @@ class PipelineRunner:
                     if self.on_held:
                         self.on_held(outcome)
                 elif outcome is not None:
-                    self.on_result(outcome)
+                    self._deliver(outcome)
             except Exception as exc:
                 LOGGER.exception("Translation pipeline failed")
                 self.on_error(str(exc))
