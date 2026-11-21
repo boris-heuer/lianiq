@@ -3,7 +3,8 @@
 Lianiq has no localisation layer; these constants are the English defaults. The
 missing-requirement texts are shared with ``lianiq.languages.requirements.describe``.
 This module is Qt-free: the shell's Qt-free modules read their labels from it. The Meeting
-strings (CAP-0177 contract.md §7) live in ``strings_meeting`` and are re-exported here.
+strings (CAP-0177 contract.md §7) live in ``strings_meeting`` and the language-pack strings
+(CAP-0171 contract.md §11) in ``strings_packs``; both are re-exported here.
 """
 
 from __future__ import annotations
@@ -15,8 +16,9 @@ from lianiq.languages.requirements import (
     MISSING_VOICE,
 )
 from lianiq.languages.session import LOCKED_MESSAGE
-from lianiq.ui import strings_meeting
+from lianiq.ui import strings_meeting, strings_packs
 from lianiq.ui.strings_meeting import *
+from lianiq.ui.strings_packs import *
 
 PAIR_LABEL = "Language pair"
 PAIR_PLANNED_SUFFIX = "– planned, unavailable"
@@ -311,3 +313,4 @@ __all__ = [
     "WINDOW_TITLE",
 ]
 __all__ += strings_meeting.__all__  # the Meeting strings (CAP-0177 contract.md §7)
+__all__ += strings_packs.__all__  # the language-pack strings (CAP-0171 contract.md §11)
