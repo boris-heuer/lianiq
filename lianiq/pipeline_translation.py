@@ -7,6 +7,7 @@ import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 import numpy as np
@@ -24,7 +25,6 @@ from lianiq.pipeline_types import (
     AdapterFactories,
     BoundUtterance,
     PipelineEvent,
-    PipelineEventKind,
     SpeechRecognizer,
     Synthesizer,
     Translator,
@@ -32,6 +32,9 @@ from lianiq.pipeline_types import (
     bind_utterance,
 )
 from lianiq.translation.context import ContextBuffer
+
+if TYPE_CHECKING:
+    from lianiq.conversation.spoken_output import SpokenOutput
 
 # The ``lianiq.pipeline`` logger, as before the move.
 LOGGER = logging.getLogger("lianiq.pipeline")
@@ -46,7 +49,6 @@ class TranslationPipeline(PipelineAdapters, PipelineHeldTurns):
         playback: Callable[[Path, int | None], None] | None = None,
         context_sentences: int = 5,
         output_device: int | None = None,
-        on_playback_state: Callable[[bool], None] | None = None,
         turn_router: TurnRouter | None = None,
         *,
         factories: AdapterFactories | None = None,
@@ -59,18 +61,20 @@ class TranslationPipeline(PipelineAdapters, PipelineHeldTurns):
         self.playback = playback
         self.context = ContextBuffer(context_sentences)
         self.output_device = output_device
-        self.on_playback_state = on_playback_state
         self.turn_router = turn_router or TurnRouter(DEFAULT_DETECTION_MIN_PROBABILITY)
         self.factories = factories or AdapterFactories()
         self.registry = registry
         self.catalog = catalog
-        # Notice events (``PipelineEvent``). Without a listener a playback failure raises as
-        # before; with one, the turn's result is kept and spoken output stops (text-only).
+        # Notice events (``PipelineEvent``) of the session's owner.
         self.on_event: Callable[[PipelineEvent], None] | None = None
+        # Spoken output (CAP-0167 C §5): set by Conversation; the runner speaks each result
+        # through it after delivering the text. ``playback`` and ``output_device`` are the
+        # player and speakers it uses.
+        self.spoken: SpokenOutput | None = None
         # Serializes adapter construction and warm-up across Start requests.
         self._adapter_lock = threading.RLock()
-        # Spoken output follows the started mode (``prepare``) or ``set_voice_output``.
-        self.voice_output = synthesizer is not None
+        # The languages Conversation speaks: bound by ``prepare``; ``set_spoken_languages``.
+        self.spoken_languages: frozenset[LanguageId] = frozenset()
         # Serializes turn processing, held-turn resolution and context changes.
         self._turn_lock = threading.RLock()
         # Held turns with their retained audio, in memory only, until resolved or discarded.
@@ -171,7 +175,10 @@ class TranslationPipeline(PipelineAdapters, PipelineHeldTurns):
         item: BoundUtterance,
         epoch: int,
     ) -> TranslationResult:
-        """Translate one routed turn; ``epoch`` is the context epoch when the turn started."""
+        """Translate one routed turn; ``epoch`` is the context epoch when the turn started.
+
+        Nothing is synthesized here: the caller delivers the result and then speaks it.
+        """
         source, target = route.source, route.target
         with self._context_lock:
             stale = epoch != self._context_epoch
@@ -184,23 +191,6 @@ class TranslationPipeline(PipelineAdapters, PipelineHeldTurns):
             if epoch == self._context_epoch:
                 self.context.add(source, text, translated)
 
-        tts_seconds = 0.0
-        if self.voice_output and self.playback is not None:
-            synthesizer = self.voice_synthesizer()
-            tts_started = time.perf_counter()
-            wav_path: Path | None = None
-            if self.on_playback_state:
-                self.on_playback_state(True)
-            try:
-                wav_path = synthesizer.synthesize(translated, target)
-                tts_seconds = time.perf_counter() - tts_started
-                LOGGER.info("Speech synthesis completed in %.3f seconds", tts_seconds)
-                self._play(wav_path, target)
-            finally:
-                if wav_path:
-                    wav_path.unlink(missing_ok=True)
-                if self.on_playback_state:
-                    self.on_playback_state(False)
         result = TranslationResult(
             turn_id=item.turn_id,
             captured_at=item.captured_at,
@@ -210,29 +200,6 @@ class TranslationPipeline(PipelineAdapters, PipelineHeldTurns):
             target_language=target,
             stt_seconds=stt_seconds,
             translation_seconds=translation_seconds,
-            tts_seconds=tts_seconds,
         )
         LOGGER.info("Pipeline completed in %.3f seconds", result.total_seconds)
         return result
-
-    def _play(self, wav_path: Path, language: LanguageId) -> None:
-        """Play one synthesized turn; a failure is a notice event when someone listens."""
-        assert self.playback is not None
-        try:
-            self.playback(wav_path, self.output_device)
-        except Exception as exc:
-            on_event = self.on_event
-            if on_event is None:
-                raise
-            LOGGER.exception("Audio playback failed; spoken output stops for this session")
-            # The speakers failed: the session continues text-only (spec §2.2.3 step 2).
-            self.voice_output = False
-            on_event(
-                PipelineEvent(
-                    PipelineEventKind.PLAYBACK_FAILED,
-                    language=language,
-                    message=f"{type(exc).__name__}: {exc}",
-                )
-            )
-        else:
-            LOGGER.info("Audio playback completed")
