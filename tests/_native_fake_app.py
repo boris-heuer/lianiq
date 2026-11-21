@@ -27,7 +27,7 @@ SIDEBAR = (
     ("Text translation", False, PLANNED),
     ("Listen & translate", False, PLANNED),
     ("Call Bridge", True, "Experimental"),
-    ("Language packs", False, PLANNED),
+    ("Language packs", True, ""),
     ("Settings", True, ""),
 )
 ORIGINAL = "German: Guten Morgen, das ist ein Test."
