@@ -22,7 +22,6 @@ classifiers = [
 ]
 dependencies = [
   "faster-whisper>=1.1,<2",
-  "huggingface-hub>=1.5,<2",
   "numpy>=1.26,<3",
   "piper-tts==1.8.0",
   "PySide6==6.12.0",
@@ -52,6 +51,7 @@ include = ["lianiq*"]
 
 [tool.setuptools.package-data]
 "lianiq.ui" = ["assets/*.svg"]
+"lianiq.packs" = ["builtin_catalog.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -60,3 +60,7 @@ addopts = "-q"
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+[tool.ruff.lint.per-file-ignores]
+# The offline flags (AC-22) are set before the engine imports.
+"lianiq/app.py" = ["E402"]
