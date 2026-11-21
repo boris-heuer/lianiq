@@ -53,6 +53,7 @@ def test_e03_passes_and_stores_the_transcript_as_sha256_only(ctx, monkeypatch) -
         "strip-visible-meeting",
         "strip-visible-call-bridge",
         "call-bridge-start-disabled-busy",
+        "strip-visible-language-packs",
         "strip-visible-settings",
         "stopped-with-f9-from-settings",
         "transcript-sha256-unchanged",
