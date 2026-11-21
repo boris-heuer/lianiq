@@ -55,7 +55,7 @@ def test_ac29_meeting_is_the_second_entry_enabled_and_ctrl_2_opens_it(window) ->
         (WorkspaceId.TEXT_TRANSLATION, EntryState.ENABLED),  # CAP-0172
         (WorkspaceId.LISTEN, EntryState.PLANNED),
         (WorkspaceId.CALL_BRIDGE, EntryState.EXPERIMENTAL),
-        (WorkspaceId.LANGUAGE_PACKS, EntryState.PLANNED),
+        (WorkspaceId.LANGUAGE_PACKS, EntryState.ENABLED),
         (WorkspaceId.SETTINGS, EntryState.ENABLED),
     ]
     button = window.navigation.buttons[MEETING]
