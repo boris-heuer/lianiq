@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPlainTextEdit,
+    QProgressBar,
     QPushButton,
     QSplitter,
     QVBoxLayout,
@@ -136,6 +137,14 @@ class TextTranslationLayout:
         self.status_label.setObjectName("textStatus")
         self.status_label.setWordWrap(True)
         self.copy_translation_button = _button(strings.TEXT_COPY_TRANSLATION)
+        self.busy_indicator = QProgressBar()  # indeterminate while a request runs
+        self.busy_indicator.setObjectName("textBusy")
+        self.busy_indicator.setRange(0, 0)
+        self.busy_indicator.setTextVisible(False)
+        self.busy_indicator.setMaximumWidth(120)
+        self.busy_indicator.setAccessibleName(strings.TEXT_TRANSLATING)
+        self.busy_indicator.hide()
+        row.addWidget(self.busy_indicator)
         row.addWidget(self.status_label, 1)
         row.addWidget(self.copy_translation_button)
         column.addLayout(row)

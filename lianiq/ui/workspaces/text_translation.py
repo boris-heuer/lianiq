@@ -50,6 +50,8 @@ class TextTranslationWorkspace(TextTranslationLayout, QObject):
             lambda: host.device_setup.resolved(EndpointFlow.RENDER),
             self.render,
             self._default_languages(),
+            notify=host.post_notice,
+            resolve=host.resolve_notices,
         )
         self._shown_result: int | None = None
 
@@ -108,7 +110,7 @@ class TextTranslationWorkspace(TextTranslationLayout, QObject):
         return False
 
     def _translate_clicked(self) -> None:
-        if self.controller.translating:
+        if self.controller.cancellable:
             self.controller.cancel()
         else:
             self.controller.translate()
@@ -164,7 +166,8 @@ class TextTranslationWorkspace(TextTranslationLayout, QObject):
         self.counter_label.setProperty("warning", snapshot.check is SourceCheck.TOO_LONG)
         self.readiness_label.setText(self._readiness_text(snapshot))
         self.readiness_label.setVisible(bool(self.readiness_label.text()))
-        if snapshot.translating:
+        self.busy_indicator.setVisible(snapshot.translating)
+        if self.controller.cancellable:
             self.translate_button.setText(strings.TEXT_CANCEL)
             self.translate_button.setEnabled(True)
         else:

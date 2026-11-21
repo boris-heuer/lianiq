@@ -10,6 +10,7 @@ from lianiq.ui.shell.workspaces import WorkspaceId, label
 
 CONVERSATION = WorkspaceId.CONVERSATION
 CALL_BRIDGE = WorkspaceId.CALL_BRIDGE
+TEXT_TRANSLATION = WorkspaceId.TEXT_TRANSLATION
 
 PAIR_LOCKED = "conversation.pair-locked"
 DIRECTION_UNAVAILABLE = "conversation.direction-unavailable"
@@ -24,6 +25,7 @@ DEVICES_CHANGED = "device.changed"
 BRIDGE_DROPPED = "call-bridge.dropped"
 BRIDGE_CAPTURE = "call-bridge.capture-muted"
 BRIDGE_RECOVERY = "call-bridge.recovery-failed"
+TRANSLATION_FAILED = "text-translation.failed"
 
 
 def unavailable_key(mode: WorkspaceId) -> str:
