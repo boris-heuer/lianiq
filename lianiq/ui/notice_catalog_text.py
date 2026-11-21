@@ -11,15 +11,18 @@ from collections.abc import Callable
 from lianiq.ui import notice_catalog as catalog
 from lianiq.ui import strings
 from lianiq.ui.notice_catalog_base import (
+    PLAYBACK_FAILED,
     TEXT_TRANSLATION,
     TRANSLATION_FAILED,
     _notice,
+    busy_key,
     model_failed_key,
     retry,
 )
-from lianiq.ui.notices import Notice, Severity
+from lianiq.ui.notices import Notice, NoticeAction, Severity
 
 TEXT_FAILURE_KEYS = (TRANSLATION_FAILED, model_failed_key(TEXT_TRANSLATION))
+PLAYBACK_KEYS = (PLAYBACK_FAILED, busy_key(TEXT_TRANSLATION))
 
 
 def translation_failed(reason: str, where: str, on_retry: Callable[[], None]) -> Notice:
@@ -37,3 +40,17 @@ def translation_failed(reason: str, where: str, on_retry: Callable[[], None]) ->
 
 def model_failed(reason: str, where: str, on_retry: Callable[[], None]) -> Notice:
     return catalog.model_failed(TEXT_TRANSLATION, reason, where, on_retry)
+
+
+def playback_failed(reason: str, where: str, open_audio: Callable[[], None]) -> Notice:
+    """The texts stay; the session is idle again (AC-29). **Open Language packs**: WI-05."""
+    return _notice(
+        PLAYBACK_FAILED,
+        Severity.WARNING,
+        strings.TEXT_PLAYBACK_FAILED.format(reason=reason),
+        strings.DETAIL_DEVICE,
+        where,
+        strings.CONTINUES_NOTHING,
+        TEXT_TRANSLATION,
+        (NoticeAction(strings.TEXT_OPEN_AUDIO, open_audio),),
+    )
