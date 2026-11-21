@@ -89,9 +89,20 @@ def test_a_call_bridge_uses_every_model_of_its_session(packs) -> None:
     assert packs_in_use(owner, tracker, packs) == {STT, *MT, VOICE_DE, VOICE_ZH}
 
 
-def test_a_running_session_without_a_bound_usage_protects_every_pack(packs) -> None:
+def test_a_running_session_without_a_bound_usage_protects_every_installed_pack(packs) -> None:
     owner, tracker = started(WorkspaceId.CONVERSATION, None)
+    assert packs_in_use(owner, tracker, packs, {STT, VOICE_DE, "unknown"}) == {STT, VOICE_DE}
+    assert packs_in_use(owner, tracker, packs, ()) == frozenset()
+    # Without the installed ids every catalog pack counts as installed.
     assert packs_in_use(owner, tracker, packs) == {pack.id for pack in packs.packs()}
+
+
+def test_an_unbound_session_still_allows_installing_a_pack_that_is_not_installed(packs) -> None:
+    owner, tracker = started(WorkspaceId.CONVERSATION, None)
+    guard = in_use_guard(owner, tracker, packs, lambda: {STT})
+    guard(packs.get(VOICE_DE), "install")
+    with pytest.raises(PackInUse):
+        guard(packs.get(STT), "remove")
 
 
 def test_the_tracker_clears_when_the_owner_becomes_idle(packs) -> None:
