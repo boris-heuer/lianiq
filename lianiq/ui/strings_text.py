@@ -1,0 +1,45 @@
+"""English UI strings of the Text translation workspace (CAP-0172 contract.md §10).
+
+Re-exported through ``lianiq.ui.strings`` (the ``strings_meeting`` precedent). ``{reason}`` is
+always one of the ``TEXT_REASON_*`` texts, never an exception message.
+"""
+
+from __future__ import annotations
+
+TEXT_SOURCE_LANGUAGE = "Source language"
+TEXT_TARGET_LANGUAGE = "Target language"
+TEXT_SWAP = "Swap languages"
+TEXT_SOURCE_LABEL = "Source text"
+TEXT_RESULT_LABEL = "Translation"
+TEXT_SOURCE_PLACEHOLDER = "Type or paste text to translate."
+TEXT_RESULT_EMPTY = "The translation appears here after Translate (Ctrl+Enter)."
+TEXT_TRANSLATE = "Translate"
+TEXT_TRANSLATE_HINT = "Translate (Ctrl+Enter)"
+TEXT_CANCEL = "Cancel"
+TEXT_RETRY = "Retry"
+TEXT_TRANSLATING = "Translating…"
+TEXT_COUNTER = "{count} / {limit} characters"
+TEXT_TOO_LONG = "Too long to translate: {count} characters. Shorten the text to {limit} characters."
+TEXT_EMPTY_REASON = "Enter text to translate."
+TEXT_STALE = "Out of date — the text or a language changed. Translate again."
+TEXT_CANCELLED = "Translation cancelled. Your text is unchanged."
+TEXT_FAILED = "Translation failed: {reason}"
+TEXT_UNSUPPORTED = "Translation from {source} to {target} is not supported."
+TEXT_NO_PACK_HINT = "Text translation needs a translation pack. Install one in Language packs."
+TEXT_PLAY = "Play translation"
+TEXT_REPLAY = "Replay"
+TEXT_STOP = "Stop"
+TEXT_PLAYING = "Playing translation…"
+TEXT_VOICE_MISSING = "Play translation needs the {language} voice."
+TEXT_SPEAKERS_MISSING = "Play translation needs speakers. Choose them in Settings › Audio devices."
+TEXT_OPEN_AUDIO = "Open audio settings"
+TEXT_PLAYBACK_FAILED = "Playback failed: {reason}. The translation stays available."
+TEXT_COPY_SOURCE = "Copy source"
+TEXT_COPY_TRANSLATION = "Copy translation"
+TEXT_COPIED = "Copied"
+TEXT_REASON_MODEL = "the translation model could not be loaded"
+TEXT_REASON_MEMORY = "not enough memory"
+TEXT_REASON_DEVICE = "the speakers could not be opened"
+TEXT_REASON_OTHER = "unexpected error (details in Diagnostics)"
+
+__all__ = [name for name in dir() if name.startswith("TEXT_")]
