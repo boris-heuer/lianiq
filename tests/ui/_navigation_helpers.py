@@ -16,12 +16,13 @@ from lianiq.ui.shell.workspaces import WorkspaceId
 from tests._spy_window import build_window
 from tests.ui._language_helpers import submit, transcript, wait_until
 
-PLANNED = (WorkspaceId.LISTEN, WorkspaceId.LANGUAGE_PACKS)
+PLANNED = (WorkspaceId.LISTEN,)
 ENABLED = (
     WorkspaceId.CONVERSATION,
     WorkspaceId.MEETING,
     WorkspaceId.TEXT_TRANSLATION,  # CAP-0172
     WorkspaceId.CALL_BRIDGE,
+    WorkspaceId.LANGUAGE_PACKS,  # CAP-0171
     WorkspaceId.SETTINGS,
 )
 
