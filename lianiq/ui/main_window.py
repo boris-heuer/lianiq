@@ -43,6 +43,7 @@ from lianiq.ui.shell.session_owner import ActiveSessionOwner, SessionState
 from lianiq.ui.shell.workspaces import DEFAULT_ENTRIES, WorkspaceId
 from lianiq.ui.workspaces.call_bridge import CallBridgeWorkspace
 from lianiq.ui.workspaces.conversation import ConversationWorkspace
+from lianiq.ui.workspaces.language_packs import LanguagePacksWorkspace
 from lianiq.ui.workspaces.meeting import MeetingWorkspace
 from lianiq.ui.workspaces.settings import SettingsWorkspace
 
@@ -63,6 +64,7 @@ class UiBridge(QObject):
     call_bridge_level = Signal(object, float)
     call_bridge_capture_fault = Signal(object, str)
     pipeline_event = Signal(object, int)  # PipelineEvent, session generation
+    packs_event = Signal(object)  # CAP-0171 pack jobs
 
 
 def _forward(workspace: str, name: str) -> property:
@@ -130,6 +132,7 @@ class MainWindow(MainWindowLayout, MainWindowServices, QMainWindow):
         self.call_bridge = CallBridgeWorkspace(self)
         self.meeting = MeetingWorkspace(self)
         self.settings = SettingsWorkspace(self)
+        self.language_packs = LanguagePacksWorkspace(self)
         self.device_setup = DeviceSetup(self)
 
         self.setWindowTitle("lianiq")
@@ -181,6 +184,8 @@ class MainWindow(MainWindowLayout, MainWindowServices, QMainWindow):
             self.settings.refresh()
         elif workspace is WorkspaceId.MEETING:
             self.meeting.refresh()
+        elif workspace is WorkspaceId.LANGUAGE_PACKS:
+            self.language_packs.refresh()
         self.pages.setCurrentWidget(page)
         return True
 
