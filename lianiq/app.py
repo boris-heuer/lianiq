@@ -108,7 +108,6 @@ def build_pipeline(
         registry=registry,
         catalog=catalog,
     )
-    pipeline.set_voice_output(config.voice_output)
     return pipeline
 
 
