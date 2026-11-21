@@ -51,6 +51,7 @@ def test_e03_passes_and_stores_the_transcript_as_sha256_only(ctx, monkeypatch) -
         "screenshot-running-masked",
         "strip-visible-conversation",
         "strip-visible-meeting",
+        "strip-visible-text-translation",
         "strip-visible-call-bridge",
         "call-bridge-start-disabled-busy",
         "strip-visible-settings",
