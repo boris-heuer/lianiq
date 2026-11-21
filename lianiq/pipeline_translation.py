@@ -13,7 +13,7 @@ from uuid import UUID
 import numpy as np
 
 from lianiq.conversation.routing import HeldTurn, TurnRoute, TurnRouter
-from lianiq.domain import AudioUtterance, TranslationResult
+from lianiq.domain import AudioUtterance, Transcript, TranslationResult
 from lianiq.languages.capabilities import CapabilityCatalog, DirectedEdge
 from lianiq.languages.errors import UnsupportedModeError
 from lianiq.languages.modes import InputKind, RoutingKind, SessionPair
@@ -71,6 +71,9 @@ class TranslationPipeline(PipelineAdapters, PipelineHeldTurns):
         # through it after delivering the text. ``playback`` and ``output_device`` are the
         # player and speakers it uses.
         self.spoken: SpokenOutput | None = None
+        # Listen (CAP-0170 C §5): called after recognition, before routing, for every
+        # segment (empty text included), on the worker thread. Unset for other workspaces.
+        self.on_recognized: Callable[[BoundUtterance, Transcript], None] | None = None
         # Serializes adapter construction and warm-up across Start requests.
         self._adapter_lock = threading.RLock()
         # The languages Conversation speaks: bound by ``prepare``; ``set_spoken_languages``.
@@ -109,6 +112,7 @@ class TranslationPipeline(PipelineAdapters, PipelineHeldTurns):
                 utterance.samples, utterance.sample_rate, forced
             )
             stt_seconds = time.perf_counter() - started
+            self._notify_recognized(item, transcript)
             if not transcript.text.strip():
                 LOGGER.info("Speech recognition returned no text")
                 return None
@@ -137,6 +141,15 @@ class TranslationPipeline(PipelineAdapters, PipelineHeldTurns):
                 transcript.probability,
             )
             return self._translate(transcript.text, route, stt_seconds, item, epoch)
+
+    def _notify_recognized(self, item: BoundUtterance, transcript: Transcript) -> None:
+        hook = self.on_recognized
+        if hook is None:
+            return
+        try:
+            hook(item, transcript)
+        except Exception as exc:  # noqa: BLE001 - a listener never breaks the turn
+            LOGGER.warning("Recognition listener failed (%s)", type(exc).__name__)
 
     def reset_context(self) -> None:
         """Clear the translation context (every session stop and pair or mode change).
