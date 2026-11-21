@@ -3,8 +3,8 @@
 After the turn it navigates to every enabled workspace, stops the session with the session
 strip's **Stop (F9)** from Settings and returns to Conversation; the transcript and the pair
 must be unchanged (spec VoR-01, E2E C-03). The sidebar must list seven entries and open the
-Meeting page with **Start meeting** (CAP-0177 E2E C-02); no meeting is started. Needs the
-provisioned models (D-01).
+Meeting page with **Start meeting** (CAP-0177 E2E C-02); no meeting is started. The visit
+includes the Language packs page (CAP-0171 C-03). Needs the provisioned models (D-01).
 """
 
 from __future__ import annotations
@@ -84,7 +84,13 @@ def main() -> int:
             print(f"FAIL navigation: {len(window.navigation.buttons)} sidebar entries", flush=True)
             application.exit(8)
             return
-        for workspace in (WorkspaceId.MEETING, WorkspaceId.CALL_BRIDGE, WorkspaceId.SETTINGS):
+        visits = (
+            WorkspaceId.MEETING,
+            WorkspaceId.CALL_BRIDGE,
+            WorkspaceId.LANGUAGE_PACKS,  # CAP-0171: showing the page starts no job
+            WorkspaceId.SETTINGS,
+        )
+        for workspace in visits:
             window.navigation.buttons[workspace].click()
             application.processEvents()
             if window.current_workspace() is not workspace or not window.stop_button.isVisible():
