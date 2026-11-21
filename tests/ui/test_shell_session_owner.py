@@ -65,7 +65,7 @@ def test_ac03_registry_lists_seven_entries_in_spec_order_with_settings_last() ->
     assert [(item.id, item.label, item.state) for item in DEFAULT_ENTRIES] == [
         (WorkspaceId.CONVERSATION, "Conversation", EntryState.ENABLED),
         (WorkspaceId.MEETING, "Meeting", EntryState.ENABLED),
-        (WorkspaceId.TEXT_TRANSLATION, "Text translation", EntryState.PLANNED),
+        (WorkspaceId.TEXT_TRANSLATION, "Text translation", EntryState.ENABLED),  # CAP-0172
         (WorkspaceId.LISTEN, "Listen & translate", EntryState.PLANNED),
         (WorkspaceId.CALL_BRIDGE, "Call Bridge", EntryState.EXPERIMENTAL),
         (WorkspaceId.LANGUAGE_PACKS, "Language packs", EntryState.PLANNED),
@@ -84,7 +84,6 @@ def test_ac03_registry_lists_seven_entries_in_spec_order_with_settings_last() ->
 
 def test_ac04_ac05_only_planned_entries_are_not_selectable() -> None:
     assert [item.id for item in DEFAULT_ENTRIES if not item.selectable] == [
-        WorkspaceId.TEXT_TRANSLATION,
         WorkspaceId.LISTEN,
         WorkspaceId.LANGUAGE_PACKS,
     ]

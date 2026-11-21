@@ -13,6 +13,7 @@ from lianiq.ui import strings
 from lianiq.ui.notices import Notice
 from lianiq.ui.shell.session_owner import SessionState
 from lianiq.ui.shell.workspaces import WorkspaceId
+from lianiq.ui.workspaces.text_translation import TextTranslationWorkspace
 
 
 class MainWindowServices:
@@ -29,6 +30,11 @@ class MainWindowServices:
             self.notices.resolve(catalog.PAIR_LOCKED)
         for banner in self.banners.values():  # e.g. Reconnect is available after Stop
             banner.update_action_states()
+
+    def build_text_translation_page(self):
+        """The Text translation workspace (CAP-0172); ``closeEvent`` shuts its worker down."""
+        self.text_translation = TextTranslationWorkspace(self)
+        return self.text_translation.build_page()
 
     # Notices.
 

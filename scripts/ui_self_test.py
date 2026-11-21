@@ -84,7 +84,8 @@ def main() -> int:
             print(f"FAIL navigation: {len(window.navigation.buttons)} sidebar entries", flush=True)
             application.exit(8)
             return
-        for workspace in (WorkspaceId.MEETING, WorkspaceId.CALL_BRIDGE, WorkspaceId.SETTINGS):
+        visited = (WorkspaceId.MEETING, WorkspaceId.TEXT_TRANSLATION, WorkspaceId.CALL_BRIDGE)
+        for workspace in (*visited, WorkspaceId.SETTINGS):
             window.navigation.buttons[workspace].click()
             application.processEvents()
             if window.current_workspace() is not workspace or not window.stop_button.isVisible():

@@ -52,7 +52,7 @@ def test_ac29_meeting_is_the_second_entry_enabled_and_ctrl_2_opens_it(window) ->
     others = [(item.id, item.state) for item in DEFAULT_ENTRIES if item.id is not MEETING]
     assert others == [
         (WorkspaceId.CONVERSATION, EntryState.ENABLED),
-        (WorkspaceId.TEXT_TRANSLATION, EntryState.PLANNED),
+        (WorkspaceId.TEXT_TRANSLATION, EntryState.ENABLED),  # CAP-0172
         (WorkspaceId.LISTEN, EntryState.PLANNED),
         (WorkspaceId.CALL_BRIDGE, EntryState.EXPERIMENTAL),
         (WorkspaceId.LANGUAGE_PACKS, EntryState.PLANNED),

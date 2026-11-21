@@ -257,6 +257,7 @@ class MainWindow(MainWindowLayout, MainWindowServices, QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         self.meeting.end_meeting()  # drains on its own thread; never blocks the close
+        self.text_translation.shutdown()
         self.stop_call_bridge()
         self.stop_listening()
         if self.persist_settings:
