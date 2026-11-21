@@ -156,7 +156,13 @@ class TextTranslationLayout:
         self.translate_button.setToolTip(strings.TEXT_TRANSLATE_HINT)
         self.retry_button = _button(strings.TEXT_RETRY)
         self.retry_button.hide()
-        row.addWidget(self.translate_button)
-        row.addWidget(self.retry_button)
-        row.addStretch(1)
+        self.play_button = _button(strings.TEXT_PLAY)  # Play translation / Replay / Stop
+        self.play_hint = QLabel()  # voice or speakers missing
+        self.play_hint.setObjectName("textPlayHint")
+        self.play_hint.setWordWrap(True)
+        self.open_audio_button = _button(strings.TEXT_OPEN_AUDIO)
+        for widget in (self.translate_button, self.retry_button, self.play_button):
+            row.addWidget(widget)
+        row.addWidget(self.play_hint, 1)
+        row.addWidget(self.open_audio_button)
         return row
