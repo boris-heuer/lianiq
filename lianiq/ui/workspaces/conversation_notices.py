@@ -148,7 +148,7 @@ class ConversationNotices:
     def speakers_lost(self, name: str | None = None, generation: int | None = None) -> None:
         """The speakers failed or left: capture continues, spoken output is off."""
         name = name or self.host.device_setup.device_name(RENDER)
-        self.host.pipeline.set_voice_output(False)
+        self.host.pipeline.set_spoken_languages(frozenset())
         self.post(
             catalog.speakers_lost(
                 name,
