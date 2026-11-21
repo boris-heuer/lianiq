@@ -25,7 +25,10 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import QObject, Signal, Slot
 
 from lianiq.audio.capture import MicrophoneCapture
+from lianiq.audio.playback import stop_playback
+from lianiq.config_voice import VoicePreferences
 from lianiq.conversation.routing import HeldTurn
+from lianiq.conversation.spoken_output import PlaybackState, SpokenOutput
 from lianiq.domain import TranslationResult
 from lianiq.languages.modes import SessionPair
 from lianiq.languages.registry import LanguageId
@@ -91,7 +94,6 @@ class ConversationWorkspace(
             on_level=bridge.level.emit,
             on_error=bridge.error.emit,
         )
-        self.pipeline.on_playback_state = self.capture.set_muted
 
         # Overflow, dropped turns and playback failure become notices; each event carries
         # the generation of the session it was emitted in.
@@ -99,6 +101,16 @@ class ConversationWorkspace(
             bridge.pipeline_event.emit(event, self._generation)
 
         self.pipeline.on_event = emit_event
+        # CAP-0167 WI-02: each result is spoken after it is shown; capture is muted while
+        # a translation is synthesized and played (the former ``_translate`` mute window).
+        self.pipeline.spoken = SpokenOutput(
+            self.pipeline.voice_synthesizer,
+            lambda path, device: self.pipeline.playback(path, device),
+            stop_playback,
+            VoicePreferences(self.config, self.pipeline.registry).options,
+            lambda state: self.capture.set_muted(state is not PlaybackState.IDLE),
+            emit_event,
+        )
         self.runner = PipelineRunner(
             self.pipeline,
             on_result=bridge.result.emit,
