@@ -12,36 +12,14 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from enum import StrEnum
 
-from lianiq.languages.errors import CapabilityMissingError
-from lianiq.pipeline_types import Translator
+from lianiq.pipeline_types import FailureReason, Translator
+from lianiq.pipeline_types import classify_failure as failure_reason
 from lianiq.text_translation.segments import join_output, split_source
 from lianiq.text_translation.state import TextResult, TranslationRequest
 
 LOGGER = logging.getLogger(__name__)
 SHUTDOWN_WAIT_SECONDS = 1.0
-
-
-class FailureReason(StrEnum):
-    MODEL = "model"
-    MEMORY = "memory"
-    DEVICE = "device"  # playback only: the speakers could not be opened
-    OTHER = "other"
-
-
-def failure_reason(error: BaseException) -> FailureReason:
-    names = {cls.__name__ for cls in type(error).__mro__}
-    if isinstance(error, MemoryError) or "OutOfMemoryError" in names:
-        return FailureReason.MEMORY
-    if isinstance(error, RuntimeError) and "out of memory" in str(error).lower():
-        return FailureReason.MEMORY  # torch CPU allocation failure
-    if (
-        isinstance(error, CapabilityMissingError | OSError | ImportError)
-        or "ModelLoadError" in names
-    ):
-        return FailureReason.MODEL  # OSError covers FileNotFoundError and load I/O errors
-    return FailureReason.OTHER
 
 
 class _Cancelled(Exception):
