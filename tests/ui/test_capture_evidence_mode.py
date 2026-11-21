@@ -26,6 +26,7 @@ ENABLED = (
     WorkspaceId.MEETING,  # CAP-0177: the seventh entry, second and enabled
     WorkspaceId.TEXT_TRANSLATION,  # CAP-0172
     WorkspaceId.CALL_BRIDGE,
+    WorkspaceId.LANGUAGE_PACKS,  # CAP-0171: enabled
     WorkspaceId.SETTINGS,
 )
 SHOTS = len(ENABLED) * len(AC29_SIZES)
@@ -80,7 +81,7 @@ def test_evidence_mode_writes_one_png_per_enabled_workspace_and_size(evidence_ru
 
     assert code == 0
     files = sorted(path.name for path in folder.iterdir())
-    assert len(files) == SHOTS == 20
+    assert len(files) == SHOTS == 24
     assert files == sorted(
         capture.evidence_name(workspace, width, height, grabs[0][3].devicePixelRatioF())
         for workspace in ENABLED
