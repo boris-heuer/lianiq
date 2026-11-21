@@ -66,7 +66,7 @@ def _sidebar_checks(entries, s) -> list[Check]:
         s.NAV_LANGUAGE_PACKS,
         s.NAV_SETTINGS,
     ]
-    planned = (s.NAV_TEXT_TRANSLATION, s.NAV_LISTEN, s.NAV_LANGUAGE_PACKS)
+    planned = (s.NAV_TEXT_TRANSLATION, s.NAV_LISTEN)
     names = [entry.name for entry in entries]
     tops = [entry.rect[1] for entry in entries]
     by = {entry.name: entry for entry in entries}
