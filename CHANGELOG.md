@@ -12,6 +12,16 @@ All notable user-visible changes are documented here.
   after **Save…**), the setup of the Jabra Speak2 75 speakerphone and the headset mark, and the
   known limits. The README has a Meeting section, and `docs/native-e2e-rows.md` lists the
   Meeting operator rows.
+- The **Language packs** workspace (sixth sidebar entry, Ctrl+6) is now enabled: it lists the
+  speech recognition, translation and voice packs with their state (*Downloadable*,
+  *Installing…*, *Validated*, *Failed*, *Custom path*), "Needed by", the models folder and its
+  free space, and English, Spanish and French in a collapsed *Planned languages* group.
+  **Get…** opens the pack details (source, model and version, sizes, licence, use constraints,
+  SHA-256 per file); **Download** and **Import…** (a `.zip` or a folder) stay disabled until
+  the licence is accepted and while disk space is short. A job shows its progress with
+  **Cancel**; a cancelled or failed job, including no connection, keeps the previous state
+  and offers **Retry**. **Remove** names the usages that stop being ready, and only one pack
+  job runs at a time. Nothing connects to the network before **Download**.
 
 ### Fixed
 

@@ -4,13 +4,14 @@ The code that calls ``ActiveSessionOwner.request_start`` binds the session it st
 after the call returns (Conversation, Call Bridge, Meeting with its local-speech switch);
 the tracker clears itself when the owner becomes idle. ``packs_in_use`` maps the bound
 session's requirements through the pack catalog; a running session without a bound usage
-protects every pack. Any job (install, update, remove) on a protected pack raises
+protects every installed pack (contract.md §8), so a pack that is not installed can still be
+installed meanwhile. Any job (install, update, remove) on a protected pack raises
 ``PackInUse(mode)``; installing a pack outside the set stays allowed.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
@@ -62,14 +63,22 @@ class ActiveUsageTracker:
 
 
 def packs_in_use(
-    owner: ActiveSessionOwner, tracker: ActiveUsageTracker, packs: PackCatalog
+    owner: ActiveSessionOwner,
+    tracker: ActiveUsageTracker,
+    packs: PackCatalog,
+    installed: Iterable[str] | None = None,
 ) -> frozenset[str]:
-    """Ids of the packs the active session uses; every pack while a session is unbound."""
+    """Ids of the packs the active session uses; every installed pack while it is unbound.
+
+    ``installed`` holds the ids of the installed packs; ``None`` (not known) counts every
+    catalog pack as installed, so a caller that cannot tell still protects them all.
+    """
     if owner.state is SessionState.IDLE:
         return frozenset()
     usage = tracker.current
     if usage is None:
-        return frozenset(pack.id for pack in packs.packs())
+        ids = frozenset(pack.id for pack in packs.packs())
+        return ids if installed is None else ids & frozenset(installed)
     needed = set(requirements(usage.session))
     if usage.local_speech and usage.session.mode.meeting:
         needed.update(meeting_local_speech_requirements(usage.session))
@@ -78,14 +87,21 @@ def packs_in_use(
 
 
 def in_use_guard(
-    owner: ActiveSessionOwner, tracker: ActiveUsageTracker, packs: PackCatalog
+    owner: ActiveSessionOwner,
+    tracker: ActiveUsageTracker,
+    packs: PackCatalog,
+    installed: Callable[[], Iterable[str]] | None = None,
 ) -> Callable[[PackDefinition, str], None]:
-    """The ``PackJobRunner`` guard: refuse every job on a pack the active session uses."""
+    """The ``PackJobRunner`` guard: refuse every job on a pack the active session uses.
+
+    ``installed`` returns the installed pack ids at the time of each job start.
+    """
 
     def guard(pack: PackDefinition, operation: str) -> None:
         if operation not in PROTECTED_OPERATIONS:
             return
-        if pack.id in packs_in_use(owner, tracker, packs):
+        known = installed() if installed is not None else None
+        if pack.id in packs_in_use(owner, tracker, packs, known):
             usage = tracker.current
             mode = usage.mode if usage is not None else owner.active
             raise PackInUse(label(mode if mode is not None else FALLBACK_MODE))

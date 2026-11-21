@@ -49,6 +49,7 @@ class MainWindowLayout:
             WorkspaceId.MEETING: self.meeting.build_page(),
             WorkspaceId.TEXT_TRANSLATION: self.build_text_translation_page(),
             WorkspaceId.CALL_BRIDGE: self.call_bridge.build_page(),
+            WorkspaceId.LANGUAGE_PACKS: self.language_packs.build_page(),
             WorkspaceId.SETTINGS: self.settings.build_page(),
         }
         for page in self.workspace_pages.values():

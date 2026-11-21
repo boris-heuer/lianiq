@@ -144,12 +144,16 @@ def test_ac04_up_down_skip_planned_entries_and_enter_selects(window) -> None:
     press(buttons[WorkspaceId.TEXT_TRANSLATION], Qt.Key.Key_Down)  # skips Listen (planned)
     assert QApplication.focusWidget() is buttons[WorkspaceId.CALL_BRIDGE]
     press(buttons[WorkspaceId.CALL_BRIDGE], Qt.Key.Key_Down)
+    assert QApplication.focusWidget() is buttons[WorkspaceId.LANGUAGE_PACKS]
+    press(buttons[WorkspaceId.LANGUAGE_PACKS], Qt.Key.Key_Down)
     assert QApplication.focusWidget() is buttons[WorkspaceId.SETTINGS]
     press(buttons[WorkspaceId.SETTINGS], Qt.Key.Key_Down)  # no wrap-around
     assert QApplication.focusWidget() is buttons[WorkspaceId.SETTINGS]
     press(buttons[WorkspaceId.SETTINGS], Qt.Key.Key_Return)
     assert window.current_workspace() is WorkspaceId.SETTINGS
     press(buttons[WorkspaceId.SETTINGS], Qt.Key.Key_Up)
+    assert QApplication.focusWidget() is buttons[WorkspaceId.LANGUAGE_PACKS]
+    press(buttons[WorkspaceId.LANGUAGE_PACKS], Qt.Key.Key_Up)
     assert QApplication.focusWidget() is buttons[WorkspaceId.CALL_BRIDGE]
     press(buttons[WorkspaceId.CALL_BRIDGE], Qt.Key.Key_Space)
     assert window.current_workspace() is WorkspaceId.CALL_BRIDGE
@@ -168,7 +172,7 @@ def test_ctrl_number_selects_enabled_entries_by_position(window) -> None:
         (Qt.Key.Key_3, WorkspaceId.TEXT_TRANSLATION),  # CAP-0172
         (Qt.Key.Key_2, WorkspaceId.MEETING),
         (Qt.Key.Key_4, WorkspaceId.MEETING),  # planned: ignored
-        (Qt.Key.Key_6, WorkspaceId.MEETING),  # planned: ignored
+        (Qt.Key.Key_6, WorkspaceId.LANGUAGE_PACKS),  # CAP-0171
         (Qt.Key.Key_1, WorkspaceId.CONVERSATION),
     ):
         press(window.focusWidget() or window, key, control)
