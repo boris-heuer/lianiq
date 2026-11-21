@@ -86,6 +86,7 @@ def main() -> int:
             return
         visits = (
             WorkspaceId.MEETING,
+            WorkspaceId.TEXT_TRANSLATION,
             WorkspaceId.CALL_BRIDGE,
             WorkspaceId.LANGUAGE_PACKS,  # CAP-0171: showing the page starts no job
             WorkspaceId.SETTINGS,
