@@ -26,6 +26,7 @@ SHUTDOWN_WAIT_SECONDS = 1.0
 class FailureReason(StrEnum):
     MODEL = "model"
     MEMORY = "memory"
+    DEVICE = "device"  # playback only: the speakers could not be opened
     OTHER = "other"
 
 

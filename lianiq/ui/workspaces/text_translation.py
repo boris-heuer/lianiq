@@ -15,15 +15,18 @@ from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QGuiApplication, QKeySequence, QShortcut
 
 from lianiq.call_bridge.contracts import EndpointFlow
+from lianiq.config_voice import VoicePreferences
 from lianiq.languages.errors import LanguageContractError
 from lianiq.languages.registry import Availability
 from lianiq.languages.requirements import describe
 from lianiq.text_translation.controller import TextSnapshot, TextTranslationController
 from lianiq.text_translation.jobs import TranslationJobs
 from lianiq.text_translation.limits import MAX_SOURCE_CODE_POINTS, SourceCheck
-from lianiq.text_translation.readiness import TranslateBlock
+from lianiq.text_translation.playback import DevicePlayer, TextPlayback
+from lianiq.text_translation.readiness import PlayBlock, TranslateBlock
 from lianiq.text_translation.state import ResultState
 from lianiq.ui import strings
+from lianiq.ui.shell.workspaces import WorkspaceId
 from lianiq.ui.workspaces.text_translation_layout import TextTranslationLayout
 
 if TYPE_CHECKING:
@@ -42,6 +45,17 @@ class TextTranslationWorkspace(TextTranslationLayout, QObject):
         self.registry = host.pipeline.registry
         self.posted.connect(self._run_posted)  # queued: the receiver lives on the GUI thread
         self.jobs = TranslationJobs(host.pipeline.text_translator, self.posted.emit)
+        preferences = VoicePreferences(host.config, self.registry)
+        # The target voice is bound per Play with that moment's choice, rate and volume.
+        self.playback = TextPlayback(
+            host.session_owner,
+            lambda language: host.pipeline.voice_synthesizer().bound(
+                {language: preferences.options(language)}
+            ),
+            DevicePlayer(),
+            lambda: host.device_setup.resolved(EndpointFlow.RENDER),
+            self.posted.emit,
+        )
         self.controller = TextTranslationController(
             self.registry,
             lambda: host.pipeline.catalog,
@@ -52,6 +66,8 @@ class TextTranslationWorkspace(TextTranslationLayout, QObject):
             self._default_languages(),
             notify=host.post_notice,
             resolve=host.resolve_notices,
+            playback=self.playback,
+            open_audio=self.open_audio_settings,
         )
         self._shown_result: int | None = None
 
@@ -85,6 +101,8 @@ class TextTranslationWorkspace(TextTranslationLayout, QObject):
         escape.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         self.translate_button.clicked.connect(self._translate_clicked)
         self.retry_button.clicked.connect(self.controller.retry)
+        self.play_button.clicked.connect(self._play_clicked)
+        self.open_audio_button.clicked.connect(self.open_audio_settings)
         self.copy_source_button.clicked.connect(
             lambda: self._copy(self.copy_source_button, self.source_edit.toPlainText())
         )
@@ -114,6 +132,17 @@ class TextTranslationWorkspace(TextTranslationLayout, QObject):
             self.controller.cancel()
         else:
             self.controller.translate()
+
+    def _play_clicked(self) -> None:
+        if self.playback.state == "idle":
+            self.controller.play()
+        else:
+            self.controller.stop_playback()
+
+    def open_audio_settings(self) -> None:
+        """Settings › Audio devices with the Conversation output selector focused."""
+        self.host.show_workspace(WorkspaceId.SETTINGS)
+        self.host.device_setup.output_combo.setFocus()
 
     def _combo_changed(self, combo) -> None:
         language = combo.currentData()
@@ -174,9 +203,10 @@ class TextTranslationWorkspace(TextTranslationLayout, QObject):
             self.translate_button.setText(strings.TEXT_TRANSLATE)
             self.translate_button.setEnabled(self.controller.can_translate())
         self.retry_button.setVisible(snapshot.retry)
-        self.status_label.setText(
-            strings.TEXT_TRANSLATING if snapshot.translating else snapshot.status or ""
-        )
+        playing = snapshot.playback != "idle"
+        status = strings.TEXT_PLAYING if playing else snapshot.status or ""
+        self.status_label.setText(strings.TEXT_TRANSLATING if snapshot.translating else status)
+        self._render_play(snapshot, playing)
         result = self.controller.draft.result
         result_id = None if result is None else result.result_id
         if result_id != self._shown_result:
@@ -193,6 +223,23 @@ class TextTranslationWorkspace(TextTranslationLayout, QObject):
             )
         )
         self.copy_translation_button.setEnabled(snapshot.result_state is ResultState.CURRENT)
+
+    def _render_play(self, snapshot: TextSnapshot, playing: bool) -> None:
+        """Play translation, then Replay after the first playback; Stop while playing."""
+        label = strings.TEXT_REPLAY if snapshot.replay else strings.TEXT_PLAY
+        self.play_button.setText(strings.TEXT_STOP if playing else label)
+        self.play_button.setAccessibleName(self.play_button.text())
+        self.play_button.setEnabled(playing or self.controller.can_play())
+        block = snapshot.readiness.play
+        hint = ""
+        if block is PlayBlock.VOICE_MISSING:
+            language = self.registry.display_name(self.controller.draft.target)
+            hint = strings.TEXT_VOICE_MISSING.format(language=language)
+        elif block is PlayBlock.SPEAKERS_MISSING:
+            hint = strings.TEXT_SPEAKERS_MISSING
+        self.play_hint.setText(hint)
+        self.play_hint.setVisible(bool(hint))
+        self.open_audio_button.setVisible(block is PlayBlock.SPEAKERS_MISSING)
 
     def _readiness_text(self, snapshot: TextSnapshot) -> str:
         if snapshot.check is SourceCheck.TOO_LONG:

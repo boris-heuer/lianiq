@@ -26,6 +26,7 @@ BRIDGE_DROPPED = "call-bridge.dropped"
 BRIDGE_CAPTURE = "call-bridge.capture-muted"
 BRIDGE_RECOVERY = "call-bridge.recovery-failed"
 TRANSLATION_FAILED = "text-translation.failed"
+PLAYBACK_FAILED = "text-translation.playback-failed"
 
 
 def unavailable_key(mode: WorkspaceId) -> str:
