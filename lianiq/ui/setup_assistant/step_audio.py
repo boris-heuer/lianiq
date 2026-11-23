@@ -46,6 +46,11 @@ def _call_bridge(host, role: str) -> str | None:
     return panel._endpoints[panel.endpoint_combos[EndpointRole(role)].currentData()].display_name
 
 
+def _listen(host) -> str | None:
+    resolved = host.listen.microphone()  # the ``listen.*`` choice (CAP-0170 C §8)
+    return None if resolved.endpoint is None else resolved.endpoint.display_name
+
+
 def _meeting(host, role: str) -> str | None:
     endpoint = host.meeting.endpoint(MeetingRole(role))
     return None if endpoint is None else endpoint.display_name
@@ -61,6 +66,8 @@ def role_devices(host, profile: UsageProfile) -> list[tuple[str, str | None]]:
         found = [_call_bridge(host, role) for role in CALL_ENDPOINT_ROLES]
     elif profile.id == "meeting":
         found = [_meeting(host, role) for role in MEETING_ENDPOINT_ROLES]
+    elif profile.id == "listen-and-translate":
+        found = [_listen(host)]
     else:
         found = [None] * len(profile.device_roles)
     return list(zip(profile.device_roles, found, strict=True))

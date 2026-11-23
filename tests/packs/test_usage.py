@@ -36,6 +36,7 @@ from lianiq.ui.shell.workspaces import WorkspaceId
 
 PAIR = BUILTIN_REGISTRY.pair("de", "zh-Hans")
 PROFILES = {profile.id: profile for profile in USAGE_PROFILES}
+LISTEN = "listen-and-translate"
 
 
 @pytest.fixture
@@ -89,7 +90,13 @@ def test_profile_table_matches_the_contract() -> None:
             UsageAvailability.ENABLED,
             ("Speakers",),
         ),
-        ("listen-and-translate", "Listen & translate", WorkspaceId.LISTEN, "planned", ()),
+        (
+            "listen-and-translate",
+            "Listen & translate",
+            WorkspaceId.LISTEN,
+            UsageAvailability.ENABLED,
+            ("Microphone",),
+        ),
     ]
 
 
@@ -97,7 +104,7 @@ def test_required_sets_follow_cap0169_rows() -> None:
     config = AppConfig()
     kinds = {
         usage: [str(item) for item in PROFILES[usage].required(PAIR, config)]
-        for usage in ("conversation", "call-bridge", "meeting", "text-translation")
+        for usage in ("conversation", "call-bridge", "meeting", "text-translation", LISTEN)
     }
     models = ["recognition de", "recognition zh-Hans", "translation de>zh-Hans"]
     models.append("translation zh-Hans>de")
@@ -105,7 +112,9 @@ def test_required_sets_follow_cap0169_rows() -> None:
     assert kinds["call-bridge"][:6] == [*models, "voice de", "voice zh-Hans"]
     assert kinds["meeting"][:5] == [*models, "voice zh-Hans"]  # local de: table speaks Mandarin
     assert kinds["text-translation"] == ["translation de>zh-Hans", "translation zh-Hans>de"]
-    assert [p.id for p in USAGE_PROFILES if p.both_directions] == ["text-translation"]
+    assert kinds[LISTEN] == [*models, "microphone"]  # both fixed directions (CAP-0170 C §8)
+    both = [p.id for p in USAGE_PROFILES if p.both_directions]
+    assert both == ["text-translation", "listen-and-translate"]
 
 
 def test_both_directions_needs_fixed_routing() -> None:
@@ -128,6 +137,23 @@ def test_ac31_text_translation_alone_needs_both_directed_packs(tmp_path: Path, b
     assert [(row.requirements[0].kind, row.optional) for row in devices] == [
         (RequirementKind.PLAYBACK, True)
     ]  # Speakers optional; no recognition pack, no microphone
+
+
+def test_cap0170_ac25_listen_alone_needs_recognition_both_edges_and_a_microphone(
+    tmp_path: Path, builtin
+) -> None:
+    catalog = CapabilityCatalog.from_config(AppConfig(), BUILTIN_REGISTRY, ReadinessProbe(tmp_path))
+    review = _review([LISTEN], catalog, builtin, DeviceReadiness(microphone=True))
+    packs = [(row.pack_id, row.optional, row.needed_by) for row in review.rows if row.pack_id]
+    assert packs == [
+        ("stt-faster-whisper-small", False, ("Listen & translate",)),
+        ("mt-de-zh-hans", False, ("Listen & translate",)),
+        ("mt-zh-hans-de", False, ("Listen & translate",)),
+    ]  # no voice
+    devices = [row for row in review.rows if is_device_row(row)]
+    assert [(row.requirements[0].kind, row.optional) for row in devices] == [
+        (RequirementKind.MICROPHONE, False)
+    ]  # no Speakers
 
 
 def test_ac05_review_lists_required_rows_and_optional_voices(tmp_path: Path, builtin) -> None:

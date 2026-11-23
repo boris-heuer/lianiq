@@ -34,6 +34,7 @@ from lianiq.languages.requirements import (
     meeting_local_speech_requirements,
     ordered_requirements,
 )
+from lianiq.listen.session import listen_session
 from lianiq.packs.catalog import PackCatalog, PackDefinition
 from lianiq.text_translation.readiness import text_session
 from lianiq.ui import strings_packs as labels
@@ -111,6 +112,10 @@ def _text(pair: LanguagePair, config: AppConfig) -> SessionPair:
     return text_session(pair.first, pair.second, spoken=False)  # row 1; reverse via both_directions
 
 
+def _listen(pair: LanguagePair, config: AppConfig) -> SessionPair:
+    return listen_session(pair, pair.first)  # row 3; reverse via both_directions
+
+
 def _local(pair: LanguagePair, language: str) -> LanguageId:
     # A stored local language outside the reviewed pair falls back to the first member.
     return LanguageId(language) if language in pair else pair.first
@@ -173,10 +178,11 @@ USAGE_PROFILES: tuple[UsageProfile, ...] = (
         "listen-and-translate",
         labels.USAGE_LISTEN,
         WorkspaceId.LISTEN,
-        UsageAvailability.PLANNED,
+        UsageAvailability.ENABLED,
+        _listen,
         None,
-        None,
-        (),
+        ("Microphone",),
+        both_directions=True,  # the page offers swap (CAP-0170 C §8)
     ),
 )
 

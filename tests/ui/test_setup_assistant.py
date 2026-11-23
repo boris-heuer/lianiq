@@ -77,11 +77,12 @@ def test_ac03_usage_step_offers_enabled_and_experimental_usages_only() -> None:
         "call-bridge": ("Call Bridge (Experimental)", True, False),
         "meeting": ("Meeting dual-mic", True, False),
         "text-translation": ("Text translation", True, False),
-        "listen-and-translate": ("Listen & translate (Planned)", False, False),
+        "listen-and-translate": ("Listen & translate", True, False),
     }
     step.boxes["conversation"].setChecked(False)
     assert not step.complete()  # Next needs one ticked usage
-    assert [p.id for p in UsageStep(("meeting", "listen-and-translate")).selected()] == ["meeting"]
+    picked = UsageStep(("meeting", "text-translation")).selected()
+    assert [p.id for p in picked] == ["meeting", "text-translation"]
 
 
 def test_ac04_languages_follow_the_registry_with_planned_disabled() -> None:
