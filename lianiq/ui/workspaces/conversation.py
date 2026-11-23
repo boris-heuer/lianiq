@@ -45,6 +45,7 @@ from lianiq.ui.workspaces.conversation_availability import ConversationAvailabil
 from lianiq.ui.workspaces.conversation_flow import ConversationFlow
 from lianiq.ui.workspaces.conversation_layout import ConversationLayout
 from lianiq.ui.workspaces.conversation_notices import ConversationNotices
+from lianiq.ui.workspaces.conversation_voice import ConversationVoice
 from lianiq.ui.workspaces.pair_selection import PairSelection
 
 if TYPE_CHECKING:
@@ -52,16 +53,17 @@ if TYPE_CHECKING:
 
 
 class ConversationWorkspace(
-    ConversationLayout, ConversationAvailability, ConversationFlow, QObject
+    ConversationLayout, ConversationAvailability, ConversationVoice, ConversationFlow, QObject
 ):
-    # *Voice output* changed its checked, enabled or tooltip state (Settings mirrors it).
-    voice_output_changed = Signal()
+    # The voice rows changed their statuses, switches or lock (Settings mirrors them).
+    voice_rows_changed = Signal()
 
     def __init__(self, host: MainWindow) -> None:
         super().__init__(host)
         self.host = host
         self.config = host.config
         self.pipeline = host.pipeline
+        self.voice_preferences = VoicePreferences(self.config, self.pipeline.registry)
         bridge = host.bridge
         bridge.result.connect(self._show_result)
         bridge.held.connect(self._show_held)
@@ -107,7 +109,7 @@ class ConversationWorkspace(
             self.pipeline.voice_synthesizer,
             lambda path, device: self.pipeline.playback(path, device),
             stop_playback,
-            VoicePreferences(self.config, self.pipeline.registry).options,
+            self.voice_preferences.options,
             lambda state: self.capture.set_muted(state is not PlaybackState.IDLE),
             emit_event,
         )
@@ -133,7 +135,7 @@ class ConversationWorkspace(
             return  # This Start was stopped or superseded while its models were loading.
         self.starting = False
         session, self._pending_session = self._pending_session, None
-        # Voice output is bound at Start: ``prepare`` applied the session's output mode.
+        # The spoken plan is bound at Start: ``prepare`` warmed and bound its voices.
         if not ready or session is None:
             self.diagnostic_wav = None
             self.owner.mark_idle(self._generation)
