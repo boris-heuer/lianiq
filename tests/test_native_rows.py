@@ -158,6 +158,7 @@ def install(monkeypatch, calls: list[str], s01_status=Status.PASS, s03_status=St
         e12,
         e13,
         e14,
+        e15,
         s02,
         s03,
         s05,
@@ -176,6 +177,7 @@ def install(monkeypatch, calls: list[str], s01_status=Status.PASS, s03_status=St
         (e10, "E-10"),
         (e14, "E-14"),
         (e13, "E-13"),
+        (e15, "E-15"),
     ):
         monkeypatch.setattr(module, "run", fake(row_id, calls))
     monkeypatch.setattr(uia_app, "close_open", lambda ctx: calls.append("app closed"))
@@ -195,7 +197,7 @@ def test_rows_run_in_the_spec_order_with_the_s04_window_around_the_app_rows(
     rows = runner.execute(context(tmp_path, repo, "a" * 40))
     assert calls == [
         "S-01", "S-02", "S-03", "S-04 begin", "S-05", "C-04", "E-01", "E-11", "E-03", "E-10",
-        "E-14", "E-13", "E-12", "C-03", "SHOT", "app closed", "S-04",
+        "E-14", "E-13", "E-15", "E-12", "C-03", "SHOT", "app closed", "S-04",
         "T-01", "T-02", "T-03", "T-04",
     ]  # fmt: skip
     assert set(rows) == {c for c in calls if c not in {"S-04 begin", "app closed"}}
