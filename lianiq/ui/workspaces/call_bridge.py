@@ -37,6 +37,7 @@ from lianiq.call_bridge.translation_lane import TranslationLane
 from lianiq.languages.errors import ModeUnavailableError
 from lianiq.languages.modes import SessionPair
 from lianiq.languages.registry import LanguageId
+from lianiq.tts.voice_router import bind_options
 from lianiq.ui import notice_catalog as catalog
 from lianiq.ui.shell.workspaces import WorkspaceId
 
@@ -68,6 +69,7 @@ class CallBridgeWorkspace(CallBridgeLifecycle, QObject):
         self.starting = False
         self._pending_assignments = None
         self._pending_session: SessionPair | None = None
+        self.voice_options: dict = {}  # bound at the latest Start
         self._endpoint_monitor = QTimer(self)
         self._endpoint_monitor.setInterval(2_000)
         self._endpoint_monitor.timeout.connect(self._reconcile_call_bridge_endpoints)
@@ -92,7 +94,8 @@ class CallBridgeWorkspace(CallBridgeLifecycle, QObject):
             lanes = CallBridgeLanes.from_session(session)
             recognizer = self.pipeline.speech_recognizer()
             translator = self.pipeline.text_translator()
-            synthesizer = self.pipeline.voice_synthesizer()
+            # The voice options taken at Start; a later change applies at the next Start.
+            synthesizer = bind_options(self.pipeline.voice_synthesizer(), self.voice_options)
             validate_voice_files = getattr(synthesizer, "validate_voice_files", None)
             if validate_voice_files is not None:
                 validate_voice_files([lanes.local, lanes.remote])
