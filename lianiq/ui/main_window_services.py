@@ -79,6 +79,7 @@ class MainWindowServices:
         self.conversation.populate_pairs()
         self.conversation.refresh_availability()
         self.meeting.refresh()
+        self.listen.refresh()
         if self.current_workspace() is WorkspaceId.SETTINGS:
             self.settings.refresh()
 
