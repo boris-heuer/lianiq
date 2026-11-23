@@ -15,6 +15,7 @@ that no action is needed. Keys are stable: a repeat of the same failure updates 
 | held turns discarded on Stop | ``conversation.held-discarded`` | warning | none |
 | queue overload / dropped turns | ``conversation.queue-overflow`` / ``.turns-dropped`` | warning | none |
 | missing voice | ``conversation.voice-missing`` | warning | none (provision) |
+| speech synthesis failed (CAP-0167) | ``conversation.synthesis-failed`` | warning | none |
 | no language pair ready | ``conversation.no-pair-ready`` | warning | Open Language packs |
 | session busy | ``<mode>.busy`` | info | none (Stop) |
 | microphone / speakers lost | ``device.microphone-lost`` / ``device.speakers-lost`` | blocking | Reconnect, Choose device |
@@ -229,6 +230,23 @@ def voice_missing(title: str, where: str) -> Notice:
     )
 
 
+SYNTHESIS_FAILED_KEY = "conversation.synthesis-failed"
+
+
+def synthesis_failed(language_name: str, where: str, generation: int | None = None) -> Notice:
+    """One turn could not be spoken (CAP-0167 C §8): its text stays, later turns are spoken."""
+    return _notice(
+        SYNTHESIS_FAILED_KEY,
+        Severity.WARNING,
+        strings.VOICE_SYNTH_FAILED.format(language=language_name),
+        strings.VOICE_SYNTH_FAILED_DETAIL,
+        where,
+        strings.VOICE_SYNTH_CONTINUES,
+        CONVERSATION,
+        generation=generation,
+    )
+
+
 def no_pair_ready(where: str, on_open: Callable[[], None]) -> Notice:
     """No language pair is ready (CAP-0171 C §12): **Open Language packs** opens the page."""
     return _notice(
@@ -252,6 +270,7 @@ def keys_resolved_by_start(mode: WorkspaceId) -> Sequence[str]:
             HELD_DISCARDED,
             QUEUE_OVERFLOW,
             TURNS_DROPPED,
+            SYNTHESIS_FAILED_KEY,
             MICROPHONE_LOST,
             device_unavailable_key(strings.NOTICE_MICROPHONE),
         ]

@@ -132,12 +132,13 @@ class SettingsWorkspace(QObject):
 
     @Slot()
     def sync_voice_rows(self) -> None:
-        """Show the rows and the switch lock of Conversation; both write ``tts.output``."""
+        """Show the rows, switch lock and playback of Conversation; both write ``tts.output``."""
         conversation = self.host.conversation
         self.voice_rows.set_rows(
             conversation.voice_statuses_shown, conversation.voice_preferences, {}
         )
         self.voice_rows.set_switches_locked(conversation.voice_lock)
+        self.voice_rows.set_playback(conversation.playback_state, conversation.can_replay())
 
     # Diagnostics ----------------------------------------------------------------------------
 

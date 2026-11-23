@@ -70,6 +70,7 @@ class ConversationWorkspace(
         bridge.held_resolved.connect(self._held_resolved)
         bridge.busy.connect(self._show_busy)
         bridge.level.connect(self._show_level)
+        bridge.playback_state.connect(self._show_playback_state)
         bridge.session_ready.connect(self._session_ready)
         self.notices = ConversationNotices(self)
         bridge.pipeline_event.connect(self.notices.pipeline_event)
@@ -77,6 +78,7 @@ class ConversationWorkspace(
         self.history: list[TranslationResult] = []
         # Models are constructed and warmed on Start, for the started mode only.
         self.starting = False
+        self.translating = False
         self._pending_session: SessionPair | None = None
         self.diagnostic_wav: Path | None = None
         self.owner = host.session_owner
@@ -104,13 +106,14 @@ class ConversationWorkspace(
 
         self.pipeline.on_event = emit_event
         # CAP-0167 WI-02: each result is spoken after it is shown; capture is muted while
-        # a translation is synthesized and played (the former ``_translate`` mute window).
+        # a translation is synthesized and played (the former ``_translate`` mute window),
+        # and the UI shows the pause through ``UiBridge.playback_state`` (WI-04).
         self.pipeline.spoken = SpokenOutput(
             self.pipeline.voice_synthesizer,
             lambda path, device: self.pipeline.playback(path, device),
-            stop_playback,
+            lambda: stop_playback(),  # looked up here, so tests patch this module's name
             self.voice_preferences.options,
-            lambda state: self.capture.set_muted(state is not PlaybackState.IDLE),
+            self.on_playback_state,
             emit_event,
         )
         self.runner = PipelineRunner(
@@ -201,10 +204,16 @@ class ConversationWorkspace(
 
     @Slot(bool)
     def _show_busy(self, busy: bool) -> None:
-        self.state_label.setText(
-            "Translating …" if busy else ("Listening …" if self.capture.running else "Ready")
-        )
+        self.translating = busy
+        if self.playback_state is PlaybackState.IDLE:  # else the microphone pause stays shown
+            self.state_label.setText(self.activity_text())
+
+    def activity_text(self) -> str:
+        if self.translating:
+            return "Translating …"
+        return "Listening …" if self.capture.running else "Ready"
 
     @Slot(float)
     def _show_level(self, level: float) -> None:
-        self.level_bar.setValue(round(level * 100))
+        if self.playback_state is PlaybackState.IDLE:  # a muted capture's late level: ignored
+            self.level_bar.setValue(round(level * 100))
