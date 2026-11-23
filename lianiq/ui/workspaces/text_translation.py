@@ -18,16 +18,13 @@ from lianiq.call_bridge.contracts import EndpointFlow
 from lianiq.config_voice import VoicePreferences
 from lianiq.languages.errors import LanguageContractError
 from lianiq.languages.registry import Availability
-from lianiq.languages.requirements import describe
-from lianiq.text_translation.controller import TextSnapshot, TextTranslationController
+from lianiq.text_translation.controller import TextTranslationController
 from lianiq.text_translation.jobs import TranslationJobs
-from lianiq.text_translation.limits import MAX_SOURCE_CODE_POINTS, SourceCheck
 from lianiq.text_translation.playback import DevicePlayer, TextPlayback
-from lianiq.text_translation.readiness import PlayBlock, TranslateBlock
-from lianiq.text_translation.state import ResultState
 from lianiq.ui import strings
 from lianiq.ui.shell.workspaces import WorkspaceId
 from lianiq.ui.workspaces.text_translation_layout import TextTranslationLayout
+from lianiq.ui.workspaces.text_translation_render import TextTranslationRender
 
 if TYPE_CHECKING:
     from lianiq.ui.main_window import MainWindow
@@ -36,7 +33,7 @@ _SUBMIT_KEYS = (Qt.Key.Key_Return, Qt.Key.Key_Enter)
 COPIED_MS = 1500
 
 
-class TextTranslationWorkspace(TextTranslationLayout, QObject):
+class TextTranslationWorkspace(TextTranslationRender, TextTranslationLayout, QObject):
     posted = Signal(object)  # a worker callback, run on the GUI thread
 
     def __init__(self, host: MainWindow) -> None:
@@ -59,7 +56,7 @@ class TextTranslationWorkspace(TextTranslationLayout, QObject):
         self.controller = TextTranslationController(
             self.registry,
             lambda: host.pipeline.catalog,
-            lambda: None,  # pack catalog: wired with the Language packs page (CAP-0171)
+            lambda: host.language_packs.packs,  # CAP-0171 catalog: PACK_MISSING vs UNSUPPORTED
             self.jobs,
             lambda: host.device_setup.resolved(EndpointFlow.RENDER),
             self.render,
@@ -68,6 +65,7 @@ class TextTranslationWorkspace(TextTranslationLayout, QObject):
             resolve=host.resolve_notices,
             playback=self.playback,
             open_audio=self.open_audio_settings,
+            open_packs=self.open_language_packs,
         )
         self._shown_result: int | None = None
 
@@ -103,6 +101,8 @@ class TextTranslationWorkspace(TextTranslationLayout, QObject):
         self.retry_button.clicked.connect(self.controller.retry)
         self.play_button.clicked.connect(self._play_clicked)
         self.open_audio_button.clicked.connect(self.open_audio_settings)
+        for button in (self.readiness_packs_button, self.no_pack_button, self.voice_packs_button):
+            button.clicked.connect(self.open_language_packs)
         self.copy_source_button.clicked.connect(
             lambda: self._copy(self.copy_source_button, self.source_edit.toPlainText())
         )
@@ -144,6 +144,10 @@ class TextTranslationWorkspace(TextTranslationLayout, QObject):
         self.host.show_workspace(WorkspaceId.SETTINGS)
         self.host.device_setup.output_combo.setFocus()
 
+    def open_language_packs(self) -> None:
+        """**Open Language packs** (CAP-0171 ``PACKS_OPEN``)."""
+        self.host.show_workspace(WorkspaceId.LANGUAGE_PACKS)
+
     def _combo_changed(self, combo) -> None:
         language = combo.currentData()
         if language is None:
@@ -183,81 +187,3 @@ class TextTranslationWorkspace(TextTranslationLayout, QObject):
 
     def shutdown(self) -> None:
         self.controller.shutdown()
-
-    # Rendering.
-
-    def render(self, snapshot: TextSnapshot) -> None:
-        if not hasattr(self, "page"):
-            return
-        self.counter_label.setText(
-            strings.TEXT_COUNTER.format(count=snapshot.length, limit=MAX_SOURCE_CODE_POINTS)
-        )
-        self.counter_label.setProperty("warning", snapshot.check is SourceCheck.TOO_LONG)
-        self.readiness_label.setText(self._readiness_text(snapshot))
-        self.readiness_label.setVisible(bool(self.readiness_label.text()))
-        self.busy_indicator.setVisible(snapshot.translating)
-        if self.controller.cancellable:
-            self.translate_button.setText(strings.TEXT_CANCEL)
-            self.translate_button.setEnabled(True)
-        else:
-            self.translate_button.setText(strings.TEXT_TRANSLATE)
-            self.translate_button.setEnabled(self.controller.can_translate())
-        self.retry_button.setVisible(snapshot.retry)
-        playing = snapshot.playback != "idle"
-        status = strings.TEXT_PLAYING if playing else snapshot.status or ""
-        self.status_label.setText(strings.TEXT_TRANSLATING if snapshot.translating else status)
-        self._render_play(snapshot, playing)
-        result = self.controller.draft.result
-        result_id = None if result is None else result.result_id
-        if result_id != self._shown_result:
-            self.result_edit.setPlainText(snapshot.result_text or "")
-            self._shown_result = result_id
-        stale = snapshot.result_state is ResultState.STALE
-        self.stale_label.setVisible(stale)
-        self.result_edit.setEnabled(not stale)  # dims the out-of-date text
-        self.result_edit.setAccessibleDescription(
-            " ".join(
-                text
-                for text in (strings.TEXT_STALE if stale else "", self.status_label.text())
-                if text
-            )
-        )
-        self.copy_translation_button.setEnabled(snapshot.result_state is ResultState.CURRENT)
-
-    def _render_play(self, snapshot: TextSnapshot, playing: bool) -> None:
-        """Play translation, then Replay after the first playback; Stop while playing."""
-        label = strings.TEXT_REPLAY if snapshot.replay else strings.TEXT_PLAY
-        self.play_button.setText(strings.TEXT_STOP if playing else label)
-        self.play_button.setAccessibleName(self.play_button.text())
-        self.play_button.setEnabled(playing or self.controller.can_play())
-        block = snapshot.readiness.play
-        hint = ""
-        if block is PlayBlock.VOICE_MISSING:
-            language = self.registry.display_name(self.controller.draft.target)
-            hint = strings.TEXT_VOICE_MISSING.format(language=language)
-        elif block is PlayBlock.SPEAKERS_MISSING:
-            hint = strings.TEXT_SPEAKERS_MISSING
-        self.play_hint.setText(hint)
-        self.play_hint.setVisible(bool(hint))
-        self.open_audio_button.setVisible(block is PlayBlock.SPEAKERS_MISSING)
-
-    def _readiness_text(self, snapshot: TextSnapshot) -> str:
-        if snapshot.check is SourceCheck.TOO_LONG:
-            return strings.TEXT_TOO_LONG.format(count=snapshot.length, limit=MAX_SOURCE_CODE_POINTS)
-        block = snapshot.readiness.translate
-        draft = self.controller.draft
-        if block is TranslateBlock.UNSUPPORTED:
-            return strings.TEXT_UNSUPPORTED.format(
-                source=self.registry.display_name(draft.source),
-                target=self.registry.display_name(draft.target),
-            )
-        if block is TranslateBlock.PACK_MISSING:
-            items = ", ".join(
-                describe(item, self.registry)
-                for item in snapshot.readiness.missing
-                if item.kind.value == "translation"
-            )
-            return strings.MODE_UNAVAILABLE.format(items=items)
-        if snapshot.check is SourceCheck.EMPTY:
-            return strings.TEXT_EMPTY_REASON
-        return ""
