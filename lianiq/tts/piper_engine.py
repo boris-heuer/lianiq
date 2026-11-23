@@ -26,6 +26,19 @@ def _synthesis_fields() -> frozenset[str]:
     return frozenset(field.name for field in dataclasses.fields(SynthesisConfig))
 
 
+def piper_speakers(voice_path: Path) -> int:
+    """``num_speakers`` of the voice's ``.onnx.json`` (absent: 1); no model is loaded."""
+    metadata = json.loads(Path(f"{voice_path}.json").read_text(encoding="utf-8"))
+    return max(1, int(metadata.get("num_speakers") or 1))
+
+
+def piper_controls(voice_path: Path) -> VoiceControls:
+    """Rate always; Volume iff ``SynthesisConfig`` has a ``volume`` field (contract §2)."""
+    return VoiceControls(
+        piper_speakers(voice_path), rate=True, volume="volume" in _synthesis_fields()
+    )
+
+
 class PiperEngine:
     """Piper voices by language ID, each loaded on first use or by ``warm_up`` and cached.
 
@@ -71,11 +84,9 @@ class PiperEngine:
             )
 
     def _speaker_count(self, language: str) -> int:
-        """``num_speakers`` of the voice's ``.onnx.json`` (absent: 1); no model is loaded."""
         language_id, voice_path = self._voice_path(language)
         if language_id not in self._speakers:
-            metadata = json.loads(Path(f"{voice_path}.json").read_text(encoding="utf-8"))
-            self._speakers[language_id] = max(1, int(metadata.get("num_speakers") or 1))
+            self._speakers[language_id] = piper_speakers(voice_path)
         return self._speakers[language_id]
 
     def controls(self, language: str) -> VoiceControls:

@@ -166,9 +166,13 @@ def test_the_controller_is_built_only_at_start_and_the_page_keeps_its_stopper(wi
 
 def test_the_app_factory_builds_the_controller_on_the_shared_engines(window) -> None:
     from lianiq.app import build_meeting_controller
+    from lianiq.tts.voice_controls import VoiceOptions
     from lianiq.ui.shell.session_owner import ActiveSessionOwner
 
     assign_table(window)
+    table = window.meeting.session().pair.other(window.meeting.session().local_language)
+    preferences = window.conversation.voice_preferences
+    preferences.set_options(table, VoiceOptions(rate=1.25))  # bound when it is built (AC-18)
     window.pipeline.prepare(window.meeting.session())
     owner = ActiveSessionOwner()
     controller = build_meeting_controller(
@@ -182,8 +186,38 @@ def test_the_app_factory_builds_the_controller_on_the_shared_engines(window) -> 
     )
     assert controller.engines.recognizer is window.pipeline.recognizer
     assert controller.engines.translator is window.pipeline.translator
-    assert controller.engines.synthesizer is window.pipeline.synthesizer
+    voice = controller.engines.synthesizer  # the shared voice, with the options bound
+    preferences.set_options(table, VoiceOptions(rate=1.5))
+    voice.synthesize("Tisch", table)
+    assert window.pipeline.synthesizer.engines[table].options[-1] == VoiceOptions(rate=1.25)
     assert not controller.running and owner.state is SessionState.IDLE
+
+
+def test_ac18_ac19_a_running_meeting_locks_voice_options_not_its_rows(window) -> None:
+    conversation, meeting = window.conversation, window.meeting
+    assign_table(window)
+    speech = meeting.speak_local_checkbox
+
+    def page() -> tuple:
+        return (meeting.start_button.isEnabled(), speech.isEnabled(), speech.isChecked())
+
+    before = page()
+    for language in conversation.voice_rows.languages():  # Conversation switches off
+        conversation.voice_rows.switch(language).click()
+    meeting.refresh()
+    assert page() == before and before[0]  # row 8 and the local speech switch (AC-19)
+
+    start_meeting(window)
+    locked = "Stop Meeting to change this voice. The running Meeting keeps its voice settings."
+    for voice_rows in (conversation.voice_rows, window.settings.voice_rows):
+        for language in voice_rows.languages():
+            assert not voice_rows.options_button(language).isEnabled()
+            assert voice_rows.options_button(language).toolTip() == locked
+    end_and_wait(window)
+    assert all(
+        conversation.voice_rows.options_button(language).isEnabled()
+        for language in conversation.voice_rows.languages()
+    )
 
 
 def test_end_meeting_while_the_models_load_cancels_and_opens_nothing(window, spies) -> None:  # noqa: F811

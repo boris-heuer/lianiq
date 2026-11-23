@@ -49,6 +49,9 @@ class AdapterFactories:
     recognizer: Callable[[], SpeechRecognizer] | None = None
     translator: Callable[[], Translator] | None = None
     synthesizer: Callable[[], Synthesizer] | None = None
+    # The ``VoiceControls`` of one language's voice without constructing the synthesizer
+    # or loading a model (CAP-0167 AC-26); ``None`` offers no **Voice options…**.
+    controls: Callable[[str], object] | None = None
 
 
 @dataclass(frozen=True, slots=True)

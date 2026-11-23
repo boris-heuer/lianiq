@@ -1,8 +1,9 @@
 """The Settings workspace: Audio devices, Voice output, Diagnostics (CAP-0168 spec §2.3.6).
 
 - **Voice output** mirrors the voice rows of Conversation (CAP-0167 contract.md §7): the same
-  switches, states and actions; a switch toggled in either place changes the saved choice
-  and refreshes both. A hint names the voices Call Bridge and Meeting need.
+  switches, states, actions and locks; a switch toggled or a **Voice options…** change in
+  either place changes the saved choice and refreshes both. A hint names the voices Call
+  Bridge and Meeting need.
 - **Diagnostics** shows the model profile and the compute device as full read-only text
   (AC-12; they left the Conversation layout, RES-06) and a readiness summary of the selected
   pair: conversation, one voice row per pair language and Call Bridge, with the **Open Language
@@ -89,6 +90,7 @@ class SettingsWorkspace(QObject):
         self.voice_rows = VoiceOutputRows(voice)
         self.voice_rows.switched.connect(conversation._voice_switched)
         self.voice_rows.packs_requested.connect(conversation.open_language_packs)
+        self.voice_rows.options_requested.connect(conversation.open_voice_options)
         self.voice_rows.replay_requested.connect(conversation.replay_spoken)
         self.voice_rows.stop_playback_requested.connect(conversation.stop_spoken)
         voice_layout.addWidget(self.voice_rows)
@@ -135,9 +137,12 @@ class SettingsWorkspace(QObject):
         """Show the rows, switch lock and playback of Conversation; both write ``tts.output``."""
         conversation = self.host.conversation
         self.voice_rows.set_rows(
-            conversation.voice_statuses_shown, conversation.voice_preferences, {}
+            conversation.voice_statuses_shown,
+            conversation.voice_preferences,
+            conversation.voice_controls_shown,
         )
         self.voice_rows.set_switches_locked(conversation.voice_lock)
+        self.voice_rows.set_options_locked(*conversation.voice_options_lock)
         self.voice_rows.set_playback(conversation.playback_state, conversation.can_replay())
 
     # Diagnostics ----------------------------------------------------------------------------

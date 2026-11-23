@@ -59,6 +59,13 @@ All notable user-visible changes are documented here.
   line reads "Microphone paused while the translation is spoken" and the level meter shows 0;
   **Stop** ends the playback at once. If a translation cannot be spoken, the notice "Could not
   speak the translation (<language>)" appears, the text stays and later turns are spoken again.
+- **Voice options…** next to a ready voice in Conversation and Settings › Voice output sets that
+  language's **Voice** (only for a voice with several speakers), **Rate** and **Volume**, as far
+  as its engine supports them; each change is saved at once and the next spoken turn uses it,
+  also while a Conversation runs. A sherpa-onnx voice shows "Loading voice…" while it reads its
+  speakers; no voice is loaded before that, **Start** or **Replay**. Call Bridge and Meeting
+  keep the voice settings of their Start: while one runs, **Voice options…** of its languages
+  says "Stop <mode> to change this voice", and a change applies at the next Start.
 
 ### Fixed
 

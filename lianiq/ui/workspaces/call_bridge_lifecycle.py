@@ -126,8 +126,11 @@ class CallBridgeLifecycle:
             # Nothing was opened; the running session continues (an info notice).
             host.show_busy(CALL_BRIDGE, busy.active)
             return
-        host.usage_tracker.bind(ActiveUsage(CALL_BRIDGE, session, False))
         conversation = host.conversation
+        # Both lanes always speak: their voice options are bound now (CAP-0167 C §5, AC-18).
+        self.voice_options = conversation.voice_preferences.snapshot(session.pair.members)
+        voices = frozenset(self.voice_options)
+        host.usage_tracker.bind(ActiveUsage(CALL_BRIDGE, session, False, voices))
         self.starting = True
         self._pending_assignments = assignments
         self._pending_session = session

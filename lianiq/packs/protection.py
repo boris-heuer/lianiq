@@ -43,8 +43,9 @@ class ActiveUsage:
     mode: WorkspaceId
     session: SessionPair
     local_speech: bool  # Meeting only: the optional local speech is on
-    # Conversation only: the spoken plan bound at Start (CAP-0167); its voices are in use
-    # even when the session output is text because only some languages are spoken.
+    # The voices the session plans to speak beyond its requirements (CAP-0167): the spoken
+    # plan of a Conversation whose plan covers only some output languages, the Call Bridge
+    # lane voices bound at Start.
     voices: frozenset[LanguageId] = frozenset()
 
 

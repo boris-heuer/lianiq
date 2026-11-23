@@ -12,6 +12,11 @@ WI-04: the playback state of ``SpokenOutput`` mutes the capture on the speaking 
 reaches the UI thread through ``UiBridge.playback_state``: the state line reads
 ``VOICE_MIC_PAUSED``, the level bar is 0, and **Replay** / **Stop playback** of both rows get
 their enabled states (contract.md §7).
+
+WI-05: **Voice options…** opens ``VoiceOptionsDialog`` with the controls of the language's
+voice (read without loading a model, AC-26). While Call Bridge or Meeting holds the session,
+**Voice options…** of its languages is locked with ``VOICE_LOCKED_SESSION`` in both places
+(AC-18); a running Conversation locks only the switches, the dialog stays usable (AC-16).
 """
 
 from __future__ import annotations
@@ -20,6 +25,7 @@ from PySide6.QtCore import Slot
 
 from lianiq.conversation.spoken_output import (
     PlaybackState,
+    VoiceState,
     VoiceStatus,
     output_languages,
     spoken_plan,
@@ -30,8 +36,14 @@ from lianiq.conversation.spoken_output import (
 from lianiq.languages.modes import OutputKind, SessionPair
 from lianiq.languages.registry import LanguageId, LanguagePair
 from lianiq.languages.requirements import ModeAvailability
+from lianiq.tts.voice_controls import VoiceControls
 from lianiq.ui import strings
-from lianiq.ui.shell.workspaces import WorkspaceId
+from lianiq.ui.shell.session_owner import SessionState
+from lianiq.ui.shell.workspaces import WorkspaceId, label
+from lianiq.ui.voice_options_dialog import VoiceOptionsDialog
+
+# The modes whose running session keeps the voice options bound at its Start (C §7).
+OPTIONS_LOCKING_MODES = {WorkspaceId.CALL_BRIDGE: "call_bridge", WorkspaceId.MEETING: "meeting"}
 
 
 class ConversationVoice:
@@ -41,6 +53,9 @@ class ConversationVoice:
     voice_lock: str | None = None  # the switch lock of a running session
     voice_statuses_shown: tuple[VoiceStatus, ...] = ()
     playback_state = PlaybackState.IDLE  # the last state shown on the UI thread
+    voice_controls_shown: dict[LanguageId, VoiceControls] = {}  # noqa: RUF012 - replaced
+    voice_options_lock: tuple[frozenset[LanguageId], str | None] = (frozenset(), None)
+    voice_dialog: VoiceOptionsDialog | None = None
 
     def _packs(self):
         workspace = getattr(self.host, "language_packs", None)
@@ -85,8 +100,18 @@ class ConversationVoice:
         self.voice_plan = plan
         if statuses:
             self.voice_preferences.sync_output(plan)
-        self.voice_rows.set_rows(statuses, self.voice_preferences, {})
+        self.voice_controls_shown = self.ready_controls(statuses)
+        self.voice_rows.set_rows(statuses, self.voice_preferences, self.voice_controls_shown)
         return plan
+
+    def ready_controls(self, statuses) -> dict[LanguageId, VoiceControls]:
+        """The controls of each ready voice; reading them never loads a model (AC-26)."""
+        found = {
+            status.language: self.pipeline.voice_controls(status.language)
+            for status in statuses
+            if status.state is VoiceState.READY
+        }
+        return {language: controls for language, controls in found.items() if controls}
 
     def planned_session(self, pair: LanguagePair, plan: frozenset[LanguageId]) -> SessionPair:
         """The session of the current controls whose output follows ``plan``."""
@@ -96,11 +121,68 @@ class ConversationVoice:
     def _voice_switched(self, language: str, on: bool) -> None:
         """A switch in Conversation or Settings: the saved choice; bound at the next Start."""
         if self.host.session_locked():  # the switches are locked: show the bound state
-            self.voice_rows.set_rows(self.voice_statuses_shown, self.voice_preferences, {})
+            self.voice_rows.set_rows(
+                self.voice_statuses_shown, self.voice_preferences, self.voice_controls_shown
+            )
             self.voice_rows_changed.emit()
             return
         self.voice_preferences.set_enabled(LanguageId(language), on)
         self.refresh_availability()
+
+    # Voice options (WI-05) ----------------------------------------------------------------
+
+    @Slot(str)
+    def open_voice_options(self, language: str) -> None:
+        """**Voice options…** of ``language`` in Conversation or Settings (window-modal)."""
+        language_id = LanguageId(language)
+        controls = self.voice_controls_shown.get(language_id)
+        if controls is None:
+            return
+        load = None
+        if controls.speakers is None:  # a sherpa-onnx voice: its speakers need the model
+
+            def load() -> VoiceControls:
+                return self.pipeline.voice_synthesizer().load_controls(language_id)
+
+        def save() -> None:
+            if self.host.persist_settings:
+                self.config.save()
+
+        dialog = VoiceOptionsDialog(
+            language_id,
+            controls,
+            self.voice_preferences,
+            self.pipeline.registry,
+            load,
+            self.host,
+            save,
+        )
+        dialog.changed.connect(lambda _language: self._voice_options_changed())
+        self.voice_dialog = dialog
+        dialog.open()
+
+    def _voice_options_changed(self) -> None:
+        """A chosen speaker shows in the state text; the plan and switches are unchanged."""
+        self.voice_statuses_shown = self.voice_statuses()
+        self.voice_rows.set_rows(
+            self.voice_statuses_shown, self.voice_preferences, self.voice_controls_shown
+        )
+        self.voice_rows_changed.emit()
+
+    def _voice_session_changed(self, state: SessionState, active: WorkspaceId | None) -> None:
+        """Call Bridge or Meeting running: **Voice options…** of its languages is locked."""
+        name = OPTIONS_LOCKING_MODES.get(active) if active is not None else None
+        if state is SessionState.IDLE or name is None:
+            self.voice_options_lock = (frozenset(), None)
+        else:
+            try:
+                languages = frozenset(getattr(self.host, name).session().pair.members)
+            except Exception:  # noqa: BLE001 - an invalid setting: lock every row
+                languages = frozenset(self.voice_rows.languages())
+            reason = strings.VOICE_LOCKED_SESSION.format(mode=label(active))
+            self.voice_options_lock = (languages, reason)
+        self.voice_rows.set_options_locked(*self.voice_options_lock)
+        self.voice_rows_changed.emit()
 
     @Slot()
     def open_language_packs(self) -> None:

@@ -28,6 +28,8 @@ REQUIRED_FILES = (MODEL_FILE, LEXICON_FILE, TOKENS_FILE, *RULE_FST_FILES, RULE_F
 NOISE_SCALE = 0.0
 NOISE_SCALE_W = 0.0
 PEAK_LEVEL = 0.9
+# The controls of a voice that is not loaded yet: its speaker count is unknown (contract §2).
+UNLOADED_CONTROLS = VoiceControls(None, rate=True, volume=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,8 +106,9 @@ class SherpaOnnxEngine:
         """Voice and Rate; ``speakers`` is ``None`` until the voice is loaded (contract §2)."""
         language_id, _voice_path = self._voice_path(language)
         loaded = self._loaded.get(language_id)
-        speakers = None if loaded is None else _speaker_count(loaded)
-        return VoiceControls(speakers, rate=True, volume=False)
+        if loaded is None:
+            return UNLOADED_CONTROLS
+        return VoiceControls(_speaker_count(loaded), rate=True, volume=False)
 
     def load_controls(self, language: str) -> VoiceControls:
         """Load the voice if needed (worker thread only), then return its controls."""

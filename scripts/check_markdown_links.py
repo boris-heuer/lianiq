@@ -8,12 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
-INLINE_LINK_RE = re.compile(
-    r"!?\[[^\]]*\]\(\s*(?:<(?P<angle>[^>]+)>|(?P<plain>[^\s)]+))"
-)
-REFERENCE_LINK_RE = re.compile(
-    r"^\s*\[[^\]]+\]:\s*(?:<(?P<angle>[^>]+)>|(?P<plain>\S+))"
-)
+INLINE_LINK_RE = re.compile(r"!?\[[^\]]*\]\(\s*(?:<(?P<angle>[^>]+)>|(?P<plain>[^\s)]+))")
+REFERENCE_LINK_RE = re.compile(r"^\s*\[[^\]]+\]:\s*(?:<(?P<angle>[^>]+)>|(?P<plain>\S+))")
 ATX_HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+(?P<text>.+?)\s*#*\s*$")
 SETEXT_HEADING_RE = re.compile(r"^\s{0,3}(?:=+|-+)\s*$")
 FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
@@ -81,7 +77,9 @@ def check_markdown_links(root: Path, files: list[Path] | None = None) -> list[Li
                 )
                 continue
             if relative_path and not candidate.exists():
-                problems.append(LinkProblem(source, line_number, target, "relative target is missing"))
+                problems.append(
+                    LinkProblem(source, line_number, target, "relative target is missing")
+                )
                 continue
 
             if not split.fragment:
@@ -90,12 +88,16 @@ def check_markdown_links(root: Path, files: list[Path] | None = None) -> list[Li
             if anchor_source.suffix.casefold() not in {".md", ".markdown"}:
                 continue
             if not anchor_source.is_file():
-                problems.append(LinkProblem(source, line_number, target, "anchor target is not a file"))
+                problems.append(
+                    LinkProblem(source, line_number, target, "anchor target is not a file")
+                )
                 continue
             anchors = anchor_cache.setdefault(anchor_source, markdown_anchors(anchor_source))
             fragment = unquote(split.fragment).removeprefix("user-content-").casefold()
             if fragment not in anchors:
-                problems.append(LinkProblem(source, line_number, target, "relative anchor is missing"))
+                problems.append(
+                    LinkProblem(source, line_number, target, "relative anchor is missing")
+                )
 
     return problems
 

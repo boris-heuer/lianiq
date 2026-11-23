@@ -66,6 +66,7 @@ class ConversationLayout:
         self.voice_rows = VoiceOutputRows(page)
         self.voice_rows.switched.connect(self._voice_switched)
         self.voice_rows.packs_requested.connect(self.open_language_packs)
+        self.voice_rows.options_requested.connect(self.open_voice_options)
         self.voice_rows.replay_requested.connect(self.replay_spoken)
         self.voice_rows.stop_playback_requested.connect(self.stop_spoken)
         layout.addWidget(self.voice_rows)

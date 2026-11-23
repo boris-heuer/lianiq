@@ -125,3 +125,9 @@ class BoundVoice:
     def synthesize_pcm(self, text: str, language: str) -> tuple[np.ndarray, int]:
         language_id, engine, options = self._bind(language)
         return engine.synthesize_pcm(text, language_id, options)
+
+
+def bind_options(synthesizer: object, options: Mapping[str, VoiceOptions]) -> object:
+    """``synthesizer.bound(options)``; a synthesizer without ``bound`` is used as it is."""
+    bound = getattr(synthesizer, "bound", None)
+    return synthesizer if bound is None else bound(options)

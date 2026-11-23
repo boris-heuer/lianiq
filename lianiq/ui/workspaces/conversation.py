@@ -85,6 +85,7 @@ class ConversationWorkspace(
         self._generation = 0  # the owner generation of this workspace's latest start
         self.owner.register(WorkspaceId.CONVERSATION, self.stop_listening)
         self.owner.subscribe(self._session_changed)
+        self.owner.subscribe(self._voice_session_changed)  # Voice options… locks (WI-05)
         self.pairs = PairSelection(
             self.config, self.pipeline.registry, lambda: self.session_controller.catalog
         )

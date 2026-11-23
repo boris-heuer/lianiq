@@ -36,6 +36,23 @@ class PipelineAdapters:
                 self.synthesizer = self._construct("synthesizer")
             return self.synthesizer
 
+    def voice_controls(self, language: str):
+        """The ``VoiceControls`` of ``language``; never constructs the synthesizer.
+
+        A constructed synthesizer answers itself (a loaded sherpa-onnx voice knows its
+        speakers); before that the ``controls`` factory reads the voice's metadata only.
+        ``None``: no controls are known, or the voice's files cannot be read.
+        """
+        synthesizer = self.synthesizer
+        try:
+            if synthesizer is not None and hasattr(synthesizer, "controls"):
+                return synthesizer.controls(language)
+            if self.factories.controls is not None:
+                return self.factories.controls(language)
+        except Exception as exc:  # noqa: BLE001 - a broken voice offers no options
+            LOGGER.warning("Voice controls unavailable: %s", type(exc).__name__)
+        return None
+
     def drop_adapters(self, names) -> None:
         """Forget the cached adapters ``names`` (their model files changed, spec §3.4); the
         next need constructs them again. An adapter without a factory is kept."""
