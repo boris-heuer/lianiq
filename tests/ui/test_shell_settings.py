@@ -1,7 +1,7 @@
 """The Settings workspace (CAP-0168 WI-02; spec §2.3.3, §2.3.6).
 
 pytest-qt style offscreen UI tests: AC-12 (model profile and compute device as full
-read-only text in Settings › Diagnostics), the Voice output section mirrored with
+read-only text in Settings › Diagnostics), the voice rows mirrored with
 Conversation, and the readiness summary.
 """
 
@@ -75,40 +75,38 @@ def test_ac12_compute_device_reports_the_started_recogniser(window, spies) -> No
     assert window.compute_device_field.text().startswith("Speech recognition: CUDA · ")
 
 
-def test_voice_output_is_mirrored_with_conversation(window) -> None:
-    mirror = window.settings.voice_output_checkbox
-    source = window.tts_checkbox
-    assert mirror.text() == "Voice output" and mirror.accessibleName() == "Voice output"
-    assert mirror.isChecked() == source.isChecked() and mirror.isEnabled()
+def test_voice_rows_are_mirrored_with_conversation(window) -> None:
+    mirror, source = window.settings.voice_rows, window.voice_rows
+    assert mirror.languages() == source.languages() != ()
+    language = source.languages()[0]
+    assert mirror.switch(language).text() == source.switch(language).text()
+    assert mirror.switch(language).isChecked() and mirror.switch(language).isEnabled()
 
-    before = mirror.isChecked()
-    mirror.click()  # the checkbox spans the row; QAbstractButton.click() toggles it reliably
-    assert mirror.isChecked() is not before
-    assert source.isChecked() is mirror.isChecked()
-    assert window.config.voice_output is mirror.isChecked()
-    source.click()
-    assert source.isChecked() is before
-    assert mirror.isChecked() is source.isChecked()
-    assert window.config.voice_output is source.isChecked()
+    mirror.switch(language).click()
+    assert not source.switch(language).isChecked()
+    assert window.config.tts.output[language].enabled is False
+    source.switch(language).click()
+    assert mirror.switch(language).isChecked()
 
     window.show_workspace(WorkspaceId.CONVERSATION)
-    start(window)  # the output is bound at Start: both are locked
-    assert not source.isEnabled() and not mirror.isEnabled()
-    assert mirror.toolTip() == source.toolTip() != ""
+    start(window)  # the plan is bound at Start: both are locked
+    assert not source.switch(language).isEnabled() and not mirror.switch(language).isEnabled()
+    assert mirror.switch(language).toolTip() == source.switch(language).toolTip() != ""
     window.stop_listening()
-    assert source.isEnabled() and mirror.isEnabled() and mirror.toolTip() == ""
+    assert mirror.switch(language).isEnabled() and mirror.switch(language).toolTip() == ""
 
 
 def test_readiness_summary_names_the_pair_and_each_mode(window) -> None:
     window.show_workspace(WorkspaceId.SETTINGS)
     rows = window.settings.readiness_field.text().splitlines()
-    assert rows[:3] == [
+    assert rows[:4] == [
         "Language pair: German ↔ Mandarin (Simplified)",
         "Conversation: Ready",
-        "Voice output: Ready",
+        "Voice German: Ready",
+        "Voice Mandarin (Simplified): Ready",
     ]
-    assert rows[3].startswith("Call Bridge: Not available: missing ")
-    assert "endpoint" in rows[3]  # no endpoints are assigned in this window
+    assert rows[4].startswith("Call Bridge: Not available: missing ")
+    assert "endpoint" in rows[4]  # no endpoints are assigned in this window
 
 
 def test_readiness_summary_and_mirror_show_a_missing_voice(tmp_path, spies, monkeypatch) -> None:  # noqa: F811
@@ -117,9 +115,11 @@ def test_readiness_summary_and_mirror_show_a_missing_voice(tmp_path, spies, monk
         window.show_workspace(WorkspaceId.SETTINGS)
         rows = window.settings.readiness_field.text().splitlines()
         assert "Conversation: Ready" in rows
-        assert "Voice output: Not available: missing voice Mandarin (Simplified)" in rows
-        mirror = window.settings.voice_output_checkbox
-        assert not mirror.isEnabled() and not mirror.isChecked()
-        assert mirror.toolTip() == window.tts_checkbox.toolTip() != ""
+        assert "Voice Mandarin (Simplified): Voice missing" in rows
+        mirror = window.settings.voice_rows
+        language = mirror.languages()[1]
+        assert not mirror.switch(language).isEnabled() and not mirror.switch(language).isChecked()
+        assert mirror.state_label(language).text() == "Voice missing"
+        assert not mirror.packs_button(language).isHidden()
     finally:
         window.close()
