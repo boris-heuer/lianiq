@@ -1,10 +1,12 @@
 """The Settings workspace: Audio devices, Voice output, Diagnostics (CAP-0168 spec §2.3.6).
 
-- **Voice output** mirrors the *Voice output* checkbox of Conversation: both show the same
-  checked, enabled and tooltip state, and toggling either changes the saved preference.
+- **Voice output** mirrors the voice rows of Conversation (CAP-0167 contract.md §7): the same
+  switches, states and actions; a switch toggled in either place changes the saved choice
+  and refreshes both. A hint names the voices Call Bridge and Meeting need.
 - **Diagnostics** shows the model profile and the compute device as full read-only text
   (AC-12; they left the Conversation layout, RES-06) and a readiness summary of the selected
-  pair: conversation, voice output and Call Bridge, with the **Open Language packs** link.
+  pair: conversation, one voice row per pair language and Call Bridge, with the **Open Language
+  packs** link.
 
 - **Notice history** (WI-03): the redacted diagnostics log with **Copy** and **Export…**
   (``DiagnosticsView``, spec §2.2.6).
@@ -22,7 +24,6 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QObject, Qt, Slot
 from PySide6.QtWidgets import (
-    QCheckBox,
     QFormLayout,
     QGroupBox,
     QLabel,
@@ -33,11 +34,13 @@ from PySide6.QtWidgets import (
 )
 
 from lianiq.call_bridge.controller import check_call_bridge
+from lianiq.conversation.spoken_output import VoiceState
 from lianiq.languages.modes import OutputKind
 from lianiq.languages.requirements import ModeAvailability, check
 from lianiq.ui import strings
 from lianiq.ui.diagnostics_view import DiagnosticsView
 from lianiq.ui.shell.scroll import workspace_scroll
+from lianiq.ui.voice_output_rows import VoiceOutputRows, state_text
 
 if TYPE_CHECKING:
     from lianiq.ui.main_window import MainWindow
@@ -80,14 +83,16 @@ class SettingsWorkspace(QObject):
 
         layout.addWidget(self.host.device_setup.build_group())  # Audio devices (WI-04)
 
-        voice = QGroupBox(strings.VOICE_OUTPUT)
+        conversation = self.host.conversation
+        voice = QGroupBox(strings.VOICE_SECTION)
         voice_layout = QVBoxLayout(voice)
-        self.voice_output_checkbox = QCheckBox(strings.VOICE_OUTPUT)
-        self.voice_output_checkbox.setAccessibleName(strings.VOICE_OUTPUT)
-        self.voice_output_checkbox.setAccessibleDescription(strings.SETTINGS_VOICE_OUTPUT_HINT)
-        self.voice_output_checkbox.toggled.connect(self._voice_output_toggled)
-        voice_layout.addWidget(self.voice_output_checkbox)
-        hint = QLabel(strings.SETTINGS_VOICE_OUTPUT_HINT)
+        self.voice_rows = VoiceOutputRows(voice)
+        self.voice_rows.switched.connect(conversation._voice_switched)
+        self.voice_rows.packs_requested.connect(conversation.open_language_packs)
+        self.voice_rows.replay_requested.connect(conversation.replay_spoken)
+        self.voice_rows.stop_playback_requested.connect(conversation.stop_spoken)
+        voice_layout.addWidget(self.voice_rows)
+        hint = QLabel(strings.VOICE_REQUIREMENTS_HINT)
         hint.setWordWrap(True)
         voice_layout.addWidget(hint)
         layout.addWidget(voice)
@@ -119,31 +124,20 @@ class SettingsWorkspace(QObject):
         layout.addWidget(self.diagnostics_view, 1)
         self.model_profile_field.setText(strings.DIAG_MODEL_PROFILE_BALANCED)
 
-        conversation = self.host.conversation
-        conversation.voice_output_changed.connect(self.sync_voice_output)
-        conversation.tts_checkbox.toggled.connect(self.sync_voice_output)
+        conversation.voice_rows_changed.connect(self.sync_voice_rows)
         self.refresh()
         return page
 
     # Voice output mirror --------------------------------------------------------------------
 
     @Slot()
-    def sync_voice_output(self) -> None:
-        """Show the Conversation checkbox state; the saved preference stays with it."""
-        source = self.host.conversation.tts_checkbox
-        mirror = self.voice_output_checkbox
-        mirror.blockSignals(True)
-        mirror.setChecked(source.isChecked())
-        mirror.blockSignals(False)
-        mirror.setEnabled(source.isEnabled())
-        mirror.setToolTip(source.toolTip())
-
-    @Slot(bool)
-    def _voice_output_toggled(self, checked: bool) -> None:
-        source = self.host.conversation.tts_checkbox
-        if source.isEnabled():
-            source.setChecked(checked)  # runs the Conversation toggle: preference + gate
-        self.sync_voice_output()
+    def sync_voice_rows(self) -> None:
+        """Show the rows and the switch lock of Conversation; both write ``tts.output``."""
+        conversation = self.host.conversation
+        self.voice_rows.set_rows(
+            conversation.voice_statuses_shown, conversation.voice_preferences, {}
+        )
+        self.voice_rows.set_switches_locked(conversation.voice_lock)
 
     # Diagnostics ----------------------------------------------------------------------------
 
@@ -157,7 +151,7 @@ class SettingsWorkspace(QObject):
             )
         )
         self.readiness_field.setText("\n".join(self.readiness_rows()))
-        self.sync_voice_output()
+        self.sync_voice_rows()
         self.diagnostics_view.refresh()
 
     def readiness_rows(self) -> list[str]:
@@ -175,12 +169,6 @@ class SettingsWorkspace(QObject):
             controller.catalog,
             devices,
         )
-        spoken = check(
-            conversation.conversation_session(pair, fixed_source, OutputKind.SPOKEN),
-            controller.catalog,
-            devices,
-        )
-        voice_missing = tuple(item for item in spoken.missing if item not in text.missing)
         call_bridge = self.host.call_bridge
         try:
             bridge = check_call_bridge(
@@ -190,13 +178,23 @@ class SettingsWorkspace(QObject):
             )
         except Exception:  # noqa: BLE001 - an invalid Call Bridge setting reads as not ready.
             bridge = ModeAvailability(False, ())
+        statuses = conversation.voice_statuses()
+        registry = self.host.pipeline.registry
+        voices = [
+            row(
+                item=strings.VOICE_READINESS_ROW.format(
+                    language=registry.display_name(status.language)
+                ),
+                status=strings.DIAG_READY
+                if status.state is VoiceState.READY
+                else state_text(status, registry, statuses),
+            )
+            for status in statuses
+        ]
         return [
             row(item=strings.PAIR_LABEL, status=conversation.pairs.pair_name(pair)),
             row(item=strings.NAV_CONVERSATION, status=self._status(text)),
-            row(
-                item=strings.VOICE_OUTPUT,
-                status=self._status(ModeAvailability(not voice_missing, voice_missing)),
-            ),
+            *voices,
             row(item=strings.NAV_CALL_BRIDGE, status=self._status(bridge)),
         ]
 
