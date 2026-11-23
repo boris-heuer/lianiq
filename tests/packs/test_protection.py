@@ -70,6 +70,17 @@ def test_a_spoken_conversation_also_uses_both_voices(packs) -> None:
     assert packs_in_use(owner, tracker, packs) == {STT, *MT, VOICE_DE, VOICE_ZH}
 
 
+def test_a_conversation_with_a_partial_spoken_plan_uses_only_the_planned_voice(packs) -> None:
+    # CAP-0167 AC-04: one voice spoken, so the session output is text; the voice is in use.
+    usage = ActiveUsage(WorkspaceId.CONVERSATION, SessionPair(PAIR, TEXT), False, frozenset({DE}))
+    owner, tracker = started(WorkspaceId.CONVERSATION, usage)
+    assert packs_in_use(owner, tracker, packs) == {STT, *MT, VOICE_DE}
+    guard = in_use_guard(owner, tracker, packs)
+    with pytest.raises(PackInUse):
+        guard(packs.get(VOICE_DE), "remove")
+    guard(packs.get(VOICE_ZH), "remove")  # not planned: allowed
+
+
 def test_a_meeting_uses_the_table_voice_and_the_local_voice_only_with_local_speech(
     packs,
 ) -> None:
