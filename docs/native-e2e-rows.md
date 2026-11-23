@@ -1,6 +1,6 @@
 # Native E2E UIA rows
 
-The rows E-01, E-11, E-03, E-10 and E-14 of `python -m native_e2e run` drive the real Lianiq
+The rows E-01, E-11, E-03, E-10, E-14 and E-13 of `python -m native_e2e run` drive the real Lianiq
 window in the VM with UI Automation (pywinauto, `backend="uia"`) and the virtual cable
 (VB-Cable). They run after C-04 and before E-12, inside the S-04 offline window, and only when S-01 passed
 and S-03 recorded the settings backup. Setup, image build and run approval are in
@@ -19,9 +19,14 @@ never retried.
 |---|---|---|
 | E-01 | Starts the app with `--no-setup-assistant`; reads the seven sidebar entries (Meeting second; all enabled), their order, selection, enabled state and description; checks that Conversation shows no Call Bridge control, Model profile, CUDA box or hardware subtitle; checks with psutil that no app process has a file under `models\` open or mapped before **Start** | Checks; `screens/e01-conversation.png` |
 | E-11 | Writes `config/settings.local.json` from `native_e2e/data/legacy-settings.template.json` with `audio.input_device` set to the PortAudio index of "CABLE Output"; starts the app; waits for "Microphone set to '…' from your previous settings"; closes the app; reads the migrated keys | `name_matches` (never the name); `screens/e11-migration-notice.png` |
-| E-03 | Checks the test phrase WAV against `image.json`; in Settings › Audio devices selects "CABLE Output" as Microphone; in Conversation unticks *Voice output*; **Start** (F8); plays the WAV into "CABLE Input"; waits for a turn in *Original* and *Translation* that two consecutive reads agree on; visits every enabled workspace; presses F9 in Settings; returns to Conversation | `name_matches` for the Microphone (never the name); transcript SHA-256 (never the text); `screens/e03-running.png`, `screens/e03-after.png` |
+| E-03 | Checks the test phrase WAV against `image.json`; in Settings › Audio devices selects "CABLE Output" as Microphone; in Conversation turns every voice switch (`Speak <language>`) off; **Start** (F8); plays the WAV into "CABLE Input"; waits for a turn in *Original* and *Translation* that two consecutive reads agree on; visits every enabled workspace; presses F9 in Settings; returns to Conversation | `name_matches` for the Microphone (never the name); transcript SHA-256 (never the text); `screens/e03-running.png`, `screens/e03-after.png` |
+| E-13 | CAP-0167 spoken output (AC-25): checks the test phrase WAV; starts its own app; in Settings › Audio devices selects "CABLE Output" as Microphone and "CABLE Input" as Speakers; in Conversation turns every voice switch on (a missing or invalid voice fails the row); **Start** (F8); plays the WAV into "CABLE Input"; waits until the turn is shown, the state reads "Microphone paused while the translation is spoken" and `logs/lianiq.log` has a completed synthesis; presses F9 at once; waits until the strip and the paused state are gone and **Stop playback** is disabled; plays the WAV again | `name_matches` for both devices; whether the log since F9 has "Microphone capture stopped", a playback ended by the stop and no "Microphone capture started"; transcript SHA-256 unchanged; `screens/e13-after-stop.png`. No log line is stored |
 | E-10 | Settings › Diagnostics › **Export…**: types the path into the save dialog's file-name `Edit` (`AutomationId` 1001) and presses Enter, first to `%TEMP%\lianiq-e2e\diagnostics-E10.txt`, then onto `%TEMP%\lianiq-e2e\ro\diagnostics-E10.txt`, an existing file in a writable folder whose ACL denies the test user writes (`icacls`). The dialog asks whether to replace the file; the row answers **Yes** (`CommandButton_6`), and Lianiq must show its own "Export failed" notice ("Permission denied") while the file keeps its content | Forbidden pattern classes found (none on a pass); whether the second dialog closed (`dialog-closed`); `screens/e10-export-failed.png` |
 | E-14 | Checks `native_e2e/fixtures/listen_de_16k.wav` (two German sentences, Piper, 16 kHz mono) against the SHA-256 pinned in `rows/e14.py` before any app starts; starts its own app; Listen & translate: German → Mandarin (Simplified), *Microphone* "CABLE Output"; **Start listening (F8)**; waits until the page listens and the strip shows "Listen & translate running"; plays the WAV into "CABLE Input"; waits for two done rows in *Transcript* that two consecutive reads agree on; F9; waits for idle (**Start listening (F8)** enabled); checks that the app process has no WASAPI render session (no output stream was opened); closes the app | `name_matches` for the Microphone (never the name); SHA-256 of the translation texts (never the text); `render_sessions` count; `screens/e14-listen.png` with *Transcript* masked |
+
+E-13 runs after E-10 and closes its app at the end. It plays the translation into the cable, so
+the paused microphone is what keeps Lianiq from hearing its own voice; the second WAV is played
+after F9, so any capture after Stop shows in the log.
 
 E-03 leaves the app open for E-10, so the export holds that session's log. E-10 reads the
 failure from the notice elements only: the notice history logs every posted notice title,
@@ -52,7 +57,7 @@ The PO chose the write-protected file after native run 44267851808.
 
 ## Reviewing a run (e2e plan E-03, E-04)
 
-Read the five rows in `native-evidence.json`: each is `pass`, E-03, E-11 and E-14 use the method
+Read the six rows in `native-evidence.json`: each is `pass`; E-03, E-11, E-14 and E-13 use the method
 `automated-virtual-device`. Open the screenshots under `screens/`: every device name region
 and both transcript panels are black rectangles. Run `python -m native_e2e verify <artifact-dir>`; it must pass.
 
@@ -63,7 +68,12 @@ and both transcript panels are black rectangles. Run `python -m native_e2e verif
 | E-01 `sidebar-seven-entries-in-order` fails with 0 entries | The window was not reachable through UI Automation: the app did not start, or the console session was locked |
 | E-11 `migration-notice-shown` times out | The cable is missing or renamed (T-02 also fails), or the app did not read `settings.local.json` |
 | E-03 `turn-in-original-and-translation` times out | Spec assumption 4: the German model did not recognise the Piper phrase through the cable |
-| E-03 `microphone-cable-selected` or `voice-output-off` fails | The cable is missing from the Microphone list (T-02 also fails), or *Voice output* did not react to the click; the row does not press **Start** then |
+| E-03 `microphone-cable-selected` or `voice-output-off` fails | The cable is missing from the Microphone list (T-02 also fails), or a voice switch did not react to the click; the row does not press **Start** then |
+| E-13 `speakers-cable-selected` fails | "CABLE Input" is missing from the Speakers list |
+| E-13 `voice-output-on` fails with `not-ready` | A voice of the pair is missing or invalid in the VM image; provision both voices |
+| E-13 `translation-spoken` times out | No turn (see E-03), or the voice did not synthesise: look for "Speech synthesis failed" in `logs/lianiq.log` in the VM |
+| E-13 `playback-ended-by-stop` fails | The speech had ended before F9 (the log has "Audio playback completed"), or the stop did not end it |
+| E-13 `no-capture-after-stop` fails | The microphone started again after **Stop**: a defect, never retried |
 | E-03 `scroll-unchanged` fails with `unreadable` | UI Automation gave no scroll value for a transcript panel or its scroll bar |
 | E-10 `overwrite-confirmed` fails | The save dialog showed no "replace?" prompt for the protected file (the file is missing, or the prompt has no `CommandButton_6`) |
 | E-10 `failure-notice-shown` fails with `dialog-closed: false` | The save dialog stayed open after **Yes** (an error box over it); the row cancels it before the screenshot |
