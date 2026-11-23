@@ -223,6 +223,8 @@ class MainWindow(MainWindowLayout, MainWindowServices, QMainWindow):
 
     @Slot()
     def start_listening(self) -> None:
+        if self.current_workspace() is WorkspaceId.LISTEN:  # F8 on the Listen page
+            return self.listen.start()
         self.conversation.start_listening()
 
     @Slot()
@@ -263,6 +265,7 @@ class MainWindow(MainWindowLayout, MainWindowServices, QMainWindow):
     def closeEvent(self, event: QCloseEvent) -> None:
         self.meeting.end_meeting()  # drains on its own thread; never blocks the close
         self.text_translation.shutdown()
+        self.listen.shutdown()
         self.stop_call_bridge()
         self.stop_listening()
         if self.persist_settings:

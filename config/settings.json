@@ -83,5 +83,11 @@
     "first_run": "pending",
     "usages": [],
     "languages": []
+  },
+  "listen": {
+    "source_language": null,
+    "target_language": null,
+    "input_policy": "follow_default",
+    "input_endpoint_id": null
   }
 }

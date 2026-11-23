@@ -4,7 +4,7 @@ Qt-free: seven workspaces in the fixed spec §2.3.1 order with Settings last; CA
 Meeting second, after Conversation (``lianiq.shell.workspace-registry.v1``, amended
 additively). A workspace is enabled, planned (listed, disabled, no page) or experimental
 (enabled, marked). CAP-0172 enables *Text translation* (its page, same position); CAP-0171
-enables Language packs.
+enables Language packs, CAP-0170 *Listen & translate*.
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ DEFAULT_ENTRIES: tuple[WorkspaceEntry, ...] = (
     WorkspaceEntry(WorkspaceId.CONVERSATION, strings.NAV_CONVERSATION, EntryState.ENABLED),
     WorkspaceEntry(WorkspaceId.MEETING, strings.NAV_MEETING, EntryState.ENABLED),
     WorkspaceEntry(WorkspaceId.TEXT_TRANSLATION, strings.NAV_TEXT_TRANSLATION, EntryState.ENABLED),
-    WorkspaceEntry(WorkspaceId.LISTEN, strings.NAV_LISTEN, EntryState.PLANNED),
+    WorkspaceEntry(WorkspaceId.LISTEN, strings.NAV_LISTEN, EntryState.ENABLED),
     WorkspaceEntry(WorkspaceId.CALL_BRIDGE, strings.NAV_CALL_BRIDGE, EntryState.EXPERIMENTAL),
     WorkspaceEntry(WorkspaceId.LANGUAGE_PACKS, strings.NAV_LANGUAGE_PACKS, EntryState.ENABLED),
     WorkspaceEntry(WorkspaceId.SETTINGS, strings.NAV_SETTINGS, EntryState.ENABLED),

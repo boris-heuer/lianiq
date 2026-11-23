@@ -52,6 +52,7 @@ def test_e03_passes_and_stores_the_transcript_as_sha256_only(ctx, monkeypatch) -
         "strip-visible-conversation",
         "strip-visible-meeting",
         "strip-visible-text-translation",
+        "strip-visible-listen-&-translate",  # CAP-0170
         "strip-visible-call-bridge",
         "call-bridge-start-disabled-busy",
         "strip-visible-language-packs",

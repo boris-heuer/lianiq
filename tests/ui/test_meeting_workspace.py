@@ -53,7 +53,7 @@ def test_ac29_meeting_is_the_second_entry_enabled_and_ctrl_2_opens_it(window) ->
     assert others == [
         (WorkspaceId.CONVERSATION, EntryState.ENABLED),
         (WorkspaceId.TEXT_TRANSLATION, EntryState.ENABLED),  # CAP-0172
-        (WorkspaceId.LISTEN, EntryState.PLANNED),
+        (WorkspaceId.LISTEN, EntryState.ENABLED),  # CAP-0170
         (WorkspaceId.CALL_BRIDGE, EntryState.EXPERIMENTAL),
         (WorkspaceId.LANGUAGE_PACKS, EntryState.ENABLED),
         (WorkspaceId.SETTINGS, EntryState.ENABLED),

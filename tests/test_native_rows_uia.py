@@ -79,7 +79,7 @@ def _swap(order, a, b):
         ({"missing": {"Meeting"}}, "sidebar-seven-entries-in-order"),
         ({"sidebar": _swap(SIDEBAR, 1, 2)}, "sidebar-seven-entries-in-order"),
         (
-            {"sidebar": (*SIDEBAR[:3], ("Listen & translate", True, PLANNED), *SIDEBAR[4:])},
+            {"sidebar": (*SIDEBAR[:3], ("Listen & translate", False, PLANNED), *SIDEBAR[4:])},
             "planned-entries-disabled-with-description",
         ),
         (

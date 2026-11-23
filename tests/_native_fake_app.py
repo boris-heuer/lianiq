@@ -25,7 +25,7 @@ SIDEBAR = (
     ("Conversation", True, ""),
     ("Meeting", True, ""),
     ("Text translation", True, ""),
-    ("Listen & translate", False, PLANNED),
+    ("Listen & translate", True, ""),
     ("Call Bridge", True, "Experimental"),
     ("Language packs", True, ""),
     ("Settings", True, ""),

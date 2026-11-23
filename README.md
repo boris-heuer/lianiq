@@ -177,8 +177,9 @@ selected.
 ### The window
 
 - **Sidebar.** Conversation, Meeting, Text translation, Listen & translate, Call Bridge (marked
-  "Experimental") and Language packs, with Settings at the bottom. Text translation, Listen &
-  translate and Language packs are greyed out as "Planned" and cannot be opened yet. Click an
+  "Experimental") and Language packs, with Settings at the bottom. An entry that is not available
+  yet is greyed out as "Planned" and cannot be opened. **Listen & translate** recognises speech in
+  the chosen source language and shows each sentence with its translation; it never speaks. Click an
   entry, move with Up/Down and press Space or Enter, or press **Ctrl+1** … **Ctrl+7**. Below 1000 px window
   width the sidebar becomes an icon rail with the labels in the tooltips.
 - **Session strip.** While a session starts, runs or stops, a strip below the workspace shows
