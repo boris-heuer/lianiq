@@ -196,7 +196,8 @@ selected.
   resolved; **+N more** opens the notice history. The status bar only shows readiness and
   progress.
 - **Settings.** *Audio devices* (Microphone, Speakers, **Refresh**, **Test microphone**, **Test
-  speakers**), *Voice output* (the same setting as in Conversation) and *Diagnostics* (model
+  speakers**), *Voice output* (the same voice switches as in Conversation, with the hint which
+  voices Call Bridge and Meeting need) and *Diagnostics* (model
   profile, compute device, the readiness of the selected pair, and the notice history with
   **Copy** and **Export…**).
 
@@ -208,18 +209,54 @@ selected.
 - Choose automatic direction within the pair, German → Mandarin (Simplified), or Mandarin
   (Simplified) → German. An unavailable entry is disabled, and its tooltip names what is missing.
 - Choose the microphone and speakers in Settings › Audio devices before starting (see below).
-- Choose **Voice output** before starting. It is available only when the voices of the selected
-  direction are provisioned; otherwise its tooltip names the missing voice and text output still
-  works.
+- Choose which languages are spoken in the *Voice output* row (see below).
 
-The language pair, direction, and **Voice output** are bound at **Start**. While a session or the
-Call Bridge runs, these controls are disabled; stop the session to change them.
+The language pair, direction, and the voice switches are bound at **Start**. While a session or
+the Call Bridge runs, these controls are disabled; stop the session to change them.
 
 No model is loaded before **Start**. **Start** loads only the models the selected mode needs:
 speech recognition for the spoken language(s), the translation model of each direction in use, and
 voices only when spoken output is on. A missing reverse translation model therefore does not block
 a fixed direction. If a required model or device is missing, **Start** is disabled and the status
 bar names each missing item.
+
+#### Voice output
+
+The voice row under **Start** (mirrored in Settings › Voice output) has one switch per language of
+the pair, named `Speak <language>`, with the state of its voice next to it:
+
+| State | Meaning |
+|---|---|
+| `<voice> · Ready` | The voice is provisioned; the switch is on unless you turned it off |
+| *Voice missing* / *Voice files invalid* | The switch is off and disabled; **Open Language packs** gets the voice. That language is shown as text only, without a notice |
+| `Not an output language in <direction>` | A fixed direction never speaks its source language |
+
+A ready voice is spoken by default, also after an upgrade from the former single *Voice output*
+checkbox. Each choice is saved in `tts.output`. A translation is always shown as text first and
+then spoken. While it is spoken the state line reads "Microphone paused while the translation is
+spoken" and the level meter shows 0, so Lianiq never translates its own voice.
+
+- **Replay** speaks the latest spoken translation of the running session again, with the current
+  voice options. Before anything was spoken its tooltip reads "Nothing to replay yet".
+- **Stop playback** ends the current speech; the session keeps listening. **Stop** (F9) ends the
+  speech and the session.
+- **Voice options…** sits next to a ready voice whose engine offers at least one control. Each
+  change is saved at once and the next spoken turn uses it, also in a running Conversation:
+
+| Engine | Voice | Rate | Volume |
+|---|---|---|---|
+| Piper (German) | Only for a voice with several speakers | 0.75×–1.50× | 10–100 %, when the installed Piper supports it |
+| sherpa-onnx (Mandarin) | When the model has several speakers; the dialog first shows "Loading voice…" while it reads their number | 0.75×–1.50× | — |
+
+No voice is loaded before **Start**, **Replay** or a sherpa-onnx **Voice options…**. While a
+Conversation runs its switches are locked, but **Voice options…** stays usable. Call Bridge and
+Meeting keep the voice options of their Start: while one runs, **Voice options…** of its languages
+says `Stop <mode> to change this voice`. Call Bridge always speaks both languages and needs both
+voices; Meeting dual-mic needs the voice of the table language. If a translation cannot be
+spoken, the notice `Could not speak the translation (<language>)` appears; the text stays and the
+next turn is spoken again.
+
+#### Held turns
 
 In automatic mode, a turn is held instead of guessed when its language is outside the pair,
 unknown, or detected with a probability below `languages.detection_min_probability` (default
@@ -412,6 +449,8 @@ Schema v2 keys every language setting by language ID:
 - `translation.edges`: one model per direction, keyed `"<source>><target>"`, such as
   `"de>zh-Hans"`; a reverse direction is never derived from a configured one;
 - `tts.voices`: one voice file per language ID;
+- `tts.output`: per language ID, `enabled` (omitted: on while the voice is ready), `speaker`,
+  `rate` (0.75–1.5) and `volume` (0.1–1.0), as set in the voice row and **Voice options…**;
 - `call_bridge.local_language`: the language spoken on the local side of the Call Bridge;
 - `audio.input_policy` / `audio.output_policy` (`explicit` or `follow_default`),
   `audio.input_endpoint_id` / `audio.output_endpoint_id` and `audio.input_device_name` /
