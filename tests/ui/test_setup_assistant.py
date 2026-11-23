@@ -76,12 +76,12 @@ def test_ac03_usage_step_offers_enabled_and_experimental_usages_only() -> None:
         "conversation": ("Conversation", True, True),
         "call-bridge": ("Call Bridge (Experimental)", True, False),
         "meeting": ("Meeting dual-mic", True, False),
-        "text-translation": ("Text translation (Planned)", False, False),
+        "text-translation": ("Text translation", True, False),
         "listen-and-translate": ("Listen & translate (Planned)", False, False),
     }
     step.boxes["conversation"].setChecked(False)
     assert not step.complete()  # Next needs one ticked usage
-    assert [p.id for p in UsageStep(("meeting", "text-translation")).selected()] == ["meeting"]
+    assert [p.id for p in UsageStep(("meeting", "listen-and-translate")).selected()] == ["meeting"]
 
 
 def test_ac04_languages_follow_the_registry_with_planned_disabled() -> None:
@@ -189,6 +189,24 @@ def test_ac05_review_lists_the_required_packs_with_reasons_and_get(window) -> No
     review = reviewed(assistant)
     voice = next(t.text() for t in review.row_labels if t.text().startswith("Voice Mandarin"))
     assert voice.endswith("Needed by: Meeting dual-mic")  # needed by Meeting, not optional
+
+
+def test_cap0172_ac31_text_translation_alone(window) -> None:
+    assistant = open_setup_assistant(window)
+    assistant.usage.boxes["conversation"].setChecked(False)
+    assistant.usage.boxes["text-translation"].setChecked(True)
+    to_step(assistant, AUDIO)
+    assert [label.text() for label in assistant.audio.role_labels] == ["Speakers: Test speakers"]
+    review = reviewed(assistant)
+    rows = [label.text() for label in review.row_labels]
+    assert [row.split(" — ")[0] for row in rows[:2]] == [
+        "Translation German → Mandarin (Simplified)",
+        "Translation Mandarin (Simplified) → German",
+    ]
+    assert all(row.endswith("Needed by: Text translation") for row in rows[:2])
+    assert all(row.endswith(strings.ASSIST_OPTIONAL_VOICE) for row in rows[2:])
+    assert [row[:6] for row in rows[2:]] == ["Voice ", "Voice ", "Playba"]  # no STT, no mic
+    assert assistant.finish_button.isVisible() and assistant.finish_button.isEnabled()
 
 
 def test_ac01_skip_escape_and_finish_store_the_first_run(window, tmp_path, monkeypatch) -> None:

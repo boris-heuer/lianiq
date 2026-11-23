@@ -35,6 +35,7 @@ from lianiq.languages.requirements import (
     ordered_requirements,
 )
 from lianiq.packs.catalog import PackCatalog, PackDefinition
+from lianiq.text_translation.readiness import text_session
 from lianiq.ui import strings_packs as labels
 from lianiq.ui.shell.workspaces import WorkspaceId
 
@@ -57,14 +58,41 @@ class UsageProfile:
     session: Callable[[LanguagePair, AppConfig], SessionPair] | None  # None when planned
     optional: Callable[[SessionPair], tuple[Requirement, ...]] | None
     device_roles: tuple[str, ...]  # rendered role labels for the audio check
+    both_directions: bool = False  # also cover the reverse of a fixed-routing session (C §9)
 
-    def required(self, pair: LanguagePair, config: AppConfig) -> tuple[Requirement, ...]:
-        """CAP-0169 ``ordered_requirements(self.session(pair, config))``; () when planned."""
+    def _sessions(self, pair: LanguagePair, config: AppConfig) -> tuple[SessionPair, ...]:
         if self.session is None:
             return ()
-        return ordered_requirements(self.session(pair, config))
+        session = self.session(pair, config)
+        if not self.both_directions:
+            return (session,)
+        if session.mode.routing is not RoutingKind.FIXED:
+            raise ValueError("both_directions needs a fixed-routing session")
+        return session, replace(session, fixed_source=session.fixed_target)
+
+    def _union(self, parts: Sequence[tuple[Requirement, ...]]) -> tuple[Requirement, ...]:
+        merged = tuple(dict.fromkeys(item for part in parts for item in part))
+        if not self.both_directions:
+            return merged
+        return tuple(sorted(merged, key=lambda item: _KIND_ORDER.index(item.kind)))  # stable
+
+    def required(self, pair: LanguagePair, config: AppConfig) -> tuple[Requirement, ...]:
+        """CAP-0169 ``ordered_requirements`` of each covered session, merged; () when planned."""
+        return self._union([ordered_requirements(s) for s in self._sessions(pair, config)])
+
+    def optional_requirements(
+        self, pair: LanguagePair, config: AppConfig
+    ) -> tuple[Requirement, ...]:
+        """``self.optional(s)`` of each covered session minus ``required``; () when none."""
+        if self.optional is None:
+            return ()
+        optional = self.optional
+        merged = self._union([optional(s) for s in self._sessions(pair, config)])
+        required = set(self.required(pair, config))
+        return tuple(item for item in merged if item not in required)
 
 
+_KIND_ORDER = tuple(RequirementKind)  # CAP-0169 display order of the kinds
 _TEXT_CONVERSATION = UsageMode(InputKind.MICROPHONE, RoutingKind.BIDIRECTIONAL, OutputKind.TEXT)
 
 
@@ -73,10 +101,14 @@ def _conversation(pair: LanguagePair, config: AppConfig) -> SessionPair:
 
 
 def _spoken_extras(session: SessionPair) -> tuple[Requirement, ...]:
-    """Row 6 minus row 5: both voices and the playback device."""
+    """The spoken row minus the text row: row 6 minus 5 (voices, playback), row 2 minus 1."""
     spoken = replace(session, mode=replace(session.mode, output=OutputKind.SPOKEN))
     text = set(ordered_requirements(session))
     return tuple(item for item in ordered_requirements(spoken) if item not in text)
+
+
+def _text(pair: LanguagePair, config: AppConfig) -> SessionPair:
+    return text_session(pair.first, pair.second, spoken=False)  # row 1; reverse via both_directions
 
 
 def _local(pair: LanguagePair, language: str) -> LanguageId:
@@ -131,10 +163,11 @@ USAGE_PROFILES: tuple[UsageProfile, ...] = (
         "text-translation",
         labels.USAGE_TEXT,
         WorkspaceId.TEXT_TRANSLATION,
-        UsageAvailability.PLANNED,
-        None,
-        None,
-        (),
+        UsageAvailability.ENABLED,
+        _text,
+        _spoken_extras,
+        ("Speakers",),
+        both_directions=True,
     ),
     UsageProfile(
         "listen-and-translate",
@@ -247,9 +280,7 @@ def readiness_review(
     for profile in sorted(usages, key=_rank):
         required = profile.required(pair, config)
         entries = [(item, True) for item in required]
-        if profile.session is not None and profile.optional is not None:
-            optional = profile.optional(profile.session(pair, config))
-            entries += [(item, False) for item in optional]
+        entries += [(item, False) for item in profile.optional_requirements(pair, config)]
         for requirement, needed in entries:
             pack = packs.for_requirement(requirement)
             key: object = pack.id if pack is not None else requirement

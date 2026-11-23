@@ -55,6 +55,8 @@ def role_devices(host, profile: UsageProfile) -> list[tuple[str, str | None]]:
     """(role label, device name or ``None``) for each device role of ``profile`` (C §7)."""
     if profile.id == "conversation":
         found = [_conversation(host, flow) for flow in (CAPTURE, RENDER)]
+    elif profile.id == "text-translation":  # Play uses the Conversation output (CAP-0172 C §5)
+        found = [_conversation(host, RENDER)]
     elif profile.id == "call-bridge":
         found = [_call_bridge(host, role) for role in CALL_ENDPOINT_ROLES]
     elif profile.id == "meeting":
