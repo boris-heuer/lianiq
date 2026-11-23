@@ -196,6 +196,7 @@ class MeetingWorkspace(
             return
         try:
             self.controller.set_speak_local(on)
+            self.host.usage_tracker.set_local_speech(on)  # its voice is now in use (C §8)
         except ValueError:  # no German output of its own in this meeting: revert, say why
             self.config.meeting.speak_local = False
             checkbox = self.speak_local_checkbox
