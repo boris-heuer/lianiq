@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from lianiq.config_listen import ListenConfig
 from lianiq.config_meeting import validate_meeting_config
 from lianiq.config_migration import (
     SCHEMA_VERSION,
@@ -213,6 +214,7 @@ class AppConfig:
     call_bridge: CallBridgeConfig = field(default_factory=CallBridgeConfig)
     meeting: MeetingConfig = field(default_factory=MeetingConfig)
     provisioning: ProvisioningConfig = field(default_factory=ProvisioningConfig)  # CAP-0171
+    listen: ListenConfig = field(default_factory=ListenConfig)  # CAP-0170
 
     def __post_init__(self) -> None:
         if self.schema_version != SCHEMA_VERSION:
@@ -246,6 +248,7 @@ class AppConfig:
             call_bridge=CallBridgeConfig(**raw.get("call_bridge", {})),
             meeting=MeetingConfig(**raw.get("meeting", {})),
             provisioning=provisioning_from_mapping(raw.get("provisioning", {})),
+            listen=ListenConfig(**raw.get("listen", {})),
         )
 
     def save(self, path: Path | None = None) -> None:
