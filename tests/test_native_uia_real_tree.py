@@ -31,7 +31,7 @@ def test_sidebar_lists_the_checkbox_entries_of_the_region() -> None:
         Node("Workspaces", "Custom", parents=TOP),
         Node("Conversation", "CheckBox", selected=True, parents=(*TOP, "Workspaces")),
         Node("Settings", "CheckBox", parents=(*TOP, "Workspaces")),
-        Node("Voice output", "CheckBox", parents=TOP),  # outside the region
+        Node("Speak German", "CheckBox", parents=TOP),  # outside the region
     ]
     assert [node.name for node in ui.sidebar(nodes, "Workspaces")] == ["Conversation", "Settings"]
 
