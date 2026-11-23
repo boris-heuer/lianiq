@@ -2,10 +2,10 @@
 
 pywinauto, the real window and the virtual cable exist only in the VM image, so the UIA row
 tests drive this fake through the ``App`` surface the rows use. It models the sidebar, the
-session strip, the Conversation panels, combos and Voice output, the Call Bridge Start,
+session strip, the Conversation panels, combos and voices, the Call Bridge Start,
 Settings with the device combo, **Export…** and the notice history, the notice banner and
-the export dialog with its "replace?" prompt. As in the real app (``_notice_changed``) every posted notice title is
-logged into the history. Knobs remove elements or change behaviour, so each pass rule can
+the export dialog with its "replace?" prompt. As in the real app every posted notice title
+is logged into the history. Knobs remove elements or change behaviour, so each pass rule can
 be shown to fail.
 """
 
@@ -21,6 +21,7 @@ from tests._native_png import red_png
 
 CABLE = "CABLE Output (VB-Audio Virtual Cable)"
 PLANNED = "Planned — not available yet"
+VOICE_SWITCHES = ("Speak German", "Speak Mandarin (Simplified)")
 SIDEBAR = (
     ("Conversation", True, ""),
     ("Meeting", True, ""),
@@ -63,7 +64,7 @@ class FakeApp:
         self.notices: list[str] = []
         self.log = "2026-11-14T10:00:00+01:00 [session] Conversation started\n"
         self.dialog, self.prompt = False, None
-        self.mic, self.voice = DEFAULT_MIC, True
+        self.mic, self.voices = DEFAULT_MIC, dict.fromkeys(VOICE_SWITCHES, True)
         self.readonly: set[Path] = set()
         self.closed = False
         self.launches = 0
@@ -72,7 +73,7 @@ class FakeApp:
         if knobs.get("no_processes"):
             self.process_list = []
 
-    # Launch and close ------------------------------------------------------------------------
+    # Launch and close
 
     def start(self, ctx):
         self.ctx, self.closed, self.page = ctx, False, "Conversation"
@@ -109,7 +110,7 @@ class FakeApp:
     def processes(self):
         return self.process_list
 
-    # What UI Automation reads ----------------------------------------------------------------
+    # What UI Automation reads
 
     def nodes(self) -> list[Node]:
         top = ("lianiq",)
@@ -150,7 +151,7 @@ class FakeApp:
         way = "German → Mandarin" if "direction" in on else "Automatic"
         return [
             Node("▶  Start  (F8)", "Button", parents=top),
-            Node("Voice output", "CheckBox", selected=self.voice, parents=top),
+            *(Node(n, "CheckBox", selected=on, parents=top) for n, on in self.voices.items()),
             Node("Language pair", "ComboBox", value=pair, parents=top),
             Node("Conversation direction", "ComboBox", value=way, parents=top),
             Node("Original", "Text", parents=top),
@@ -174,7 +175,7 @@ class FakeApp:
             *real.history(top, self.log),
         ]
 
-    # Actions -------------------------------------------------------------------------------
+    # Actions
 
     def press(self, node: Node) -> None:
         if "Workspaces" in node.parents and node.enabled:
@@ -186,8 +187,8 @@ class FakeApp:
         elif node.automation_id == "CommandButton_6" and self.prompt:
             path, self.prompt = self.prompt, None
             self.save(path)
-        elif node.name == "Voice output" and not self.knobs.get("voice_stuck"):
-            self.voice = not self.voice
+        elif node.name in self.voices and not self.knobs.get("voice_stuck"):
+            self.voices[node.name] ^= True
 
     def choose(self, node: Node, item: str) -> None:
         if node.name != "Microphone" or self.knobs.get("no_cable_item") or item != CABLE:
