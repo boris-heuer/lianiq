@@ -43,6 +43,12 @@ All notable user-visible changes are documented here.
   missing or invalid; a missing voice offers **Open Language packs**. A ready voice is spoken by
   default, also after an upgrade from the old checkbox, and a language whose voice is missing is
   shown as text only. Settings › Diagnostics lists the readiness of each language's voice.
+- Conversation (and its mirror in Settings › Voice output) has **Replay**, which speaks the latest
+  spoken translation again with the current voice settings, and **Stop playback**, which ends the
+  current playback while the session keeps running. While a translation is spoken the state
+  line reads "Microphone paused while the translation is spoken" and the level meter shows 0;
+  **Stop** ends the playback at once. If a translation cannot be spoken, the notice "Could not
+  speak the translation (<language>)" appears, the text stays and later turns are spoken again.
 
 ### Fixed
 
