@@ -101,9 +101,12 @@ def test_ac16_ac19_a_text_only_conversation_protects_its_packs_until_stop(
     window, monkeypatch
 ) -> None:
     page = install_pair(window)
-    # AC-19: no voices — spoken output is disabled naming the voice; Meeting is not ready.
+    # AC-19: no voices — every voice switch is disabled and shows the voice as missing; Meeting is not ready.
     assert wait_until(lambda: window.start_button.isEnabled())
-    assert not window.tts_checkbox.isEnabled() and "voice" in window.tts_checkbox.toolTip()
+    voice_rows = window.conversation.voice_rows
+    for language in voice_rows.languages():
+        assert not voice_rows.switch(language).isEnabled()
+        assert voice_rows.state_label(language).text() == strings.VOICE_STATE_MISSING
     meeting = window.meeting.availability()
     assert not meeting.available
     assert "Mandarin" in window.meeting.missing_text(meeting.missing)

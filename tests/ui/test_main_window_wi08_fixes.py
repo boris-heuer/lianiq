@@ -257,7 +257,9 @@ def test_dev02_language_combos_show_the_full_selected_value_at_the_default_width
     for index in range(window.mode_combo.count()):
         window.mode_combo.setCurrentIndex(index)
         show_at_default_width(window)
-        controls = (window.pair_combo, window.mode_combo, window.tts_checkbox)
+        rows = window.voice_rows
+        switches = tuple(rows.switch(language) for language in rows.languages())
+        controls = (window.pair_combo, window.mode_combo, *switches)
         assert [
             f"{control.accessibleName() or control.objectName()}: {control.width()}"
             for control in controls

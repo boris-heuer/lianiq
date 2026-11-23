@@ -139,13 +139,16 @@ class MainWindowServices:
         others = self.call_bridge.active() or self.meeting.active() or self.listen.active()
         return running or others
 
-    def prepare_in_background(self, session: SessionPair, ready: Signal) -> None:
+    def prepare_in_background(
+        self, session: SessionPair, ready: Signal, plan: frozenset = frozenset()
+    ) -> None:
+        """Warm ``session``'s models (and the voices of the spoken ``plan``) off the UI thread."""
         self.start_generation += 1
         generation = self.start_generation
 
         def prepare() -> None:
             try:
-                self.pipeline.prepare(session)
+                self.pipeline.prepare(session, plan)
             except Exception as exc:  # noqa: BLE001 - background boundary reports model failures.
                 ready.emit(generation, False, str(exc))
             else:

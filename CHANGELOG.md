@@ -38,6 +38,11 @@ All notable user-visible changes are documented here.
   session uses are refused with "Stop the running <mode> session first". While no language
   pair is ready, Conversation shows the notice *No language pair is ready* with **Open
   Language packs**; Settings › Diagnostics has the same link.
+- Conversation and Settings › Voice output replace the single *Voice output* checkbox with one
+  switch per language of the pair. Each switch shows the voice name and whether it is ready,
+  missing or invalid; a missing voice offers **Open Language packs**. A ready voice is spoken by
+  default, also after an upgrade from the old checkbox, and a language whose voice is missing is
+  shown as text only. Settings › Diagnostics lists the readiness of each language's voice.
 
 ### Fixed
 

@@ -84,12 +84,10 @@ def test_e08_text_scaling_150_percent_at_1120_by_720(tmp_path, spies, monkeypatc
         assert "font-size: 16.88pt" in window.styleSheet()
         assert matrix_problems(window, 1120, 720) == []
         conversation = window.conversation
-        assert conversation._action_row.wrapped  # Voice output and Export moved down
         assert conversation._field_row.stacked  # Conversation direction under Language pair
         settle(window, 1900, 900)  # wide again: one line, in the original order
         assert not conversation._action_row.wrapped and not conversation._field_row.stacked
-        row = [window.start_button, window.swap_button, window.tts_checkbox]
-        row.append(conversation.export_button)
+        row = [window.start_button, window.swap_button, conversation.export_button]
         assert [button.x() for button in row] == sorted(button.x() for button in row)
         assert window.mode_combo.y() == window.pair_combo.y()
     finally:

@@ -93,7 +93,8 @@ class DeviceWatch:
         if conversation.capture.stream_failed or not self._present(microphone):
             conversation.notices.microphone_lost(self.device_name(CAPTURE))
             return
-        if self.host.pipeline.voice_output and not self._present(self.active.get(RENDER)):
+        # Only a session that speaks (its bound plan is non-empty) needs the speakers.
+        if self.host.pipeline.spoken_languages and not self._present(self.active.get(RENDER)):
             conversation.notices.speakers_lost(self.device_name(RENDER))
 
     def _present(self, resolved) -> bool:

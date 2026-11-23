@@ -16,7 +16,13 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from lianiq.languages.modes import SessionPair
-from lianiq.languages.requirements import meeting_local_speech_requirements, requirements
+from lianiq.languages.registry import LanguageId
+from lianiq.languages.requirements import (
+    Requirement,
+    RequirementKind,
+    meeting_local_speech_requirements,
+    requirements,
+)
 from lianiq.packs.catalog import PackCatalog, PackDefinition
 from lianiq.packs.errors import PackInUse
 from lianiq.ui.shell.session_owner import SessionState
@@ -37,6 +43,9 @@ class ActiveUsage:
     mode: WorkspaceId
     session: SessionPair
     local_speech: bool  # Meeting only: the optional local speech is on
+    # Conversation only: the spoken plan bound at Start (CAP-0167); its voices are in use
+    # even when the session output is text because only some languages are spoken.
+    voices: frozenset[LanguageId] = frozenset()
 
 
 class ActiveUsageTracker:
@@ -82,6 +91,7 @@ def packs_in_use(
     needed = set(requirements(usage.session))
     if usage.local_speech and usage.session.mode.meeting:
         needed.update(meeting_local_speech_requirements(usage.session))
+    needed.update(Requirement(RequirementKind.VOICE, language) for language in usage.voices)
     found = (packs.for_requirement(requirement) for requirement in needed)
     return frozenset(pack.id for pack in found if pack is not None)
 

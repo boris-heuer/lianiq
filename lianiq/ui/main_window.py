@@ -84,7 +84,7 @@ class MainWindow(MainWindowLayout, MainWindowServices, QMainWindow):
     session_controller = _forward("conversation", "session_controller")
     pair_combo = _forward("conversation", "pair_combo")
     mode_combo = _forward("conversation", "mode_combo")
-    tts_checkbox = _forward("conversation", "tts_checkbox")
+    voice_rows = _forward("conversation", "voice_rows")
     start_button = _forward("conversation", "start_button")
     source_panel = _forward("conversation", "source_panel")
     target_panel = _forward("conversation", "target_panel")
@@ -271,7 +271,6 @@ class MainWindow(MainWindowLayout, MainWindowServices, QMainWindow):
         if self.persist_settings:
             self.call_bridge_panel.apply_to_config()
             self.conversation.save_routing()
-            # ``config.voice_output`` holds the user's preference, kept even while a
-            # missing voice disables the checkbox.
+            # ``tts.output`` holds the voice switches; ``languages.output`` mirrors the plan.
             self.config.save()
         event.accept()

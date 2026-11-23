@@ -146,7 +146,7 @@ def test_ac03_vor02_missing_reverse_edge_blocks_automatic_and_the_fixed_directio
     start(window)
     assert spies.recognizer.warmed_languages == ["de"]
     assert spies.translator.warmed_edges == ["de>zh-Hans"]
-    assert spies.synthesizer is None
+    assert spies.synthesizer.warmed_languages == ["zh-Hans"]  # the target voice is spoken
     submit(window, spies, transcript("Guten Tag", "de"))
     assert wait_until(lambda: len(window.history) == 1)
     assert spies.recognizer.calls == ["de"]
@@ -167,25 +167,24 @@ def test_ac08_automatic_text_starts_and_voice_output_names_the_missing_voice(
     window = open_window(tmp_path, monkeypatch, request, configure=without_mandarin_voice)
 
     assert window.mode_combo.currentText() == AUTOMATIC
-    assert not window.tts_checkbox.isEnabled()
-    assert window.tts_checkbox.toolTip() == "Not available: missing voice Mandarin (Simplified)"
-    assert not window.tts_checkbox.isChecked()  # spoken output is unavailable
+    rows = window.voice_rows
+    assert not rows.switch(ZH).isEnabled() and not rows.switch(ZH).isChecked()
+    assert rows.state_label(ZH).text() == "Voice missing"
+    assert rows.switch(DE).isChecked()  # the German voice is ready: spoken by default
     assert window.start_button.isEnabled()
 
     start(window)
     assert window.session_controller.session.mode.output is OutputKind.TEXT
-    assert window.pipeline.voice_output is False
-    submit(window, spies, transcript("Guten Tag", "de"))
+    assert window.pipeline.spoken_languages == {DE}  # only the ready voice is spoken
+    submit(window, spies, transcript("Guten Tag", "de"))  # into Mandarin: text only
     assert wait_until(lambda: len(window.history) == 1)
-    assert spies.synthesizer is None  # no voice constructed, loaded or used
+    assert spies.synthesizer.calls == []
     window.stop_listening()
 
-    # The fixed direction to German needs only the German voice: Voice output is offered,
-    # and the saved preference (spoken) applies again.
+    # The fixed direction to German needs only the German voice: the full spoken output.
     window.mode_combo.setCurrentText(ZH_TO_DE)
-    assert window.tts_checkbox.isEnabled()
-    assert window.tts_checkbox.toolTip() == ""
-    assert window.tts_checkbox.isChecked()
+    assert rows.switch(DE).isEnabled() and rows.switch(DE).isChecked()
+    assert not rows.switch(ZH).isEnabled()
     assert window.config.voice_output is True
 
 
@@ -197,7 +196,7 @@ def test_ac13_pair_routing_switch_and_voice_output_are_locked_while_running(wind
         window.pair_combo,
         window.mode_combo,
         window.swap_button,
-        window.tts_checkbox,
+        *(window.voice_rows.switch(language) for language in window.voice_rows.languages()),
     )
     assert all(control.isEnabled() for control in session_controls)
 
@@ -255,4 +254,6 @@ def test_missing_microphone_disables_start_and_names_it(
     window._refresh_availability()
 
     assert not window.start_button.isEnabled()
-    assert window.statusBar().currentMessage() == "Not available: missing microphone"
+    # Ready voices are switched on by default, so the speakers are needed too (AC-28).
+    message = "Not available: missing microphone, playback device"
+    assert window.statusBar().currentMessage() == message

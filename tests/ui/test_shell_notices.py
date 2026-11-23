@@ -130,15 +130,14 @@ def test_ac24_a_pipeline_event_of_an_older_session_is_dropped(window) -> None:
     assert window.notices.count(CONVERSATION) == 1
 
 
-def test_ac24_missing_voice_is_a_warning_with_text_only_output(tmp_path, spies, monkeypatch):  # noqa: F811
+def test_ac24_missing_voice_is_shown_in_its_row_not_as_a_notice(tmp_path, spies, monkeypatch):  # noqa: F811
     from tests.ui._language_helpers import without_mandarin_voice
 
     window = build_window(tmp_path, monkeypatch, configure=without_mandarin_voice)
     try:
-        title, detail, labels = shown(window)
-        assert title == "Warning: Not available: missing voice Mandarin (Simplified)"
-        assert "translations appear as text only" in detail and labels == []
-        window.mode_combo.setCurrentText("Mandarin (Simplified) → German")  # German voice exists
+        # CAP-0167 C §8: Conversation no longer posts ``conversation.voice-missing``.
         assert window.notices.live() == () and not banner(window).isVisible()
+        language = window.voice_rows.languages()[1]
+        assert window.voice_rows.state_label(language).text() == "Voice missing"
     finally:
         window.close()

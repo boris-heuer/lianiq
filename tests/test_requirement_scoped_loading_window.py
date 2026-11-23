@@ -36,6 +36,15 @@ class TestMainWindowLoadsOnlyOnStart:
             waited += 10
         return condition()
 
+    @staticmethod
+    def set_voices(window, on: bool) -> None:
+        """Turn every enabled voice switch on or off (CAP-0167 voice rows)."""
+        rows = window.voice_rows
+        for language in rows.languages():
+            switch = rows.switch(language)
+            if switch.isEnabled() and switch.isChecked() is not on:
+                switch.click()
+
     @pytest.mark.parametrize(
         ("mode_label", "spoken", "recognition", "edges", "voices"),
         [
@@ -61,7 +70,7 @@ class TestMainWindowLoadsOnlyOnStart:
         assert window.start_button.isEnabled()
 
         window.mode_combo.setCurrentText(mode_label)
-        window.tts_checkbox.setChecked(spoken)
+        self.set_voices(window, spoken)
         assert spies.constructed == []
         QTest.mouseClick(window.start_button, Qt.MouseButton.LeftButton)
 
@@ -79,24 +88,25 @@ class TestMainWindowLoadsOnlyOnStart:
     def test_voice_output_is_bound_at_start_and_locked_while_models_load(
         self, window, spies, spoken
     ) -> None:
-        # CAP-0169 AC-13 (WI-04 review F6): Voice output is part of the session bound at
-        # Start; it is disabled while the models load and while the session runs.
+        # CAP-0169 AC-13 (WI-04 review F6): the voice switches are part of the session bound
+        # at Start; they are disabled while the models load and while the session runs.
         window.mode_combo.setCurrentText("German → Mandarin (Simplified)")
-        window.tts_checkbox.setChecked(spoken)
+        self.set_voices(window, spoken)
+        switch = window.voice_rows.switch(window.voice_rows.languages()[1])  # the target
         spies.release_warm_up.clear()
         window.start_listening()
-        assert not window.tts_checkbox.isEnabled()
-        assert window.tts_checkbox.toolTip() == "Stop the session to change language pair or mode"
-        window.tts_checkbox.setChecked(not spoken)  # a programmatic toggle changes nothing
+        assert not switch.isEnabled()
+        assert switch.toolTip() == "Stop the session to change language pair or mode"
+        switch.setChecked(not spoken)  # a programmatic toggle changes nothing
         spies.release_warm_up.set()
 
         assert self.wait_until(lambda: window.capture.running)
         assert window.pipeline.voice_output is spoken
         expected = OutputKind.SPOKEN if spoken else OutputKind.TEXT
         assert window.session_controller.session.mode.output is expected
-        assert not window.tts_checkbox.isEnabled()
+        assert not switch.isEnabled() and switch.isChecked() is spoken
         window.stop_listening()
-        assert window.tts_checkbox.isEnabled()
+        assert switch.isEnabled()
 
     def test_a_stopped_start_never_starts_capture_for_the_next_start(self, window, spies) -> None:
         spies.failing_warm_up_calls = {2}

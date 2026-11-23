@@ -24,7 +24,9 @@ class DeviceRefresh:
 
     def post_unavailable(self, refused: bool = False, spoken: bool | None = None) -> bool:
         """Post or resolve the per-flow notice; ``True`` if a relevant choice is not ready."""
-        spoken = self.config.voice_output if spoken is None else spoken
+        if spoken is None:  # the plan of the voice switches; before the first refresh the
+            plan = self.host.conversation.voice_plan  # saved ``languages.output`` mirrors it
+            spoken = self.config.voice_output if plan is None else bool(plan)
         blocked = False
         for flow in (CAPTURE, RENDER):
             resolved, key = self.resolved(flow), catalog.device_unavailable_key(FLOW_NAMES[flow])

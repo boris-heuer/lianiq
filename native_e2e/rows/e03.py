@@ -3,7 +3,7 @@
 VoR-02 path (spec §1.5): the N-01 WAV is checked against its SHA-256 in ``image.json``
 before any app starts. Settings › Audio devices: "CABLE Output" is selected as Microphone
 (compared with the cable's WASAPI name; only ``name_matches`` is stored); Conversation:
-*Voice output* is unticked. Then **Start** (F8), wait for "Conversation running" (model
+every voice switch ("Speak {language}") is off. Then **Start** (F8), wait for "Conversation running" (model
 readiness, 300 s), play the WAV into "CABLE Input" with ``sounddevice`` and wait for a turn
 in *Original* and *Translation*, recorded once two consecutive reads agree. During the
 session every enabled workspace is visited: the strip shows "Conversation running" in each,
@@ -164,22 +164,33 @@ def _cable_microphone(app, s, checks: list[Check]) -> bool:
     return matches
 
 
+def _voice_switches(nodes, s) -> list[Node]:
+    """The shown voice switches ("Speak {language}", one per pair language)."""
+    prefix = s.VOICE_SWITCH_NAME.split("{", 1)[0]
+    return [
+        node
+        for node in nodes
+        if node.visible and node.control_type == "CheckBox" and node.name.startswith(prefix)
+    ]
+
+
 def _voice_output_off(app, s, checks: list[Check]) -> bool:
-    """Conversation: untick *Voice output* (if ticked) and wait until it reads unticked."""
+    """Conversation: turn every enabled voice switch off and wait until all read off."""
     name = "voice-output-off"
     if not ui.select(app, s.NAV_CONVERSATION, s.NAV_REGION):
         checks.append(check(name, False, "not-selected"))
         return False
-    box = ui.find(app.nodes(), s.VOICE_OUTPUT, "CheckBox")
-    if box is None:
+    switches = _voice_switches(app.nodes(), s)
+    if not switches:
         checks.append(check(name, False, "not-found"))
         return False
-    if box.selected is not False:
-        app.press(box)
+    for switch in switches:
+        if switch.enabled and switch.selected is not False:
+            app.press(switch)
 
     def off() -> bool:
-        found = ui.find(app.nodes(), s.VOICE_OUTPUT, "CheckBox")
-        return found is not None and found.selected is False
+        found = _voice_switches(app.nodes(), s)
+        return bool(found) and all(node.selected is False for node in found)
 
     return ui.waited(checks, name, off)
 

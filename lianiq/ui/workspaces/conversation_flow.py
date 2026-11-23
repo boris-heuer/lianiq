@@ -12,6 +12,7 @@ from lianiq.languages.errors import ModeUnavailableError
 from lianiq.languages.modes import SessionPair
 from lianiq.languages.session import format_transcript_v2
 from lianiq.packs.protection import ActiveUsage
+from lianiq.ui import strings
 from lianiq.ui.shell.session_owner import SessionBusy, SessionState
 from lianiq.ui.shell.workspaces import WorkspaceId, session_busy_message
 
@@ -35,14 +36,20 @@ class ConversationFlow:
             self.host.show_busy(WorkspaceId.CONVERSATION, busy)
             return
         try:
-            session = self.session_pair()
-            availability = self.session_controller.availability(session)
+            pair = self.current_pair()
+            if pair is None:
+                raise RuntimeError(strings.NO_PAIR_READY)
+            # The spoken plan of the switches is bound to this session (CAP-0167 C §4).
+            plan = self.current_plan()
+            session = self.planned_session(pair, plan)
+            availability = self.start_availability(session, plan)
         except Exception as exc:  # noqa: BLE001 - GUI boundary reports invalid selections.
             self.host.show_error(str(exc))
             return
+        self.voice_preferences.sync_output(plan)
         # A saved device that is missing or unusable refuses Start; no other device is
-        # chosen instead (spec §2.2.4).
-        if self.host.device_setup.refuse_start(self.tts_checkbox.isChecked()):
+        # chosen instead (spec §2.2.4). The speakers count only for a non-empty plan.
+        if self.host.device_setup.refuse_start(bool(plan)):
             self.diagnostic_wav = None
             return
         if not availability.available:
@@ -54,14 +61,16 @@ class ConversationFlow:
         except SessionBusy as busy:
             self.host.show_busy(WorkspaceId.CONVERSATION, busy.active)
             return
-        self.host.usage_tracker.bind(ActiveUsage(WorkspaceId.CONVERSATION, session, False))
+        self.host.usage_tracker.bind(
+            ActiveUsage(WorkspaceId.CONVERSATION, session, False, frozenset(plan))
+        )
         self.starting = True
         self._pending_session = session
         self.set_session_controls_enabled(False)
         self.start_button.setEnabled(False)
         self.state_label.setText("Loading models …")
         self.host.statusBar().showMessage("Loading the models the selected mode requires …")
-        self.host.prepare_in_background(session, self.host.bridge.session_ready)
+        self.host.prepare_in_background(session, self.host.bridge.session_ready, plan)
 
     def _begin_listening(self, session: SessionPair) -> None:
         try:

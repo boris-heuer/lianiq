@@ -91,8 +91,7 @@ def test_ac19_a_stream_fault_counts_as_microphone_lost(window) -> None:
 
 def test_ac20_speakers_unplugged_keep_capture_and_reconnect_after_stop(window, spies) -> None:  # noqa: F811
     setup, fake = window.device_setup, window.fake_devices
-    window.mode_combo.setCurrentText("German → Mandarin (Simplified)")
-    window.tts_checkbox.setChecked(True)
+    window.mode_combo.setCurrentText("German → Mandarin (Simplified)")  # spoken by default
     start(window)
     fake.unplug(SPEAKERS)
 
