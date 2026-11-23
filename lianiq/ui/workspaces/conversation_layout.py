@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QCheckBox,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -21,6 +20,7 @@ from lianiq.ui.combo_fit import StackWhenNarrow, WhenNarrow, WrapWhenNarrow, fit
 from lianiq.ui.held_turn_bar import HeldTurnBar
 from lianiq.ui.result_panel import ResultPanel
 from lianiq.ui.shell.scroll import workspace_scroll
+from lianiq.ui.voice_output_rows import VoiceOutputRows
 
 
 class ConversationLayout:
@@ -33,12 +33,6 @@ class ConversationLayout:
         self.pairs.build(controls)
         self.pair_combo, self.mode_combo = self.pairs.pair_combo, self.pairs.mode_combo
 
-        self.tts_checkbox = QCheckBox(strings.VOICE_OUTPUT)
-        self.tts_checkbox.setAccessibleName(strings.VOICE_OUTPUT)
-        # Checked = the saved preference while spoken output is available (see
-        # ``refresh_availability``); the output is bound to the session at Start.
-        self.tts_checkbox.setChecked(self.config.voice_output)
-        self.tts_checkbox.toggled.connect(self._toggle_tts)
         # Microphone and Speakers are in Settings › Audio devices (CAP-0168 WI-04).
         controls.setColumnStretch(2, 1)
         layout.addLayout(controls)
@@ -59,17 +53,22 @@ class ConversationLayout:
         self.export_button.clicked.connect(self.notices.export_transcript)
         action_row.addWidget(self.start_button)
         action_row.addWidget(self.swap_button)
-        action_row.addSpacing(12)
-        action_row.addWidget(self.tts_checkbox)
         action_row.addStretch()
         action_row.addWidget(self.export_button)
         layout.addLayout(action_row)
-        # With large text, Voice output and Export move to a second line (never cut).
+        # With large text, Export moves to a second line (never cut).
         second_row = QHBoxLayout()
         second_row.addStretch(1)
         layout.addLayout(second_row)
-        tail = [self.tts_checkbox, self.export_button]
-        self._action_row = WrapWhenNarrow(page, action_row, second_row, tail)
+        self._action_row = WrapWhenNarrow(page, action_row, second_row, [self.export_button])
+        # CAP-0167 WI-03: one voice switch per pair language under the Start row; the
+        # spoken plan they select is bound at Start (``refresh_availability``).
+        self.voice_rows = VoiceOutputRows(page)
+        self.voice_rows.switched.connect(self._voice_switched)
+        self.voice_rows.packs_requested.connect(self.open_language_packs)
+        self.voice_rows.replay_requested.connect(self.replay_spoken)
+        self.voice_rows.stop_playback_requested.connect(self.stop_spoken)
+        layout.addWidget(self.voice_rows)
 
         # WI-05 (spec §2.3.7): the row with Start stays outside the scroll area; the held-turn
         # bar, the result panels and the level line scroll when the window is too small.
@@ -135,15 +134,17 @@ class ConversationLayout:
         return self.target_panel.text
 
     def set_session_controls_enabled(self, enabled: bool) -> None:
-        # Pair, routing and output are bound at Start (AC-13, PO decision Q2): changing
-        # them needs Stop. While locked, the tooltip says why they are disabled.
-        for control in (self.pair_combo, self.mode_combo, self.swap_button, self.tts_checkbox):
+        # Pair, routing and the voice switches are bound at Start (AC-13, PO decision Q2):
+        # changing them needs Stop. While locked, the tooltip says why they are disabled.
+        for control in (self.pair_combo, self.mode_combo, self.swap_button):
             control.setEnabled(enabled)
             control.setToolTip("" if enabled else strings.LOCKED_TOOLTIP)
+        self.voice_lock = None if enabled else strings.LOCKED_TOOLTIP
+        self.voice_rows.set_switches_locked(self.voice_lock)
         if enabled:
             self.refresh_availability()
         else:
-            self.voice_output_changed.emit()
+            self.voice_rows_changed.emit()
 
     def set_devices_enabled(self, enabled: bool) -> None:
         self.host.device_setup.set_enabled(enabled)
