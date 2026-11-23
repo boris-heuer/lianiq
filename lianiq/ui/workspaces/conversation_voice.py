@@ -7,6 +7,11 @@ shows the rows in Conversation and Settings, writes ``languages.output`` from th
 the voice of each planned language and the playback device; with every output language on
 it is row 6 (or 4). The plan is bound to the session at Start. A missing voice is shown in
 its row, never as a notice (contract.md §8).
+
+WI-04: the playback state of ``SpokenOutput`` mutes the capture on the speaking thread and
+reaches the UI thread through ``UiBridge.playback_state``: the state line reads
+``VOICE_MIC_PAUSED``, the level bar is 0, and **Replay** / **Stop playback** of both rows get
+their enabled states (contract.md §7).
 """
 
 from __future__ import annotations
@@ -14,6 +19,7 @@ from __future__ import annotations
 from PySide6.QtCore import Slot
 
 from lianiq.conversation.spoken_output import (
+    PlaybackState,
     VoiceStatus,
     output_languages,
     spoken_plan,
@@ -24,6 +30,7 @@ from lianiq.conversation.spoken_output import (
 from lianiq.languages.modes import OutputKind, SessionPair
 from lianiq.languages.registry import LanguageId, LanguagePair
 from lianiq.languages.requirements import ModeAvailability
+from lianiq.ui import strings
 from lianiq.ui.shell.workspaces import WorkspaceId
 
 
@@ -33,6 +40,7 @@ class ConversationVoice:
     voice_plan: frozenset[LanguageId] | None = None  # ``None`` until the first refresh
     voice_lock: str | None = None  # the switch lock of a running session
     voice_statuses_shown: tuple[VoiceStatus, ...] = ()
+    playback_state = PlaybackState.IDLE  # the last state shown on the UI thread
 
     def _packs(self):
         workspace = getattr(self.host, "language_packs", None)
@@ -109,3 +117,33 @@ class ConversationVoice:
         spoken = self.pipeline.spoken
         if spoken is not None:
             spoken.stop_playback()
+
+    # Playback state (WI-04) ---------------------------------------------------------------
+
+    def on_playback_state(self, state: PlaybackState) -> None:
+        """``SpokenOutput.on_state`` on the speaking thread: mute now, show it on the UI thread."""
+        self.capture.set_muted(state is not PlaybackState.IDLE)
+        self.host.bridge.playback_state.emit(state.value)
+
+    @Slot(str)
+    def _show_playback_state(self, value: str) -> None:
+        self.playback_state = PlaybackState(value)
+        if self.playback_state is PlaybackState.IDLE:
+            self.state_label.setText(self.activity_text())
+        else:
+            self.level_bar.setValue(0)
+            self.state_label.setText(strings.VOICE_MIC_PAUSED)
+        self.refresh_playback()
+
+    def can_replay(self) -> bool:
+        """A running session has a spoken translation it still speaks (AC-12)."""
+        spoken = self.pipeline.spoken
+        last = None if spoken is None else spoken.last_spoken
+        capture = getattr(self, "capture", None)  # built after the controls
+        running = capture is not None and capture.running
+        return running and last is not None and last.target_language in spoken.plan
+
+    def refresh_playback(self) -> None:
+        """**Replay** and **Stop playback** in Conversation, then the Settings mirror."""
+        self.voice_rows.set_playback(self.playback_state, self.can_replay())
+        self.voice_rows_changed.emit()
