@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from lianiq.languages.capabilities import DirectedEdge
-from lianiq.languages.modes import OutputKind, SessionPair
+from lianiq.languages.modes import SessionPair
 from lianiq.languages.registry import LanguageId
 from lianiq.languages.requirements import RequirementKind, ordered_requirements
 from lianiq.pipeline_types import SpeechRecognizer, Synthesizer, Translator, _warm_up
@@ -89,11 +89,8 @@ class PipelineAdapters:
         if voices:
             _warm_up(self.voice_synthesizer(), voices)
         if not session.mode.call_bridge:  # Call Bridge lanes synthesize on their own.
-            # The spoken plan, plus the voices a spoken mode requires (rows 2, 4 and 6).
-            spoken = plan
-            if session.mode.output is OutputKind.SPOKEN:
-                spoken |= frozenset(voices)
-            self.set_spoken_languages(spoken)
+            # Conversation speaks exactly the plan its voice switches bound at Start.
+            self.set_spoken_languages(plan)
         LOGGER.info(
             "Prepared session: recognition=%s translation=%s voices=%s",
             ",".join(languages) or "-",
