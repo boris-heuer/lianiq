@@ -79,7 +79,6 @@ def only_de_to_zh_edge(config, _root) -> None:
 def without_mandarin_voice(config, _root) -> None:
     """Both STT languages and both edges, but no ``zh-Hans`` voice (AC-08)."""
     Path(config.tts.voices["zh-Hans"]).unlink()
-    config.voice_output = True  # the saved preference is spoken output
 
 
 # The explicit name keeps the fixture "window" for test modules importing this function.
