@@ -13,7 +13,8 @@ workspace's failures into notices (``notice_catalog``) and handles their actions
 - **Reconnect** runs a full device refresh and reselects the same identity, only while no
   stream is open (``DEVICE_RECONNECT_AFTER_STOP`` otherwise); **Choose device** opens
   Settings › Audio devices with the selector of the flow focused;
-- a missing voice, and a failed transcript export with **Retry**.
+- a failed speech synthesis (CAP-0167: the text stays, later turns are spoken), and a
+  failed transcript export with **Retry**.
 
 The diagnostics log gets each turn's ID, languages and timings, never its text.
 """
@@ -105,6 +106,9 @@ class ConversationNotices:
             self.post(catalog.queue_overflow(where, generation))
         elif event.kind is PipelineEventKind.TURNS_DROPPED:
             self.post(catalog.turns_dropped(event.count, where, generation))
+        elif event.kind is PipelineEventKind.SYNTHESIS_FAILED and event.language is not None:
+            name = self.host.pipeline.registry.display_name(event.language)
+            self.post(catalog.synthesis_failed(name, where, generation))
         elif event.kind is PipelineEventKind.PLAYBACK_FAILED:
             self.speakers_lost(generation=generation)
 
@@ -140,6 +144,7 @@ class ConversationNotices:
         """The speakers failed or left: capture continues, spoken output is off."""
         name = name or self.host.device_setup.device_name(RENDER)
         self.host.pipeline.set_spoken_languages(frozenset())
+        self.workspace.refresh_playback()  # nothing is spoken or replayed any more
         self.post(
             catalog.speakers_lost(
                 name,
