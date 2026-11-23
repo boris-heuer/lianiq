@@ -75,6 +75,15 @@ or the setup assistant reads the installed packs, each listed file is checked ag
 altered file makes the pack *Failed* instead of loading it. Logs and Settings › Diagnostics
 record only the pack id, version, operation, state and error class of a job.
 
+## Listen & translate
+
+| What you see | What to do |
+|---|---|
+| "Listen & translate needs speech recognition and a translation pack. Install them in Language packs." or **Start listening (F8)** disabled with a missing item | Press **Open Language packs** and install the recognition and translation packs of the chosen languages |
+| "Listen & translate needs a microphone. Choose one here or in Settings › Audio devices." | Choose a *Microphone* on the page, or press **Open audio settings** |
+| "The microphone <name> is no longer available. Listening stopped; your text is kept." | Replug the device and press **Reconnect**, or press **Choose device** and pick another one; then **Start listening (F8)**. Lianiq never switches the microphone by itself |
+| "Listening — nothing heard yet." stays, or rows show "Not understood" | Check the hardware mute switch and the Windows input level, and that the speaker uses the *Source language* |
+
 ## Window size, scaling and accessibility
 
 - Lianiq opens at 1280×720, or at the largest size that fits the screen's work area. On a small

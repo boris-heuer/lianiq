@@ -62,7 +62,7 @@ def test_validate_survives_rows_of_the_wrong_shape() -> None:
 
 def test_duplicate_row_ids_are_rejected_once_each() -> None:
     data = _data()
-    data["rows"] += [data["rows"][0], data["rows"][0], data["rows"][12]]
+    data["rows"] += [data["rows"][0], data["rows"][0], data["rows"][PHASE1_ROWS.index("SHOT")]]
 
     assert validate(data) == ["$.rows: duplicate id S-01", "$.rows: duplicate id SHOT"]
 

@@ -36,7 +36,7 @@ class Method(StrEnum):
 # Spec §2.3 order; a row id from this list that is missing from rows[] is open.
 PHASE1_ROWS: tuple[str, ...] = (
     "S-01", "S-02", "S-03", "S-04", "S-05", "C-04", "E-01", "E-11", "E-03", "E-10",
-    "E-12", "C-03", "SHOT", "T-01", "T-02", "T-03", "T-04",
+    "E-14", "E-12", "C-03", "SHOT", "T-01", "T-02", "T-03", "T-04",
 )  # fmt: skip
 
 

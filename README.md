@@ -252,6 +252,20 @@ table, you speak German into your own microphone.
 See [`docs/meeting-architecture.md`](docs/meeting-architecture.md) for the roles, the feedback
 guard, the privacy statement, the speakerphone setup (Jabra Speak2 75) and the known limits.
 
+### Listen & translate
+
+**Listen & translate** (sidebar, fourth entry, **Ctrl+4**) shows what one speaker says, sentence
+by sentence, with its translation. It never speaks.
+
+- Choose the *Source language*, the *Target language* (**Swap languages** exchanges them) and the
+  *Microphone*. They are locked while listening.
+- **Start listening (F8)** loads only speech recognition and the translation model and opens the
+  microphone. Each completed sentence appears in *Transcript* with its time and translation;
+  **Stop (F9)** keeps the text. **Copy transcript** and **Export transcript** write the
+  `# lianiq transcript v2` format of the translated rows.
+- If a pack is missing, **Open Language packs** installs it; see
+  [troubleshooting](docs/troubleshooting.md#listen--translate).
+
 ### Audio devices
 
 Settings › Audio devices lists the Conversation **Microphone** and **Speakers**. The first entry,

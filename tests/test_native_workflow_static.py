@@ -201,7 +201,10 @@ def test_the_workflow_and_native_text_files_fit_the_inline_publish_limit() -> No
     large = [
         path.relative_to(ROOT).as_posix()
         for path in files
-        if path.is_file() and "__pycache__" not in path.parts and path.stat().st_size > 32 * 1024
+        if path.is_file()
+        and "__pycache__" not in path.parts
+        and path.name != "listen_de_16k.wav"  # the binary E-14 fixture (CAP-0170)
+        and path.stat().st_size > 32 * 1024
     ]
     assert large == []
     assert WORKFLOW.stat().st_size <= 22_000

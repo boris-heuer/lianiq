@@ -31,6 +31,9 @@ SCOPE = [
 ]
 MAX_PY_BYTES = 12_288
 MAX_TEXT_BYTES = 22_000
+# The one committed binary: the CAP-0170 E-14 fixture, pinned by SHA-256 in rows/e14.py.
+LISTEN_FIXTURE = ROOT / "native_e2e" / "fixtures" / "listen_de_16k.wav"
+MAX_FIXTURE_BYTES = 400 * 1024
 
 
 def read(path: Path) -> str:
@@ -50,7 +53,8 @@ def test_every_wi02_file_exists() -> None:
 
 def test_files_are_small_utf8_text_and_powershell_is_ascii() -> None:
     files = [p for p in [*TOOLS.rglob("*"), *(ROOT / "native_e2e").rglob("*")] if p.is_file()]
-    files = [p for p in files if "__pycache__" not in p.parts]
+    files = [p for p in files if "__pycache__" not in p.parts and p != LISTEN_FIXTURE]
+    assert LISTEN_FIXTURE.stat().st_size <= MAX_FIXTURE_BYTES
     for path in files:
         data = path.read_bytes()
         data.decode("utf-8")  # no binary file is committed
@@ -65,7 +69,8 @@ def test_no_test_phrase_wav_is_committed() -> None:
     tracked = subprocess.run(
         ["git", "ls-files", "--", "*.wav"], cwd=ROOT, capture_output=True, text=True, check=True
     )
-    assert tracked.stdout.strip() == ""
+    fixture = LISTEN_FIXTURE.relative_to(ROOT).as_posix()
+    assert [line for line in tracked.stdout.splitlines() if line != fixture] == []
 
 
 def test_admin_helper_executes_exactly_the_three_contract_verbs() -> None:
