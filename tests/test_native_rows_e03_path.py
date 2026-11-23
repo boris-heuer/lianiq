@@ -1,7 +1,7 @@
 """Unit tests of the E-03 VoR-02 path, its stable reads and masks, and the E-10 notice read.
 
 E-03 selects "CABLE Output" as Microphone in Settings (only ``name_matches`` is stored) and
-turns Voice output off before Start; it records the turn only once the view is stable, needs
+turns every voice switch off before Start; it records the turn only once the view is stable, needs
 a readable scroll value and an unchanged pair and direction, and masks both transcript
 panels and every element showing transcript text in its screenshots. E-10 reads only the
 notice elements, never the notice history that logs every posted notice title (CAP-0174
@@ -18,7 +18,15 @@ from native_e2e import screens
 from native_e2e.evidence.model import Status
 from native_e2e.rows import e01, e03, e10, ui
 from native_e2e.uia import Node
-from tests._native_fake_app import CABLE, PANEL_RECTS, TRANSLATION, FakeApp, install, make_ctx
+from tests._native_fake_app import (
+    CABLE,
+    PANEL_RECTS,
+    TRANSLATION,
+    VOICE_SWITCHES,
+    FakeApp,
+    install,
+    make_ctx,
+)
 from tests.test_native_screens import NAMES, black_inside
 
 
@@ -52,16 +60,24 @@ def test_e03_selects_the_cable_and_turns_voice_output_off_before_start(ctx, monk
     ]
     details = {check.name: check.detail for check in row.checks}
     assert details["microphone-cable-selected"] == "name_matches: true"
-    assert app.mic == CABLE and app.voice is False
+    assert app.mic == CABLE and not any(app.voices.values())
     assert "CABLE" not in json.dumps(row.to_dict(), ensure_ascii=False)  # never the name
 
 
 def test_e03_keeps_voice_output_off_when_it_is_already_off(ctx, monkeypatch) -> None:
     app = FakeApp()
-    app.voice = False
+    app.voices = dict.fromkeys(VOICE_SWITCHES, False)
     row, _ = run_e03(ctx, monkeypatch, app)
     assert row.status is Status.PASS, row.checks
-    assert app.voice is False
+    assert not any(app.voices.values())
+
+
+def test_e03_turns_off_only_the_switch_that_is_on(ctx, monkeypatch) -> None:
+    app = FakeApp()
+    app.voices[VOICE_SWITCHES[0]] = False
+    row, _ = run_e03(ctx, monkeypatch, app)
+    assert row.status is Status.PASS, row.checks
+    assert app.voices == dict.fromkeys(VOICE_SWITCHES, False)
 
 
 @pytest.mark.parametrize(
@@ -71,7 +87,7 @@ def test_e03_keeps_voice_output_off_when_it_is_already_off(ctx, monkeypatch) -> 
         ({"mic_ignored": True}, "microphone-cable-selected", "name_matches: false"),
         ({"missing": {"Microphone"}}, "microphone-cable-selected", "name_matches: false"),
         ({"voice_stuck": True}, "voice-output-off", "timeout"),
-        ({"missing": {"Voice output"}}, "voice-output-off", "not-found"),
+        ({"missing": set(VOICE_SWITCHES)}, "voice-output-off", "not-found"),
     ],
 )
 def test_e03_never_starts_unless_the_cable_and_voice_output_are_set(
