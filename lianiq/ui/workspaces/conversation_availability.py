@@ -9,7 +9,7 @@ from lianiq.hardware import ctranslate2_cuda_available, resolve_compute_device
 from lianiq.languages.errors import PairLockedError
 from lianiq.languages.modes import OutputKind, SessionPair
 from lianiq.languages.registry import LanguageId, LanguagePair
-from lianiq.languages.requirements import DeviceReadiness, ModeAvailability, check
+from lianiq.languages.requirements import DeviceReadiness, check
 from lianiq.ui import notice_catalog, strings
 from lianiq.ui.shell.workspaces import WorkspaceId
 from lianiq.ui.workspaces.pair_selection import conversation_session
@@ -61,14 +61,14 @@ class ConversationAvailability:
         self.source_text.setPlaceholderText(placeholder)
 
     def refresh_availability(self) -> None:
-        """Drive the routing entries, *Voice output* and **Start** from ``check()``."""
+        """Drive the routing entries, the voice rows and **Start** from ``check()``."""
         self.show_microphone()
         if self.host.session_locked():
             return
         try:
             self._refresh_availability()
         finally:
-            self.voice_output_changed.emit()
+            self.voice_rows_changed.emit()
 
     def _refresh_availability(self) -> None:
         status = self.host.statusBar()
@@ -77,7 +77,7 @@ class ConversationAvailability:
             control.setEnabled(pair is not None)
         if pair is None:
             self.start_button.setEnabled(False)
-            self.tts_checkbox.setEnabled(False)
+            self.refresh_voice_rows()  # no pair: no rows
             self.state_label.setText("Not available")
             status.showMessage(strings.NO_PAIR_READY)
             self._no_pair_notice(True)
@@ -97,27 +97,10 @@ class ConversationAvailability:
             item.setToolTip(
                 "" if availability.available else self.host.describe_missing(availability)
             )
-        fixed_source = self.current_fixed_source()
-        text = check(
-            self.conversation_session(pair, fixed_source, OutputKind.TEXT), catalog, devices
-        )
-        spoken = check(
-            self.conversation_session(pair, fixed_source, OutputKind.SPOKEN), catalog, devices
-        )
-        # Voice readiness never makes text output unavailable (IS §7).
-        voice_missing = tuple(item for item in spoken.missing if item not in text.missing)
-        voice_text = (
-            self.host.describe_missing(ModeAvailability(False, voice_missing))
-            if voice_missing
-            else ""
-        )
-        self.tts_checkbox.setEnabled(not voice_missing)
-        self.tts_checkbox.setToolTip(voice_text)
-        self.notices.voice(voice_text)
-        self.tts_checkbox.blockSignals(True)
-        self.tts_checkbox.setChecked(self.config.voice_output and not voice_missing)
-        self.tts_checkbox.blockSignals(False)
-        availability = self.session_controller.availability(self.session_pair())
+        # Voice readiness never makes text output unavailable (IS §7): a missing voice is
+        # shown in its row, and only the planned voices and speakers gate Start.
+        plan = self.refresh_voice_rows()
+        availability = self.start_availability(self.planned_session(pair, plan), plan)
         self.start_button.setEnabled(availability.available)
         self.notices.availability(availability.available)
         if availability.available:
@@ -199,14 +182,7 @@ class ConversationAvailability:
         pair = self.current_pair()
         if pair is None:
             raise RuntimeError(strings.NO_PAIR_READY)
-        output = OutputKind.SPOKEN if self.tts_checkbox.isChecked() else OutputKind.TEXT
-        return self.conversation_session(pair, self.current_fixed_source(), output)
-
-    @Slot(bool)
-    def _toggle_tts(self, enabled: bool) -> None:
-        # The saved preference; a running session keeps the output it was started with.
-        self.config.voice_output = enabled
-        self.refresh_availability()
+        return self.planned_session(pair, self.current_plan())
 
     @Slot()
     def _swap_direction(self) -> None:
