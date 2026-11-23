@@ -42,8 +42,14 @@ def model_failed(reason: str, where: str, on_retry: Callable[[], None]) -> Notic
     return catalog.model_failed(TEXT_TRANSLATION, reason, where, on_retry)
 
 
-def playback_failed(reason: str, where: str, open_audio: Callable[[], None]) -> Notice:
-    """The texts stay; the session is idle again (AC-29). **Open Language packs**: WI-05."""
+def playback_failed(
+    reason: str,
+    where: str,
+    open_audio: Callable[[], None],
+    open_packs: Callable[[], None] = lambda: None,
+) -> Notice:
+    """The texts stay; the session is idle again (AC-29); **Open audio settings** and
+    **Open Language packs** (spec §2.2.2)."""
     return _notice(
         PLAYBACK_FAILED,
         Severity.WARNING,
@@ -52,5 +58,8 @@ def playback_failed(reason: str, where: str, open_audio: Callable[[], None]) -> 
         where,
         strings.CONTINUES_NOTHING,
         TEXT_TRANSLATION,
-        (NoticeAction(strings.TEXT_OPEN_AUDIO, open_audio),),
+        (
+            NoticeAction(strings.TEXT_OPEN_AUDIO, open_audio),
+            NoticeAction(strings.PACKS_OPEN, open_packs),
+        ),
     )
