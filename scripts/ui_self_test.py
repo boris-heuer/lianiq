@@ -87,6 +87,7 @@ def main() -> int:
         visits = (
             WorkspaceId.MEETING,
             WorkspaceId.TEXT_TRANSLATION,
+            WorkspaceId.LISTEN,  # CAP-0170: showing the page opens no microphone
             WorkspaceId.CALL_BRIDGE,
             WorkspaceId.LANGUAGE_PACKS,  # CAP-0171: showing the page starts no job
             WorkspaceId.SETTINGS,
