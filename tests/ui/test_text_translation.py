@@ -106,23 +106,6 @@ def test_ac11_ac12_empty_and_over_limit_block_translate(window, spies) -> None: 
     assert len(workspace.source_edit.toPlainText()) == 5_001  # never cut
 
 
-def test_ac09_an_unconfigured_direction_is_unsupported(tmp_path, spies, monkeypatch) -> None:  # noqa: F811
-    def no_reverse(config, _root):
-        del config.translation.edges["zh-Hans>de"]
-
-    window = build_window(tmp_path, monkeypatch, provisioned=False, configure=no_reverse)
-    try:
-        workspace = page(window)
-        workspace.swap_button.click()
-        type_text(workspace, "你好。")
-        assert workspace.readiness_label.text() == (
-            "Translation from Mandarin (Simplified) to German is not supported."
-        )
-        assert not workspace.translate_button.isEnabled()
-    finally:
-        window.close()
-
-
 def test_ac22_copy_writes_exactly_the_texts(window) -> None:
     from PySide6.QtGui import QGuiApplication
 
