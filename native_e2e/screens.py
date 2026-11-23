@@ -123,16 +123,18 @@ def capture(
     relative: str,
     names: Iterable[str],
     device_combos: Sequence[str] = (),
+    fields: Sequence[str] = TRANSCRIPT_FIELDS,
 ) -> tuple[Artifact, int]:
     """Screenshot ``app``'s window to ``relative``, masked; return it and the mask count.
 
     The tree is read before and after the grab and both sets of rectangles are masked, so an
-    element that appears or moves while the pixels are copied is still covered.
+    element that appears or moves while the pixels are copied is still covered. ``fields``
+    are the always-masked panels (E-13: *Source text* and *Translation*).
     """
     names = list(names)
-    before = mask_rects(app.nodes(), names, device_combos)
+    before = mask_rects(app.nodes(), names, device_combos, fields)
     window = app.rect
     png = grab(window)
-    rects = list(dict.fromkeys(before + mask_rects(app.nodes(), names, device_combos)))
+    rects = list(dict.fromkeys(before + mask_rects(app.nodes(), names, device_combos, fields)))
     artifact = write_masked(ctx, relative, png, window[:2], rects)
     return artifact, len(rects)
