@@ -27,9 +27,12 @@ class ProvisioningConfig:
                 raise ValueError(f"provisioning.{name} must list strings only")
 
 
-def provisioning_from_mapping(raw: dict[str, Any]) -> ProvisioningConfig:
-    """Build the section; a non-list ``usages`` or ``languages`` raises ``ValueError``."""
-    values = dict(raw)
+def provisioning_from_mapping(raw: object) -> ProvisioningConfig:
+    """Build the section; a non-object section or a non-list ``usages`` or ``languages``
+    raises ``ValueError``."""
+    if not isinstance(raw, dict):
+        raise ValueError(f"provisioning must be an object: {raw!r}")  # noqa: TRY004 - C §9
+    values: dict[str, Any] = dict(raw)
     for name in _LIST_KEYS:
         if name in values:
             if not isinstance(values[name], list):
