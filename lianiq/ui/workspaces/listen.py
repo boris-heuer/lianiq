@@ -25,6 +25,7 @@ from lianiq.ui import strings
 from lianiq.ui.notice_catalog_base import model_failed_key
 from lianiq.ui.shell.session_owner import SessionBusy
 from lianiq.ui.shell.workspaces import WorkspaceId, session_busy_message
+from lianiq.ui.workspaces.listen_actions import ListenTranscriptActions
 from lianiq.ui.workspaces.listen_layout import ListenLayout
 from lianiq.ui.workspaces.listen_model import ListenTranscriptModel, reason_text
 from lianiq.ui.workspaces.listen_selection import ListenSelection
@@ -38,7 +39,7 @@ BUSY_STATES = {
 }
 
 
-class ListenWorkspace(ListenSelection, ListenLayout, QObject):
+class ListenWorkspace(ListenTranscriptActions, ListenSelection, ListenLayout, QObject):
     posted = Signal(object)  # a worker callback, run on the GUI thread
     level = Signal(float)  # the microphone level, from the audio thread
 
@@ -52,7 +53,7 @@ class ListenWorkspace(ListenSelection, ListenLayout, QObject):
         self.pipeline = ListenPipeline(host.pipeline)
         self.controller = ListenController(
             host.session_owner,
-            host.language_packs.tracker,
+            host.usage_tracker,  # the one tracker of the session's packs (CAP-0171)
             self.pipeline,
             self._capture,
             self.microphone,
@@ -101,6 +102,7 @@ class ListenWorkspace(ListenSelection, ListenLayout, QObject):
             lambda: self.host.show_workspace(WorkspaceId.LANGUAGE_PACKS)
         )
         self.open_audio_button.clicked.connect(self.open_audio_settings)
+        self.connect_actions()
         page.installEventFilter(self)
         self._sync_combos()
         self.refresh()
@@ -178,7 +180,7 @@ class ListenWorkspace(ListenSelection, ListenLayout, QObject):
         elif self._phase is not ListenPhase.IDLE:
             self._stopped = True
         self._phase = phase
-        self.model.sync(snapshot.rows_changed)
+        self.follow(snapshot)
         for widget in (self.source_combo, self.target_combo, self.swap_button):
             widget.setEnabled(idle)
             widget.setToolTip("" if idle else strings.LISTEN_LOCKED)
