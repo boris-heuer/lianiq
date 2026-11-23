@@ -62,6 +62,9 @@ class ResultPanel(QWidget):
         layout.addWidget(heading)
         layout.addWidget(self.text)
         self.follow = True
+        # A relayout (e.g. a longer state line, CAP-0167 WI-04) changes the scroll range: while
+        # *follow* is on, the view stays at the latest line.
+        self.text.verticalScrollBar().rangeChanged.connect(self._keep_following)
         # The text area (keys), its viewport (wheel) and its scroll bar (press, drag, wheel).
         for target in (self.text, self.text.viewport(), self.text.verticalScrollBar()):
             target.installEventFilter(self)
@@ -92,6 +95,10 @@ class ResultPanel(QWidget):
     def at_end(self) -> bool:
         scroll_bar = self.text.verticalScrollBar()
         return scroll_bar.value() >= scroll_bar.maximum()
+
+    def _keep_following(self, _minimum: int, maximum: int) -> None:
+        if self.follow:
+            self.text.verticalScrollBar().setValue(maximum)
 
     def _follow_user_position(self) -> None:
         self.follow = self.at_end()
