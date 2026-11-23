@@ -65,6 +65,7 @@ class UiBridge(QObject):
     call_bridge_capture_fault = Signal(object, str)
     pipeline_event = Signal(object, int)  # PipelineEvent, session generation
     packs_event = Signal(object)  # CAP-0171 pack jobs
+    playback_state = Signal(str)  # CAP-0167 ``PlaybackState`` value of spoken output
 
 
 def _forward(workspace: str, name: str) -> property:
