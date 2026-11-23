@@ -150,7 +150,8 @@ def test_ac15_the_loss_notices_are_resolved_by_the_next_start(window) -> None:
     end_and_wait(window)
     assert window.notices.get("meeting.table_render-lost") is not None  # persistent
     window.fake_devices.set(*window.fake_devices.endpoints)  # replugged
-    assert window.device_setup.refresh()  # no monitor runs while idle: list them, don't race the stop's refresh
+    # No monitor runs while idle: list them, don't race the stop's refresh.
+    assert window.device_setup.refresh()
     assert window.meeting.start_button.isEnabled()
     start_meeting(window)
     assert window.notices.get("meeting.table_render-lost") is None
