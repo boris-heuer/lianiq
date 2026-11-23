@@ -125,7 +125,7 @@ def test_vor01_automatic_german_turn_is_labelled_and_exported_with_language_ids(
     tmp_path,
     monkeypatch,
 ) -> None:
-    from PySide6.QtWidgets import QFileDialog, QPushButton
+    from PySide6.QtWidgets import QFileDialog
 
     assert window.mode_combo.currentText() == AUTOMATIC
     start(window)
@@ -139,7 +139,7 @@ def test_vor01_automatic_german_turn_is_labelled_and_exported_with_language_ids(
     monkeypatch.setattr(
         QFileDialog, "getSaveFileName", staticmethod(lambda *_args: (str(path), "Text (*.txt)"))
     )
-    export = next(b for b in window.findChildren(QPushButton) if b.text() == "Export transcript")
+    export = window.conversation.export_button  # Listen & translate has one too
     click(export)
 
     lines = path.read_text(encoding="utf-8").splitlines()
