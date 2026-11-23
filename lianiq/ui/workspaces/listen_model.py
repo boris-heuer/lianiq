@@ -61,9 +61,8 @@ class ListenTranscriptModel(QAbstractListModel):
             return None
         row = self.transcript.rows[index.row()]
         if role == Qt.ItemDataRole.DisplayRole:
-            return "\n".join(part for part in (self.heading(row), row.source_text) if part) + (
-                "\n" + self.outcome(row)
-            )
+            parts = (self.heading(row), row.source_text, self.outcome(row))
+            return "\n".join(part for part in parts if part)
         if role == Qt.ItemDataRole.AccessibleTextRole:
             return self.accessible_text(row)
         if role == Qt.ItemDataRole.TextAlignmentRole:
