@@ -1,9 +1,25 @@
 # Model acquisition and licensing
 
-`scripts/download_models.py` downloads only the pinned artifacts named in
-`THIRD_PARTY_NOTICES.md` and writes `models/model-manifest.json`. The manifest is evidence of
-the exact upstream revision and SHA-256 of each downloaded file; it is not a substitute for
-the upstream license terms.
+The Language packs page and `scripts/download_models.py` download only the pinned artifacts of
+the built-in pack catalog (`lianiq/packs/builtin_catalog.json`, named in
+`THIRD_PARTY_NOTICES.md`) and write `models/model-manifest.json`. The manifest is evidence of
+the exact upstream revision and SHA-256 of each downloaded or imported file; it is not a
+substitute for the upstream license terms.
+
+## Language pack licences
+
+The pack details show these licences and use constraints exactly as the catalog states them.
+**Download** and **Import…** stay disabled until *I accept the licence (…)* is ticked; the
+manifest records the licence and the time it was accepted (`scripts/download_models.py`
+records no acceptance time).
+
+| Pack | Model (source, revision) | Licence | Use constraints |
+|---|---|---|---|
+| `stt-faster-whisper-small` | `Systran/faster-whisper-small` @ `536b066` | MIT | — |
+| `mt-de-zh-hans` | `Helsinki-NLP/opus-mt-de-zh` @ `cf77098` | Apache-2.0 | — |
+| `mt-zh-hans-de` | `Helsinki-NLP/opus-mt-zh-de` @ `799162f` | Apache-2.0 | — |
+| `tts-de-thorsten-medium` | `rhasspy/piper-voices` `de_DE-thorsten-medium` @ `c10ece1` | MIT (repository); CC0 (Thorsten dataset, see the model card) | Keep the model card with the voice files. |
+| `tts-zh-hans-aishell3` | sherpa-onnx `vits-icefall-zh-aishell3` (archive SHA-256 `ab468db3`) | Apache-2.0 (icefall VITS recipe; AISHELL-3 dataset) | The archive contains no licence file; the provenance of the lexicon and the text-normalisation rules is still open (lianiq#81). |
 
 ## Mandarin text-to-speech: sherpa-onnx `vits-icefall-zh-aishell3`
 
