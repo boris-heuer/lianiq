@@ -151,8 +151,8 @@ def test_ac28_ctrl_number_and_focus_returns_after_switching_back(window) -> None
     settings_value.setFocus()
     press(focused(), Qt.Key.Key_5, control)
     assert window.current_workspace() is CALL_BRIDGE
-    press(focused(), Qt.Key.Key_4, control)  # planned: ignored
-    assert window.current_workspace() is CALL_BRIDGE
+    press(focused(), Qt.Key.Key_4, control)  # CAP-0170: Listen & translate
+    assert window.current_workspace() is WorkspaceId.LISTEN
 
     press(focused(), Qt.Key.Key_1, control)
     assert window.current_workspace() is CONVERSATION
