@@ -37,6 +37,7 @@ def _auto_direction(editor: QPlainTextEdit) -> None:
 def _button(text: str, name: str | None = None) -> QPushButton:
     button = QPushButton(text)
     button.setAccessibleName(text)
+    button.setAutoDefault(True)  # Enter on the focused button activates it (spec §2.3)
     if name:
         button.setObjectName(name)
     return button
@@ -109,6 +110,7 @@ class TextTranslationLayout:
         caption.setObjectName("panelTitle")
         editor = QPlainTextEdit()
         editor.setAccessibleName(title)
+        editor.setTabChangesFocus(True)  # Tab moves on, as the Tab order needs (§2.3)
         _auto_direction(editor)
         caption.setBuddy(editor)
         column.addWidget(caption)
