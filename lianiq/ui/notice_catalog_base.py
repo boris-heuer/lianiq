@@ -30,6 +30,7 @@ TRANSLATION_FAILED = "text-translation.failed"
 PLAYBACK_FAILED = "text-translation.playback-failed"
 LISTEN_FAILED = "listen.failed"  # CAP-0170 contract.md §9
 LISTEN_OVERLOAD = "listen.overload"
+LISTEN_MIC_LOST = "listen.microphone-lost"
 
 
 def unavailable_key(mode: WorkspaceId) -> str:

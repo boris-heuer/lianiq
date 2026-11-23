@@ -22,10 +22,11 @@ from lianiq.listen.pipeline import ListenPipeline
 from lianiq.listen.session import ListenReadiness, StartBlock, listen_readiness
 from lianiq.ui import notice_catalog as catalog
 from lianiq.ui import strings
-from lianiq.ui.notice_catalog_base import model_failed_key
+from lianiq.ui.notice_catalog_base import LISTEN_MIC_LOST, model_failed_key
 from lianiq.ui.shell.session_owner import SessionBusy
 from lianiq.ui.shell.workspaces import WorkspaceId, session_busy_message
 from lianiq.ui.workspaces.listen_actions import ListenTranscriptActions
+from lianiq.ui.workspaces.listen_devices import ListenDevices
 from lianiq.ui.workspaces.listen_layout import ListenLayout
 from lianiq.ui.workspaces.listen_model import ListenTranscriptModel, reason_text
 from lianiq.ui.workspaces.listen_selection import ListenSelection
@@ -39,7 +40,9 @@ BUSY_STATES = {
 }
 
 
-class ListenWorkspace(ListenTranscriptActions, ListenSelection, ListenLayout, QObject):
+class ListenWorkspace(
+    ListenTranscriptActions, ListenDevices, ListenSelection, ListenLayout, QObject
+):
     posted = Signal(object)  # a worker callback, run on the GUI thread
     level = Signal(float)  # the microphone level, from the audio thread
 
@@ -77,12 +80,13 @@ class ListenWorkspace(ListenTranscriptActions, ListenSelection, ListenLayout, QO
         )
 
     def _capture(self, on_utterance, on_error) -> MicrophoneCapture:
-        return MicrophoneCapture(
+        self._stream = MicrophoneCapture(
             self.host.config.audio,
             on_utterance=on_utterance,
             on_level=self.level.emit,
             on_error=on_error,
         )
+        return self._stream
 
     def active(self) -> bool:
         return self.controller.phase is not ListenPhase.IDLE
@@ -140,7 +144,8 @@ class ListenWorkspace(ListenTranscriptActions, ListenSelection, ListenLayout, QO
         if (other := owner.busy_for(LISTEN)) is not None:
             self.host.show_busy(LISTEN, other)
             return
-        self.host.resolve_notices((model_failed_key(LISTEN),))
+        self.host.resolve_notices((model_failed_key(LISTEN), LISTEN_MIC_LOST))
+        self.remember_microphone()
         try:
             self.controller.start(session)
         except SessionBusy as busy:
@@ -156,9 +161,8 @@ class ListenWorkspace(ListenTranscriptActions, ListenSelection, ListenLayout, QO
             self.state_label.setText(strings.LISTEN_STATE_MODEL_ERROR)
             reason = reason_text(alert.reason)
             self.host.post_notice(catalog.model_failed(LISTEN, reason, where, self.start))
-        else:  # **Reconnect** and **Choose device**: WI-05
-            text = strings.LISTEN_MIC_LOST.format(device=alert.device_name)
-            self.host.post_notice(catalog.error(LISTEN, text, where))
+        else:  # MICROPHONE_LOST, after the stop policy ran
+            self.microphone_lost(alert.device_name, alert.generation)
 
     @Slot(object)
     def _run_posted(self, callback) -> None:
