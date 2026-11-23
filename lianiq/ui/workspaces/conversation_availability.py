@@ -10,7 +10,8 @@ from lianiq.languages.errors import PairLockedError
 from lianiq.languages.modes import OutputKind, SessionPair
 from lianiq.languages.registry import LanguageId, LanguagePair
 from lianiq.languages.requirements import DeviceReadiness, ModeAvailability, check
-from lianiq.ui import strings
+from lianiq.ui import notice_catalog, strings
+from lianiq.ui.shell.workspaces import WorkspaceId
 from lianiq.ui.workspaces.pair_selection import conversation_session
 
 
@@ -79,7 +80,9 @@ class ConversationAvailability:
             self.tts_checkbox.setEnabled(False)
             self.state_label.setText("Not available")
             status.showMessage(strings.NO_PAIR_READY)
+            self._no_pair_notice(True)
             return
+        self._no_pair_notice(False)
         catalog = self.session_controller.catalog
         devices = self.device_readiness()
         model = self.mode_combo.model()
@@ -124,6 +127,19 @@ class ConversationAvailability:
         else:
             self.state_label.setText("Not available")
             status.showMessage(self.host.describe_missing(availability))
+
+    def _no_pair_notice(self, missing: bool) -> None:
+        """Post ``conversation.no-pair-ready`` once while no pair is ready (CAP-0171 C §12)."""
+        key = notice_catalog.NO_PAIR_READY_KEY
+        if not missing:
+            self.host.notices.resolve(key)
+        elif self.host.notices.get(key) is None:  # a refresh is not a repeat
+            notice = notice_catalog.no_pair_ready(self.notices.where(), self.open_packs)
+            self.host.post_notice(notice)
+
+    def open_packs(self) -> None:
+        """**Open Language packs** (``PACKS_OPEN``)."""
+        self.host.show_workspace(WorkspaceId.LANGUAGE_PACKS)
 
     @Slot(int)
     def _pair_selected(self, _index: int) -> None:
