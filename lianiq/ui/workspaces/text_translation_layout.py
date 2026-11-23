@@ -64,10 +64,14 @@ class TextTranslationLayout:
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
         layout.addLayout(self._language_row())
+        readiness_row = QHBoxLayout()
         self.readiness_label = QLabel()
         self.readiness_label.setObjectName("textReadiness")
         self.readiness_label.setWordWrap(True)
-        layout.addWidget(self.readiness_label)
+        self.readiness_packs_button = _button(strings.PACKS_OPEN)  # translation pack missing
+        readiness_row.addWidget(self.readiness_label, 1)
+        readiness_row.addWidget(self.readiness_packs_button)
+        layout.addLayout(readiness_row)
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
         self.splitter.setChildrenCollapsible(False)
         self.splitter.addWidget(self._source_pane())
@@ -148,6 +152,9 @@ class TextTranslationLayout:
         row.addWidget(self.status_label, 1)
         row.addWidget(self.copy_translation_button)
         column.addLayout(row)
+        self.no_pack_button = _button(strings.PACKS_OPEN)  # with TEXT_NO_PACK_HINT
+        self.no_pack_button.hide()
+        column.insertWidget(3, self.no_pack_button, 0, Qt.AlignmentFlag.AlignLeft)
         return pane
 
     def _action_row(self) -> QHBoxLayout:
@@ -161,8 +168,10 @@ class TextTranslationLayout:
         self.play_hint.setObjectName("textPlayHint")
         self.play_hint.setWordWrap(True)
         self.open_audio_button = _button(strings.TEXT_OPEN_AUDIO)
+        self.voice_packs_button = _button(strings.PACKS_OPEN)  # target voice missing
         for widget in (self.translate_button, self.retry_button, self.play_button):
             row.addWidget(widget)
         row.addWidget(self.play_hint, 1)
         row.addWidget(self.open_audio_button)
+        row.addWidget(self.voice_packs_button)
         return row
