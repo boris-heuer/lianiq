@@ -15,7 +15,6 @@ os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
 from lianiq.audio.playback import play_wav
 from lianiq.config import LOCAL_CONFIG_PATH, PROJECT_ROOT, AppConfig, TtsConfig, VoiceEngineConfig
-from lianiq.config_migration import SettingsMigrationError
 from lianiq.conversation.routing import TurnRouter
 from lianiq.languages.capabilities import MANIFEST_RELATIVE_PATH, CapabilityCatalog, ReadinessProbe
 from lianiq.languages.registry import BUILTIN_REGISTRY, LanguageId, LanguageRegistry
@@ -142,7 +141,7 @@ def build_meeting_controller(
     )
 
 
-def report_settings_error(error: SettingsMigrationError) -> None:
+def report_settings_error(error: ValueError) -> None:
     """Show why settings could not be loaded; no settings file is written."""
     message = (
         f"{error}.\n\nLianiq did not change any settings file. Correct or remove this "
@@ -195,9 +194,8 @@ def recover_packs(installer: PackInstaller | None = None) -> None:
 
 def main(argv: Sequence[str] | None = None) -> int:
     try:
-        # The setup assistant itself is opened by CAP-0171 WI-06 when it is due.
-        config, _setup_assistant_due = load_settings(sys.argv[1:] if argv is None else argv)
-    except SettingsMigrationError as error:
+        config, setup_assistant_due = load_settings(sys.argv[1:] if argv is None else argv)
+    except ValueError as error:  # a ``SettingsMigrationError`` or an invalid section value
         report_settings_error(error)
         return 2
     configure_logging(PROJECT_ROOT / "logs", config.ui.log_level)
@@ -209,6 +207,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         from PySide6.QtWidgets import QApplication
 
         from lianiq.ui.main_window import MainWindow
+        from lianiq.ui.setup_assistant import open_setup_assistant
     except ImportError as exc:
         logging.getLogger(__name__).exception("GUI dependency import failed")
         if sys.stderr is not None:
@@ -216,7 +215,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_UseSoftwareOpenGL)
-    application = QApplication(sys.argv)
+    application = QApplication.instance() or QApplication(sys.argv)
     application.setApplicationName("lianiq")
     pipeline = build_pipeline(config)
     meeting_factory = partial(build_meeting_controller, config, pipeline)
@@ -224,4 +223,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     window.show()
     # 1280×720, or the largest size that fits the work area (CAP-0168 spec §2.2.1).
     window.fit_to_work_area(window.screen().availableGeometry())
+    if setup_assistant_due:  # only here, never from ``MainWindow`` (C §9, AC-32)
+        open_setup_assistant(window)
     return application.exec()

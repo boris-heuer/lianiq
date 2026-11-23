@@ -12,6 +12,12 @@ All notable user-visible changes are documented here.
   after **Save…**), the setup of the Jabra Speak2 75 speakerphone and the headset mark, and the
   known limits. The README has a Meeting section, and `docs/native-e2e-rows.md` lists the
   Meeting operator rows.
+- A skippable **setup assistant** opens on the first launch (not after an upgrade, and not
+  with `--no-setup-assistant`) and again from **Run setup assistant** on the Language packs
+  page: choose what you want to do, the conversation languages, check the audio devices
+  (**Test microphone** with a live level, **Play test sound** with a generated tone; no file
+  is written), and review which packs and devices are ready, with **Get…** for each missing
+  pack. **Skip** or Escape and **Finish** are remembered, so it does not reopen on its own.
 - The **Language packs** workspace (sixth sidebar entry, Ctrl+6) is now enabled: it lists the
   speech recognition, translation and voice packs with their state (*Downloadable*,
   *Installing…*, *Validated*, *Failed*, *Custom path*), "Needed by", the models folder and its

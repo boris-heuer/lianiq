@@ -33,10 +33,15 @@ TONE_SECONDS, TONE_HZ, TONE_RATE = 1.0, 440.0, 16_000
 NO_SIGNAL_LEVEL = 0.02
 
 
-def write_tone(path: Path) -> Path:
-    """A 1 s, 440 Hz mono PCM16 tone (local; nothing is downloaded)."""
+def tone_samples() -> np.ndarray:
+    """A 1 s, 440 Hz mono PCM16 tone at ``TONE_RATE`` (generated; nothing is downloaded)."""
     times = np.arange(round(TONE_SECONDS * TONE_RATE)) / TONE_RATE
-    samples = (0.2 * np.sin(2 * np.pi * TONE_HZ * times) * 32767).astype(np.int16)
+    return (0.2 * np.sin(2 * np.pi * TONE_HZ * times) * 32767).astype(np.int16)
+
+
+def write_tone(path: Path) -> Path:
+    """``tone_samples`` as a WAV file (Settings › **Test speakers**)."""
+    samples = tone_samples()
     with wave.open(str(path), "wb") as wav:
         wav.setnchannels(1)
         wav.setsampwidth(2)

@@ -89,5 +89,9 @@ ASSIST_REVIEW_FILES_MISSING = "Files missing"
 ASSIST_REVIEW_INVALID = "Invalid"
 ASSIST_REVIEW_DEVICE = "Device not found"
 ASSIST_REVIEW_SPACE = "Missing packs: {missing} to download — {free} free on the models drive"
+# The two list captions of the languages step and the audio check results (WI-06, not in C §11).
+ASSIST_LANG_FIRST = "First language"
+ASSIST_LANG_SECOND = "Second language"
+ASSIST_SOUND_PLAYED = "Test sound played on '{name}'."
 
 __all__ = [name for name in dir() if name.isupper()]

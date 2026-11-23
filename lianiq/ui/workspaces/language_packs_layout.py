@@ -1,6 +1,6 @@
 """The Language packs page layout (CAP-0171 spec §2.3; file-size split of ``language_packs``).
 
-Header (title, ``PACKS_FOLDER``), the empty-state hint, one group per pack kind with a
+Header (title, **Run setup assistant** (WI-06), ``PACKS_FOLDER``), the empty-state hint, one group per pack kind with a
 ``PackRow`` per catalog pack (unsupported registry rows as text), and the collapsed
 *Planned languages* group without actions. Tab order: header → rows → row actions.
 """
@@ -10,7 +10,16 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QGroupBox, QLabel, QMessageBox, QToolButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from lianiq.languages.capabilities import DirectedEdge
 from lianiq.languages.registry import LanguageRegistry
@@ -67,6 +76,12 @@ def _subject_name(row: LanguageRow, registry: LanguageRegistry) -> str:
     return registry.get(row.subject).english_name
 
 
+def _run_assistant(button: QPushButton) -> None:
+    from lianiq.ui.setup_assistant import open_setup_assistant  # the assistant imports this page
+
+    open_setup_assistant(button.window())
+
+
 def _text(text: str) -> QLabel:
     label = QLabel(text)
     label.setAccessibleName(text)
@@ -93,7 +108,13 @@ class LanguagePacksLayout:
         layout.setSpacing(16)
         heading = QLabel(strings.PACKS_TITLE)
         heading.setObjectName("panelTitle")
-        layout.addWidget(heading)
+        self.run_assistant_button = QPushButton(strings.PACKS_RUN_ASSISTANT)
+        self.run_assistant_button.setAccessibleName(strings.PACKS_RUN_ASSISTANT)
+        self.run_assistant_button.clicked.connect(lambda: _run_assistant(self.run_assistant_button))
+        header = QHBoxLayout()
+        header.addWidget(heading, 1)
+        header.addWidget(self.run_assistant_button)
+        layout.addLayout(header)
         self.folder_label = read_only_value(strings.PACKS_TITLE)
         self.folder_label.setWordWrap(True)  # a long models path never scrolls sideways
         layout.addWidget(self.folder_label)
