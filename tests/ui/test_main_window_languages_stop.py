@@ -1,5 +1,7 @@
 """Main window held turns at Stop and the export journey (CAP-0169 WI-06; AC-22, VoR-01).
 
+CAP-0167 WI-04 adds spoken output at **Stop** (F9) and for a resolved held turn (AC-07, AC-10).
+
 Split from ``test_main_window_languages.py``: an offscreen ``MainWindow`` over spy adapters,
 driven by its controls; the shared helpers are in ``_language_helpers.py``. These are code
 evidence only, not native Windows product evidence (WI-08).
@@ -25,6 +27,7 @@ from tests.ui._language_helpers import (
     transcript,
     wait_until,
 )
+from tests.ui.test_voice_output_playback import StoppablePlayer, gate_synthesis
 
 # AC-22 ------------------------------------------------------------------------------------
 
@@ -146,3 +149,55 @@ def test_vor01_automatic_german_turn_is_labelled_and_exported_with_language_ids(
     assert lines[:2] == ["# lianiq transcript v2", "# pair: de zh-Hans"]
     assert lines[2].endswith("] de -> zh-Hans")
     assert window.statusBar().currentMessage() == f"Transcript saved: {path}"
+
+
+# CAP-0167 WI-04: spoken output at Stop and for a resolved held turn ----------------------
+
+
+def test_a_resolved_held_turn_is_shown_before_it_is_spoken(window, spies, monkeypatch) -> None:  # noqa: F811
+    player = StoppablePlayer(window, monkeypatch)
+    start(window)
+    submit(window, spies, transcript("Hello there", "en"))
+    assert wait_until(window.held_turn_bar.isVisible)
+    spies.recognizer.results.append(transcript("Hallo da", "de"))
+
+    click(window.held_turn_bar.translate_buttons[DE])
+
+    assert wait_until(player.playing.is_set)
+    assert player.order == ["result", "play"]  # AC-07
+    player.release()
+    assert wait_until(lambda: window.state_label.text() == "Listening …")
+
+
+def test_stop_during_playback_ends_it_and_clears_replay(window, spies, monkeypatch) -> None:  # noqa: F811
+    from lianiq.ui import strings
+
+    player = StoppablePlayer(window, monkeypatch)
+    start(window)
+    submit(window, spies, transcript("Guten Tag", "de"))
+    assert wait_until(player.playing.is_set)
+
+    click(window.stop_button)  # AC-10
+
+    assert player.released.is_set() and not window.capture.running
+    assert window.pipeline.spoken.last_spoken is None
+    assert wait_until(lambda: window.conversation.playback_state.value == "idle")
+    assert window.state_label.text() == "Ready" and window.level_bar.value() == 0
+    replay = window.voice_rows.replay_button
+    assert not replay.isEnabled() and replay.toolTip() == strings.VOICE_REPLAY_EMPTY
+    assert not window.voice_rows.stop_playback_button.isEnabled()
+
+
+def test_stop_during_synthesis_never_plays_it(window, spies, monkeypatch) -> None:  # noqa: F811
+    player = StoppablePlayer(window, monkeypatch)
+    start(window)
+    entered, release = gate_synthesis(spies)
+    submit(window, spies, transcript("Guten Tag", "de"))
+    assert wait_until(entered.is_set)
+    threading.Timer(0.2, release.set).start()  # the synthesis ends while Stop waits for it
+
+    click(window.stop_button)  # AC-10
+
+    assert wait_until(lambda: window.conversation.playback_state.value == "idle")
+    assert player.played == [] and window.state_label.text() == "Ready"
+    assert not window.capture.running
