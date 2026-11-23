@@ -2,8 +2,9 @@
 
 ``ListenWorkspace`` base (file-size split): the setup row (source, swap, target,
 microphone), the readiness line with its link, the action row (Start, state, level) and the
-transcript list. Stock widgets styled by ``theme.py``; every control has an accessible name
-equal to its label; Tab follows creation order: setup row → Start → transcript.
+transcript list, then *New segments below* with **Jump to latest** and the transcript actions.
+Stock widgets styled by ``theme.py``; every control has an accessible name
+equal to its label; Tab follows creation order: setup row → Start → transcript → actions.
 """
 
 from __future__ import annotations
@@ -98,5 +99,18 @@ class ListenLayout:
         self.transcript_view.setSpacing(4)
         layout.addWidget(self.empty_label)
         layout.addWidget(self.transcript_view, 1)
+
+        bottom = QHBoxLayout()
+        self.new_below_label = QLabel(strings.LISTEN_NEW_BELOW)
+        self.new_below_label.setObjectName("listenNewBelow")
+        self.jump_button = _button(strings.LISTEN_JUMP)
+        self.copy_button = _button(strings.LISTEN_COPY)
+        self.export_button = _button(strings.LISTEN_EXPORT)
+        for widget in (self.new_below_label, self.jump_button):
+            bottom.addWidget(widget)
+        bottom.addStretch(1)
+        bottom.addWidget(self.copy_button)
+        bottom.addWidget(self.export_button)
+        layout.addLayout(bottom)
         self.page = page
         return page
