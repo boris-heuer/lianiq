@@ -90,6 +90,10 @@ def _swap(order, a, b):
             {"sidebar": (SIDEBAR[0], ("Meeting", False, ""), *SIDEBAR[2:])},
             "planned-entries-disabled-with-description",
         ),
+        (  # CAP-0171: Language packs is enabled
+            {"sidebar": (*SIDEBAR[:5], ("Language packs", False, PLANNED), SIDEBAR[6])},
+            "planned-entries-disabled-with-description",
+        ),
         (
             {"sidebar": (*SIDEBAR[:4], ("Call Bridge", True, ""), *SIDEBAR[5:])},
             "call-bridge-experimental",
