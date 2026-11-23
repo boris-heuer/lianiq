@@ -9,7 +9,7 @@ read into it (PO decision 2026-11-19).
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, fields, replace
 from typing import TYPE_CHECKING, Any
 
@@ -134,6 +134,10 @@ class VoicePreferences:
 
     def options(self, language: LanguageId) -> VoiceOptions:
         return self.get(language).options()
+
+    def snapshot(self, languages: Iterable[str]) -> dict[LanguageId, VoiceOptions]:
+        """The options of ``languages`` now; Call Bridge and Meeting bind them at Start."""
+        return {self._id(language): self.options(self._id(language)) for language in languages}
 
     def sync_output(self, plan: frozenset[LanguageId]) -> None:
         """``languages.output`` is ``spoken`` iff the spoken plan is non-empty, else ``text``."""
