@@ -28,6 +28,8 @@ BRIDGE_CAPTURE = "call-bridge.capture-muted"
 BRIDGE_RECOVERY = "call-bridge.recovery-failed"
 TRANSLATION_FAILED = "text-translation.failed"
 PLAYBACK_FAILED = "text-translation.playback-failed"
+LISTEN_FAILED = "listen.failed"  # CAP-0170 contract.md §9
+LISTEN_OVERLOAD = "listen.overload"
 
 
 def unavailable_key(mode: WorkspaceId) -> str:
