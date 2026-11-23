@@ -164,6 +164,8 @@ def build_window(
     if configure is not None:
         configure(config, tmp_path)
     pipeline = build_pipeline(config, registry or BUILTIN_REGISTRY, probe=ReadinessProbe(tmp_path))
+    # Ready voices are spoken by default (CAP-0167 AC-02): the spy WAVs are "played" silently.
+    pipeline.playback = lambda _path, _device: None
     window = main_window_module.MainWindow(config, pipeline, persist_settings=False)
     window.fake_devices = fake_devices  # the D-07 fake the device tests drive
     window.show()
