@@ -182,3 +182,53 @@ def test_ac09_a_refused_call_bridge_start_leaves_a_running_conversation_alone(
     assert window.capture.running and window.session_controller.running
     assert window.call_bridge_controller is None
     window.stop_listening()
+
+
+# CAP-0167 WI-05: voice options bound at Start, row 7 and both lanes unchanged ------------
+
+LOCKED = "Stop Call Bridge to change this voice. The running Call Bridge keeps its voice settings."
+
+
+def spoken_rates(window, spies, controller) -> list[tuple[str, float]]:  # noqa: F811
+    """One outbound and one inbound turn; the language and rate of each synthesis."""
+    spies.synthesizer.calls.clear()
+    spies.synthesizer.options.clear()
+    spies.recognizer.results = [Transcript(f"turn {n}", None, 1.0, 0.1) for n in range(2)]
+    outbound, inbound = FakeCaptureStream.instances[-2:]
+    for capture, lane in ((outbound, controller.outbound_lane), (inbound, controller.inbound_lane)):
+        capture.on_utterance(AUDIO)
+        assert lane.wait_until_idle(timeout=2.0)
+    languages = [language for _text, language in spies.synthesizer.calls]
+    return list(zip(languages, [options.rate for options in spies.synthesizer.options]))
+
+
+def test_ac17_ac18_switches_off_both_lanes_speak_with_the_options_bound_at_start(
+    window,
+    spies,  # noqa: F811
+) -> None:
+    from lianiq.tts.voice_controls import VoiceOptions
+
+    conversation = window.conversation
+    for language in (DE, ZH):  # the Conversation switches do not change Call Bridge
+        conversation.voice_rows.switch(language).click()
+    preferences = conversation.voice_preferences
+    preferences.set_options(ZH, VoiceOptions(rate=1.25))
+    assign(window)
+    click(window.call_bridge_panel.start_button)
+    assert wait_until(lambda: window.call_bridge_controller is not None)
+    for voice_rows in (conversation.voice_rows, window.settings.voice_rows):
+        for language in (DE, ZH):
+            assert not voice_rows.options_button(language).isEnabled()
+            assert voice_rows.options_button(language).toolTip() == LOCKED
+    usage = window.usage_tracker.current
+    assert usage.voices == frozenset({DE, ZH})  # both lane voices are protected
+
+    preferences.set_options(ZH, VoiceOptions(rate=1.5))  # applies at the next Start only
+    assert spoken_rates(window, spies, window.call_bridge_controller) == [(ZH, 1.25), (DE, 1.0)]
+
+    click(window.call_bridge_panel.stop_button)
+    assert conversation.voice_rows.options_button(ZH).isEnabled()
+    assert conversation.voice_rows.options_button(ZH).toolTip() == ""
+    click(window.call_bridge_panel.start_button)
+    assert wait_until(lambda: window.call_bridge_controller is not None)
+    assert spoken_rates(window, spies, window.call_bridge_controller) == [(ZH, 1.5), (DE, 1.0)]
