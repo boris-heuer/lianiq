@@ -103,6 +103,7 @@ class ConversationFlow:
         self.set_devices_enabled(False)
         self.state_label.setText("Listening …")
         self.host.statusBar().showMessage("Offline capture is active")
+        self.refresh_playback()  # nothing to replay yet (AC-12)
 
     @Slot()
     def stop_listening(self) -> None:
@@ -124,6 +125,7 @@ class ConversationFlow:
         self.level_bar.setValue(0)
         self.state_label.setText("Ready")
         self.host.statusBar().showMessage("Capture stopped")
+        self.refresh_playback()  # ``close`` cleared the last spoken translation (AC-12)
         self.notices.stopped(len(report.discarded))
 
     def _session_changed(self, state: SessionState, active: WorkspaceId | None) -> None:
