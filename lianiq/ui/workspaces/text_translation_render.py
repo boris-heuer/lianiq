@@ -39,6 +39,7 @@ class TextTranslationRender:
         else:
             self.translate_button.setText(strings.TEXT_TRANSLATE)
             self.translate_button.setEnabled(self.controller.can_translate())
+        self.translate_button.setAccessibleName(self.translate_button.text())
         self.retry_button.setVisible(snapshot.retry)
         playing = snapshot.playback != "idle"
         status = strings.TEXT_PLAYING if playing else snapshot.status or ""
