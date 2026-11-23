@@ -27,7 +27,7 @@ from lianiq.packs.import_source import ImportSource
 from lianiq.packs.installer import PackInstaller
 from lianiq.packs.jobs import PackJobRunner
 from lianiq.packs.manifest import Manifest
-from lianiq.packs.protection import ActiveUsageTracker, in_use_guard
+from lianiq.packs.protection import in_use_guard
 from lianiq.packs.sources import DownloadSource, HttpsTransport
 from lianiq.packs.state import PackState, PackStatus, pack_status, readiness_pack_files
 from lianiq.ui import strings
@@ -61,7 +61,7 @@ class LanguagePacksWorkspace(QObject):
         self.manifest_path = self.root / MANIFEST_RELATIVE
         self.packs = PackCatalog.load(BUILTIN_CATALOG_PATH, self.registry)
         self.sessions = profile_sessions(self.registry)
-        self.tracker = ActiveUsageTracker(host.session_owner)
+        self.tracker = host.usage_tracker  # bound by the session workspaces (C §8)
         self.transport = HttpsTransport()  # used only when **Download** is clicked
         self.installer = PackInstaller(
             self.root,
@@ -80,6 +80,7 @@ class LanguagePacksWorkspace(QObject):
         self.custom: dict[str, str] = {}
         self.free = 0
         self._generation = 0
+        self._synced = False  # modes follow the first snapshot
         self.details: PackDetailsDialog | None = None
 
     def build_page(self) -> QWidget:
@@ -154,6 +155,7 @@ class LanguagePacksWorkspace(QObject):
             if status is None:  # no snapshot: only a refusal shows (e.g. the fail-safe)
                 row.message_label.setText(message)
                 row.message_label.setVisible(bool(message))
+                row.cancel_button.setVisible(job is not None and job.pack_id == pack_id)
                 continue
             if job is not None and job.pack_id == pack_id:
                 status = PackStatus(PackState.INSTALLING, None, False, status.custom_path)
@@ -180,6 +182,9 @@ class LanguagePacksWorkspace(QObject):
                 return
             _, _, self.statuses, self.custom, self.installed, self.free = event
             self.layout.status_message.setVisible(False)
+            if not self._synced:  # the launch probe has no pack files (AC-17)
+                self._synced = True
+                self.host.refresh_readiness()
         elif kind == "unknown":
             if event[1] == self._generation:
                 self.statuses, self.installed = {}, {}  # the guard protects every pack
@@ -192,9 +197,11 @@ class LanguagePacksWorkspace(QObject):
             self.messages[pack_id] = (error_text(error, reason), offline)
             self._record(pack_id, "failed", error)
             self.refresh()
+            self.host.refresh_readiness()  # spec §3.4: after every job
         elif kind == "finished":
             self._record(event[1], "succeeded", None)
             self.refresh()
+            self.host.refresh_readiness(self.packs.get(event[1]).kind)
         self._show_rows()
 
     def _record(self, pack_id: str, state: str, error) -> None:
