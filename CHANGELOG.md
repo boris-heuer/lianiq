@@ -6,6 +6,16 @@ All notable user-visible changes are documented here.
 
 ### Added
 
+- The **Text translation** workspace (third sidebar entry, Ctrl+3) is now enabled: type or
+  paste up to 5,000 characters, choose the *Source language* and *Target language* (German ↔
+  Mandarin (Simplified); **Swap languages** keeps the text) and **Translate** (Ctrl+Enter;
+  Escape cancels) offline. **Copy source** and **Copy translation** copy the texts; an edit or
+  language change marks the result out of date. **Play translation** speaks the result on the
+  Conversation speakers, **Stop** or F9 ends it and **Replay** plays it again; it is refused
+  with "Stop the Conversation session first" while another session runs. A missing translation
+  pack or voice is named with **Open Language packs**; the setup assistant offers **Text
+  translation** and lists both translation packs as needed and the voices as optional. The
+  texts are never saved, logged or exported, and nothing connects to the network.
 - `docs/meeting-architecture.md`: how a **Meeting** works (the four device roles, the language
   filter, the no-drop queue, which microphones are muted while Lianiq speaks with *Muted* or
   *Open*), the offline and privacy statement (no audio file is ever written; a transcript only
