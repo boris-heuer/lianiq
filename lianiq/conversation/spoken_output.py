@@ -185,10 +185,13 @@ class SpokenOutput:
                 path = self._synthesize(text, language)
                 if path is None:
                     return
+                if not cancel.is_set() and not self._closed:
+                    self._set_state(PlaybackState.PLAYING)
+                # Checked again after entering PLAYING: a stop that arrived while ``on_state``
+                # ran would find no stream to end yet, and the translation would play fully.
                 if cancel.is_set() or self._closed:
                     LOGGER.info("Speech synthesis stopped before playback: language=%s", language)
                     return
-                self._set_state(PlaybackState.PLAYING)
                 self._play_once(path, device, language, cancel)
             finally:
                 if path is not None:
