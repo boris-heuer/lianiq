@@ -1,8 +1,8 @@
 # Troubleshooting
 
 This guide covers the desktop shell of the source build (`python -m lianiq` or
-`python run_app.py`): the sidebar, the session strip, notices, Settings › Audio devices and
-Settings › Diagnostics. For the experimental Call Bridge routes, use the
+`python run_app.py`): the sidebar, the session strip, notices, the Language packs page,
+Settings › Audio devices and Settings › Diagnostics. For the experimental Call Bridge routes, use the
 [Windows audio troubleshooting matrix](call-bridge-operator-setup.md#windows-audio-troubleshooting-matrix)
 in the operator setup.
 
@@ -24,11 +24,12 @@ in the operator setup.
 
 | What you see | Cause | What to do |
 |---|---|---|
-| **Start (F8)** is disabled and the status bar says `Not available: missing …` | A model, voice or device the selected mode needs is missing | Run `.\.venv\Scripts\python.exe .\scripts\doctor.py`; provision what it reports with `scripts\setup.ps1` or `scripts\download_models.py`. A missing voice only disables **Voice output**; text output still works |
+| **Start (F8)** is disabled and the status bar says `Not available: missing …` | A model, voice or device the selected mode needs is missing | Get the missing pack on the **Language packs** page (see [Language packs](#language-packs)), or run `.\.venv\Scripts\python.exe .\scripts\doctor.py` and provision what it reports with `scripts\setup.ps1` or `scripts\download_models.py`. A missing voice only disables **Voice output**; text output still works |
+| A sidebar entry is greyed out and cannot be opened | It is a planned entry ("Planned — not available yet") | Nothing to fix; it is not available in this version |
+| The notice "No language pair is ready" with **Open Language packs** | Speech recognition or a translation direction of the pair is not installed | Press **Open Language packs** and get the packs marked "Needed by: Conversation"; the notice disappears once the pair is ready, without a restart |
 | A Start button is disabled with the tooltip `Stop the Conversation session first` (or `Stop the Call Bridge session first`) | Only one session runs at a time | Press **Stop (F9)** in the session strip, then start the other mode |
 | A blocking notice `<name> — unavailable` with **Choose device**, and "Recording has not started." | The saved microphone or speakers are not connected | Connect the device and press **Refresh** in Settings › Audio devices, or press **Choose device** and pick another one. Lianiq never switches to another device by itself |
 | A device is listed greyed out as `<name> — This device has no usable input channels` (or output) | The endpoint has no channel for that direction | Choose another device; an unusable device cannot be started |
-| Text translation, Listen & translate and Language packs cannot be opened | They are planned entries ("Planned — not available yet") | Nothing to fix; they are not available in this version |
 
 ## Audio devices
 
@@ -48,6 +49,31 @@ the full name, host API and channel count, never an endpoint ID.
 | `Microphone set to '<name>' from your previous settings` (or Speakers) | An older settings file chose the device by list position. Lianiq matched it by name once; check the choice. If the name was ambiguous or missing, the entry shows `— unavailable`; choose the device again |
 
 **Test microphone** and **Test speakers** are disabled while a session runs.
+
+## Language packs
+
+The Language packs page shows a failed or refused job on the pack's row, with the reason. A
+cancelled or failed job never leaves a partial pack: its staging folder
+(`models\.lianiq-staging`) is deleted and the row returns to its previous state, and a job cut
+off by a crash is undone at the next launch.
+
+| What you see | Cause | What to do |
+|---|---|---|
+| `Download unavailable: no connection to <host>. Import the pack from a file or folder instead.` with **Import…** and **Retry** | No internet connection, or the host is blocked | Connect and press **Retry**, or import the pack: copy its folder (it holds `lianiq-pack.json`) from a computer that has it, then **Import…** › **Choose folder…** or **Choose file…** for a `.zip` |
+| `Not enough disk space: <required> needed, <free> free`; **Download** and **Import…** stay disabled | The models drive has less free space than the pack needs plus 100 MiB headroom | Free space on the drive named in *Models folder: … — … free*, then open the pack details again |
+| `Files are in use. Stop Lianiq sessions and retry.` | Windows refused to replace a pack file that another program or a session holds open; the job was rolled back | Stop every Lianiq session (**Stop (F9)**), close programs that use the `models\` files, then **Retry** |
+| `Stop the running Conversation session first` (or Meeting dual-mic, Call Bridge) on **Remove** or **Update…** | The running session uses this pack | Press **Stop (F9)**, then repeat. Installing a pack the session does not use is allowed meanwhile |
+| `Another pack is being installed` on every other pack action | Only one pack job runs at a time | Wait for the running job or press its **Cancel** |
+| *Failed* with `<reason>. Download again or import the pack.` and **Download again**, **Import…** | A file of the installed pack is missing or changed (for example `1 file missing`, `integrity check failed`) | Press **Download again**, or **Import…** a good copy. The modes that need the pack stay not ready until then |
+| `This pack cannot be imported: file <name> failed the integrity check` | A file of the import source differs from the built-in SHA-256 | Use an intact copy; nothing was changed. Other reasons name the problem in the same way: `no pack file`, `unknown pack …`, `version … is not offered`, `file … is missing`, `file … has the wrong size`, `unsafe path …`, `the archive cannot be read` |
+| *Custom path* and no buttons on a row | Your settings point that model to another path | Lianiq does not install or remove custom paths; change the path in `config\settings.local.json` to use the pack |
+
+**The integrity check.** Every pack file has a size and a SHA-256 in the built-in catalog. A
+download or import checks each file (*Checking integrity… n of m files*) before the pack
+replaces anything; the pack details list all digests under *Integrity (SHA-256)*. When the page
+or the setup assistant reads the installed packs, each listed file is checked again, so an
+altered file makes the pack *Failed* instead of loading it. Logs and Settings › Diagnostics
+record only the pack id, version, operation, state and error class of a job.
 
 ## Window size, scaling and accessibility
 
