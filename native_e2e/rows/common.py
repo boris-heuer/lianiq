@@ -23,6 +23,7 @@ ROW_ACS: dict[str, tuple[str, ...]] = {
     "E-03": ("AC-11",),
     "E-10": ("AC-11",),
     "E-14": ("AC-31",),  # CAP-0170 AC-31 (Listen & translate); the others are CAP-0174 ACs
+    "E-13": ("AC-37",),  # CAP-0172 Text translation (its spec §5)
     "E-12": ("AC-12",),
     "C-03": ("AC-12",),
     "SHOT": ("AC-13",),

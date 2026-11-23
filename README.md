@@ -252,6 +252,30 @@ table, you speak German into your own microphone.
 See [`docs/meeting-architecture.md`](docs/meeting-architecture.md) for the roles, the feedback
 guard, the privacy statement, the speakerphone setup (Jabra Speak2 75) and the known limits.
 
+### Text translation
+
+**Text translation** (sidebar, third entry, **Ctrl+3**) translates typed or pasted text offline,
+German ↔ Mandarin (Simplified), without a microphone or a running session.
+
+- Choose the *Source language* and *Target language*; **Swap languages** exchanges them and keeps
+  your text. Type or paste up to 5,000 characters into *Source text*; the counter turns into a
+  warning above the limit and **Translate** stays disabled (your text is never cut).
+- **Translate** (or **Ctrl+Enter**) shows the result in *Translation*; **Escape** cancels a
+  running translation and keeps the previous result. Any edit or language change marks the result
+  out of date until you translate again. **Copy source** and **Copy translation** copy the texts.
+- **Play translation** speaks the result with the target language's voice on the Conversation
+  speakers (Settings › Audio devices); **Stop** or **F9** (from any workspace) ends it, and the
+  button then reads **Replay**. Playback is a session like Conversation: only one runs at a time.
+- Only the translation pack of the chosen direction is needed; a missing voice only disables
+  **Play translation**. **Open Language packs** next to a missing item opens the *Language packs*
+  page (**Ctrl+6**) with **Get…** for it. On the first launch, or with **Run setup assistant** on
+  that page, tick **Text translation**: the assistant lists both translation packs as "Needed by:
+  Text translation" and the voices as optional.
+
+The texts stay in memory: they are never written to settings, logs or Diagnostics, and the
+page is empty after a restart. No network connection is made except by **Download** on the
+Language packs page.
+
 ### Listen & translate
 
 **Listen & translate** (sidebar, fourth entry, **Ctrl+4**) shows what one speaker says, sentence

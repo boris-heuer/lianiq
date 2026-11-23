@@ -79,7 +79,7 @@ def _data() -> dict:
 def test_phase1_rows_follow_the_spec_order() -> None:
     assert PHASE1_ROWS == (
         "S-01", "S-02", "S-03", "S-04", "S-05", "C-04", "E-01", "E-11", "E-03", "E-10",
-        "E-14", "E-12", "C-03", "SHOT", "T-01", "T-02", "T-03", "T-04",
+        "E-14", "E-13", "E-12", "C-03", "SHOT", "T-01", "T-02", "T-03", "T-04",
     )  # fmt: skip
 
 
