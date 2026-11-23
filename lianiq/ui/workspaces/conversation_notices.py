@@ -80,15 +80,6 @@ class ConversationNotices:
         if available:
             self.host.notices.resolve(catalog.unavailable_key(CONVERSATION))
 
-    def voice(self, missing_text: str | None) -> None:
-        """A missing voice for the saved spoken-output preference (or its resolution)."""
-        if missing_text and self.host.config.voice_output:
-            live = self.host.notices.get(catalog.VOICE_MISSING)
-            if live is None or live.title != missing_text:  # a refresh is not a repeat
-                self.post(catalog.voice_missing(missing_text, self.where()))
-        else:
-            self.host.notices.resolve(catalog.VOICE_MISSING)
-
     def stopped(self, discarded: int) -> None:
         if discarded:
             self.post(catalog.held_discarded(discarded, self.where()))
