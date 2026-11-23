@@ -15,6 +15,7 @@ os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
 from lianiq.audio.playback import play_wav
 from lianiq.config import LOCAL_CONFIG_PATH, PROJECT_ROOT, AppConfig, TtsConfig, VoiceEngineConfig
+from lianiq.config_voice import VoicePreferences
 from lianiq.conversation.routing import TurnRouter
 from lianiq.languages.capabilities import MANIFEST_RELATIVE_PATH, CapabilityCatalog, ReadinessProbe
 from lianiq.languages.registry import BUILTIN_REGISTRY, LanguageId, LanguageRegistry
@@ -26,9 +27,10 @@ from lianiq.pipeline import AdapterFactories, TranslationPipeline
 from lianiq.stt.faster_whisper_engine import FasterWhisperEngine
 from lianiq.translation.glossary import Glossary
 from lianiq.translation.marian_engine import MarianTranslator
-from lianiq.tts.piper_engine import PiperEngine
-from lianiq.tts.sherpa_onnx_engine import SherpaOnnxEngine, SherpaVoiceSettings
-from lianiq.tts.voice_router import VoiceEngine, VoiceRouter
+from lianiq.tts.piper_engine import PiperEngine, piper_controls
+from lianiq.tts.sherpa_onnx_engine import UNLOADED_CONTROLS, SherpaOnnxEngine, SherpaVoiceSettings
+from lianiq.tts.voice_controls import VoiceControls
+from lianiq.tts.voice_router import VoiceEngine, VoiceRouter, bind_options
 
 
 def build_synthesizer(
@@ -105,13 +107,21 @@ def build_pipeline(
     def synthesizer() -> VoiceRouter:
         return build_synthesizer(config.tts, catalog.voice_paths(), registry)
 
+    def controls(language: str) -> VoiceControls:
+        """From the voice's metadata only; nothing is constructed or loaded (AC-26)."""
+        language_id = registry.get(language).id
+        engine = config.tts.engines.get(language_id, VoiceEngineConfig())
+        if engine.engine == "sherpa-onnx":
+            return UNLOADED_CONTROLS
+        return piper_controls(catalog.voice_paths()[language_id])
+
     pipeline = TranslationPipeline(
         # The speakers are opened by the resolved endpoint index set at Start, with WASAPI
         # auto-convert (CAP-0168 contract §4 "Opening"); no legacy index is used.
         playback=partial(play_wav, auto_convert=True),
         context_sentences=config.translation.context_sentences,
         turn_router=TurnRouter(config.languages.detection_min_probability),
-        factories=AdapterFactories(recognizer, translator, synthesizer),
+        factories=AdapterFactories(recognizer, translator, synthesizer, controls),
         registry=registry,
         catalog=catalog,
     )
@@ -124,11 +134,12 @@ def build_meeting_controller(
     """The Meeting controller factory (CAP-0177): called only at **Start meeting**.
 
     The engines are the pipeline's shared adapters, which ``prepare`` has just constructed and
-    warmed for requirement row 8; nothing else is loaded here.
+    warmed for requirement row 8; nothing else is loaded here. The voice is bound to the voice
+    options of the pair; they are locked from **Start meeting** on (CAP-0167 C §5, AC-18).
     """
-    engines = SharedEngines(
-        pipeline.speech_recognizer(), pipeline.text_translator(), pipeline.voice_synthesizer()
-    )
+    options_now = VoicePreferences(config, pipeline.registry).snapshot(session.pair.members)
+    voice = bind_options(pipeline.voice_synthesizer(), options_now)
+    engines = SharedEngines(pipeline.speech_recognizer(), pipeline.text_translator(), voice)
     return MeetingController(
         session,
         endpoints,
