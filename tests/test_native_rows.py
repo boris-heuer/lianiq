@@ -148,13 +148,33 @@ def fake(row_id: str, calls: list[str], status: Status = Status.PASS):
 
 def install(monkeypatch, calls: list[str], s01_status=Status.PASS, s03_status=Status.PASS) -> None:
     from native_e2e import uia_app
-    from native_e2e.rows import c03, c04, e01, e03, e10, e11, e12, s02, s03, s05, shot, teardown
+    from native_e2e.rows import (
+        c03,
+        c04,
+        e01,
+        e03,
+        e10,
+        e11,
+        e12,
+        e13,
+        s02,
+        s03,
+        s05,
+        shot,
+        teardown,
+    )
 
     monkeypatch.setattr(s01, "run", fake("S-01", calls, s01_status))
     monkeypatch.setattr(s03, "run", fake("S-03", calls, s03_status))
     for module, row_id in ((s02, "S-02"), (s05, "S-05"), (c04, "C-04")):
         monkeypatch.setattr(module, "run", fake(row_id, calls))
-    for module, row_id in ((e01, "E-01"), (e11, "E-11"), (e03, "E-03"), (e10, "E-10")):
+    for module, row_id in (
+        (e01, "E-01"),
+        (e11, "E-11"),
+        (e03, "E-03"),
+        (e10, "E-10"),
+        (e13, "E-13"),
+    ):
         monkeypatch.setattr(module, "run", fake(row_id, calls))
     monkeypatch.setattr(uia_app, "close_open", lambda ctx: calls.append("app closed"))
     for module, row_id in ((e12, "E-12"), (c03, "C-03"), (shot, "SHOT")):
@@ -173,7 +193,7 @@ def test_rows_run_in_the_spec_order_with_the_s04_window_around_the_app_rows(
     rows = runner.execute(context(tmp_path, repo, "a" * 40))
     assert calls == [
         "S-01", "S-02", "S-03", "S-04 begin", "S-05", "C-04", "E-01", "E-11", "E-03", "E-10",
-        "E-12", "C-03", "SHOT", "app closed", "S-04", "T-01", "T-02", "T-03", "T-04",
+        "E-13", "E-12", "C-03", "SHOT", "app closed", "S-04", "T-01", "T-02", "T-03", "T-04",
     ]  # fmt: skip
     assert set(rows) == {c for c in calls if c not in {"S-04 begin", "app closed"}}
     assert set(rows) == set(PHASE1_ROWS)  # AC-15: a full run gives every Phase 1 row a status
