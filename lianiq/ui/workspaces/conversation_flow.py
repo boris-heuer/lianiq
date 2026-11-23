@@ -11,6 +11,7 @@ from lianiq.call_bridge.contracts import EndpointFlow
 from lianiq.languages.errors import ModeUnavailableError
 from lianiq.languages.modes import SessionPair
 from lianiq.languages.session import format_transcript_v2
+from lianiq.packs.protection import ActiveUsage
 from lianiq.ui.shell.session_owner import SessionBusy, SessionState
 from lianiq.ui.shell.workspaces import WorkspaceId, session_busy_message
 
@@ -53,6 +54,7 @@ class ConversationFlow:
         except SessionBusy as busy:
             self.host.show_busy(WorkspaceId.CONVERSATION, busy.active)
             return
+        self.host.usage_tracker.bind(ActiveUsage(WorkspaceId.CONVERSATION, session, False))
         self.starting = True
         self._pending_session = session
         self.set_session_controls_enabled(False)

@@ -36,6 +36,14 @@ class PipelineAdapters:
                 self.synthesizer = self._construct("synthesizer")
             return self.synthesizer
 
+    def drop_adapters(self, names) -> None:
+        """Forget the cached adapters ``names`` (their model files changed, spec §3.4); the
+        next need constructs them again. An adapter without a factory is kept."""
+        with self._adapter_lock:
+            for name in names:
+                if getattr(self.factories, name) is not None:
+                    setattr(self, name, None)
+
     def _construct(self, name: str):
         factory = getattr(self.factories, name)
         if factory is None:

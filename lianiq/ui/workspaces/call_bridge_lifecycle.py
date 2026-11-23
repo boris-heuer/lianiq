@@ -15,6 +15,7 @@ from lianiq.call_bridge.contracts import (
 )
 from lianiq.call_bridge.controller import check_call_bridge
 from lianiq.languages.modes import CALL_BRIDGE_MODE, SessionPair
+from lianiq.packs.protection import ActiveUsage
 from lianiq.ui import notice_catalog as catalog
 from lianiq.ui import strings
 from lianiq.ui.call_bridge_panel import CallBridgePanel
@@ -125,6 +126,7 @@ class CallBridgeLifecycle:
             # Nothing was opened; the running session continues (an info notice).
             host.show_busy(CALL_BRIDGE, busy.active)
             return
+        host.usage_tracker.bind(ActiveUsage(CALL_BRIDGE, session, False))
         conversation = host.conversation
         self.starting = True
         self._pending_assignments = assignments

@@ -22,6 +22,11 @@ All notable user-visible changes are documented here.
   **Cancel**; a cancelled or failed job, including no connection, keeps the previous state
   and offers **Retry**. **Remove** names the usages that stop being ready, and only one pack
   job runs at a time. Nothing connects to the network before **Download**.
+- After every pack job the other workspaces show the new readiness without a restart.
+  **Remove** and **Update…** of a pack the running Conversation, Meeting or Call Bridge
+  session uses are refused with "Stop the running <mode> session first". While no language
+  pair is ready, Conversation shows the notice *No language pair is ready* with **Open
+  Language packs**; Settings › Diagnostics has the same link.
 
 ### Fixed
 

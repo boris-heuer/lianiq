@@ -15,6 +15,7 @@ that no action is needed. Keys are stable: a repeat of the same failure updates 
 | held turns discarded on Stop | ``conversation.held-discarded`` | warning | none |
 | queue overload / dropped turns | ``conversation.queue-overflow`` / ``.turns-dropped`` | warning | none |
 | missing voice | ``conversation.voice-missing`` | warning | none (provision) |
+| no language pair ready | ``conversation.no-pair-ready`` | warning | Open Language packs |
 | session busy | ``<mode>.busy`` | info | none (Stop) |
 | microphone / speakers lost | ``device.microphone-lost`` / ``device.speakers-lost`` | blocking | Reconnect, Choose device |
 | saved device unavailable / unusable | ``device.<flow>-unavailable`` | blocking | Choose device |
@@ -25,7 +26,7 @@ that no action is needed. Keys are stable: a repeat of the same failure updates 
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from lianiq.ui import strings
 
@@ -41,6 +42,7 @@ from lianiq.ui.notice_catalog_base import (
     DIRECTION_UNAVAILABLE,
     HELD_DISCARDED,
     MICROPHONE_LOST,
+    NO_PAIR_READY_KEY,
     NO_SIGNAL,  # noqa: F401 - re-export
     PAIR_LOCKED,
     QUEUE_OVERFLOW,
@@ -76,7 +78,7 @@ from lianiq.ui.notice_catalog_devices import (
     no_signal,  # noqa: F401 - re-export
     speakers_lost,  # noqa: F401 - re-export
 )
-from lianiq.ui.notices import Notice, Severity
+from lianiq.ui.notices import Notice, NoticeAction, Severity
 from lianiq.ui.shell.workspaces import WorkspaceId, label
 
 # Session start and model preparation -------------------------------------------------------
@@ -224,6 +226,20 @@ def voice_missing(title: str, where: str) -> Notice:
         where,
         strings.CONTINUES_TEXT_ONLY,
         CONVERSATION,
+    )
+
+
+def no_pair_ready(where: str, on_open: Callable[[], None]) -> Notice:
+    """No language pair is ready (CAP-0171 C §12): **Open Language packs** opens the page."""
+    return _notice(
+        NO_PAIR_READY_KEY,
+        Severity.WARNING,
+        strings.NO_PAIR_READY_TITLE,
+        strings.NO_PAIR_READY_DETAIL,
+        where,
+        strings.CONTINUES_NOT_STARTED,
+        CONVERSATION,
+        (NoticeAction(strings.PACKS_OPEN, on_open),),
     )
 
 

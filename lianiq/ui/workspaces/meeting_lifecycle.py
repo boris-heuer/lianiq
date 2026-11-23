@@ -17,6 +17,7 @@ from PySide6.QtCore import Signal, Slot
 
 from lianiq.meeting.contracts import TableInputDuringOutput
 from lianiq.meeting.events import MeetingEvent, MeetingEventKind, MeetingOptions
+from lianiq.packs.protection import ActiveUsage
 from lianiq.ui import notice_catalog as catalog
 from lianiq.ui import strings
 from lianiq.ui.shell.session_owner import ActiveSessionOwner, SessionBusy
@@ -84,6 +85,8 @@ class MeetingLifecycle:
         except SessionBusy as refused:
             self.host.show_busy(MEETING, refused.active)
             return
+        local_speech = self.speak_local_checkbox.isChecked()
+        self.host.usage_tracker.bind(ActiveUsage(MEETING, session, local_speech))
         self.starting, self._pending = True, session
         self.refresh()
         self.state_label.setText(strings.SESSION_STARTING.format(mode=strings.NAV_MEETING))

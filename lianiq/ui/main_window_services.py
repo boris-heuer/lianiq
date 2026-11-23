@@ -6,14 +6,27 @@ import threading
 
 from PySide6.QtCore import Signal
 
+from lianiq.languages.capabilities import CapabilityCatalog, ReadinessProbe
 from lianiq.languages.modes import SessionPair
 from lianiq.languages.requirements import ModeAvailability, describe
+from lianiq.packs.catalog import PackKind
+from lianiq.packs.errors import ManifestError
+from lianiq.packs.manifest import Manifest
+from lianiq.packs.protection import ActiveUsageTracker
+from lianiq.packs.state import readiness_pack_files
 from lianiq.ui import notice_catalog as catalog
 from lianiq.ui import strings
 from lianiq.ui.notices import Notice
 from lianiq.ui.shell.session_owner import SessionState
 from lianiq.ui.shell.workspaces import WorkspaceId
 from lianiq.ui.workspaces.text_translation import TextTranslationWorkspace
+
+# The pipeline adapter that loaded the models of a pack kind (spec §3.4).
+ADAPTERS = {
+    PackKind.RECOGNITION: "recognizer",
+    PackKind.TRANSLATION: "translator",
+    PackKind.VOICE: "synthesizer",
+}
 
 
 class MainWindowServices:
@@ -30,6 +43,54 @@ class MainWindowServices:
             self.notices.resolve(catalog.PAIR_LOCKED)
         for banner in self.banners.values():  # e.g. Reconnect is available after Stop
             banner.update_action_states()
+        if state is SessionState.IDLE and getattr(self, "_readiness_stale", False):
+            self.refresh_readiness()
+
+    @property
+    def usage_tracker(self) -> ActiveUsageTracker:
+        """The one tracker of the session's packs (contract.md §8), built on first use."""
+        tracker = getattr(self, "_usage_tracker", None)
+        if tracker is None:
+            tracker = self._usage_tracker = ActiveUsageTracker(self.session_owner)
+        return tracker
+
+    def refresh_readiness(self, kind: PackKind | None = None) -> None:
+        """After a pack job (spec §3.4): new readiness in every workspace without a restart.
+
+        ``kind`` names the pack kind whose files the job changed; its cached adapter is
+        dropped. The rebuilt probe also checks every listed pack file (C §4), as the page
+        does. While a session runs, the refresh waits until the session is idle.
+        """
+        stale = getattr(self, "_stale_adapters", set())
+        self._stale_adapters = stale | ({ADAPTERS[kind]} if kind is not None else set())
+        self._readiness_stale = True
+        if self.session_owner.state is not SessionState.IDLE:
+            return
+        self._readiness_stale = False
+        self.pipeline.drop_adapters(self._stale_adapters)
+        self._stale_adapters = set()
+        old = self.pipeline.catalog.probe
+        old.invalidate()  # a holder of the old catalog re-reads the files too
+        probe = ReadinessProbe(old.root, old.manifest_path, pack_files=self._pack_files(old))
+        rebuilt = CapabilityCatalog.from_config(self.config, self.pipeline.registry, probe)
+        self.pipeline.catalog = rebuilt
+        self.conversation.session_controller.catalog = rebuilt
+        self.conversation.populate_pairs()
+        self.conversation.refresh_availability()
+        self.meeting.refresh()
+        if self.current_workspace() is WorkspaceId.SETTINGS:
+            self.settings.refresh()
+
+    def _pack_files(self, probe: ReadinessProbe):
+        try:
+            manifest = Manifest.read(probe.manifest_path)
+        except ManifestError:
+            manifest = Manifest()
+        try:
+            packs = self.language_packs.packs
+            return readiness_pack_files(packs, manifest, self.config, probe.root)
+        except OSError:  # the CAP-0169 rules alone, as before any pack job
+            return None
 
     def build_text_translation_page(self):
         """The Text translation workspace (CAP-0172); ``closeEvent`` shuts its worker down."""
