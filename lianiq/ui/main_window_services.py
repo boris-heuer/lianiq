@@ -13,6 +13,7 @@ from lianiq.ui import strings
 from lianiq.ui.notices import Notice
 from lianiq.ui.shell.session_owner import SessionState
 from lianiq.ui.shell.workspaces import WorkspaceId
+from lianiq.ui.workspaces.listen import ListenWorkspace
 from lianiq.ui.workspaces.text_translation import TextTranslationWorkspace
 
 
@@ -35,6 +36,11 @@ class MainWindowServices:
         """The Text translation workspace (CAP-0172); ``closeEvent`` shuts its worker down."""
         self.text_translation = TextTranslationWorkspace(self)
         return self.text_translation.build_page()
+
+    def build_listen_page(self):
+        """The Listen & translate workspace (CAP-0170); ``closeEvent`` shuts it down."""
+        self.listen = ListenWorkspace(self)
+        return self.listen.build_page()
 
     # Notices.
 
@@ -65,7 +71,8 @@ class MainWindowServices:
     def session_locked(self) -> bool:
         conversation = self.conversation
         running = conversation.starting or conversation.capture.running
-        return running or self.call_bridge.active() or self.meeting.active()
+        others = self.call_bridge.active() or self.meeting.active() or self.listen.active()
+        return running or others
 
     def prepare_in_background(self, session: SessionPair, ready: Signal) -> None:
         self.start_generation += 1
