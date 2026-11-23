@@ -211,6 +211,22 @@ def test_stop_during_playback_ends_it_without_a_failure(tmp_path) -> None:
     assert len(harness.player.played) == 2
 
 
+def test_a_stop_while_entering_playing_never_plays_it(tmp_path) -> None:
+    """WI-02 advisory: a stop between the cancel check and ``play`` found no stream to end."""
+    harness = Harness(tmp_path)
+
+    def on_state(state: PlaybackState) -> None:
+        harness.states.append(state)
+        if state is PlaybackState.PLAYING:
+            harness.spoken.stop_playback()
+
+    harness.spoken._on_state = on_state
+    harness.spoken.speak(result())
+
+    assert harness.player.played == [] and harness.states[-1] is PlaybackState.IDLE
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_synthesis_failure_keeps_the_text_and_the_next_turn_is_spoken(tmp_path) -> None:
     harness = Harness(tmp_path)
     harness.engine.fail = True
