@@ -18,6 +18,7 @@ HELD_DISCARDED = "conversation.held-discarded"
 QUEUE_OVERFLOW = "conversation.queue-overflow"
 TURNS_DROPPED = "conversation.turns-dropped"
 VOICE_MISSING = "conversation.voice-missing"
+NO_PAIR_READY_KEY = "conversation.no-pair-ready"  # CAP-0171 contract.md §12
 MICROPHONE_LOST = "device.microphone-lost"
 SPEAKERS_LOST = "device.speakers-lost"
 NO_SIGNAL = "device.no-signal"
