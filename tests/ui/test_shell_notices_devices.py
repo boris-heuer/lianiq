@@ -35,8 +35,7 @@ def test_ac24_playback_failure_is_speakers_lost_and_capture_continues(window, sp
         raise RuntimeError("PortAudio error -9996")
 
     window.pipeline.playback = failing_playback
-    window.mode_combo.setCurrentText("German → Mandarin (Simplified)")
-    window.tts_checkbox.setChecked(True)
+    window.mode_combo.setCurrentText("German → Mandarin (Simplified)")  # spoken by default
     one_turn(window, spies)
 
     assert wait_until(lambda: banner(window).isVisible())
