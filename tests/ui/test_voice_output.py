@@ -3,7 +3,8 @@
 A synthetic pair ``qaa``/``qab`` (BCP 47 private use) with spy adapters, offscreen: one switch
 per pair language in Conversation and Settings, the state texts, the Start check of the
 spoken plan, the plan bound at Start, **Open Language packs** and no ``voice-missing``
-notice (contract.md §4, §7, §8; spec AC-01..AC-05, AC-28..AC-30).
+notice (contract.md §4, §7, §8; spec AC-01..AC-05, AC-28..AC-30). WI-04 playback is in
+``test_voice_output_playback.py``.
 """
 
 from __future__ import annotations
