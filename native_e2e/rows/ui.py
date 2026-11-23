@@ -1,4 +1,4 @@
-"""Shared steps of the UIA rows E-01, E-11, E-03 and E-10 (CAP-0174 contract §5).
+"""Shared steps of the UIA rows E-01, E-11, E-03, E-10 and E-13 (CAP-0174 contract §5).
 
 Every wait polls a state with ``uia.wait_for`` (default 20 s, model readiness 300 s); no row
 sleeps for a fixed time. The visible texts come from ``lianiq.ui.strings`` of the checked-out
