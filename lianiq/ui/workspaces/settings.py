@@ -4,7 +4,7 @@
   checked, enabled and tooltip state, and toggling either changes the saved preference.
 - **Diagnostics** shows the model profile and the compute device as full read-only text
   (AC-12; they left the Conversation layout, RES-06) and a readiness summary of the selected
-  pair: conversation, voice output and Call Bridge.
+  pair: conversation, voice output and Call Bridge, with the **Open Language packs** link.
 
 - **Notice history** (WI-03): the redacted diagnostics log with **Copy** and **Export…**
   (``DiagnosticsView``, spec §2.2.6).
@@ -21,7 +21,16 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QObject, Qt, Slot
-from PySide6.QtWidgets import QCheckBox, QFormLayout, QGroupBox, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QFormLayout,
+    QGroupBox,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 
 from lianiq.call_bridge.controller import check_call_bridge
 from lianiq.languages.modes import OutputKind
@@ -99,6 +108,12 @@ class SettingsWorkspace(QObject):
             label = QLabel(caption)
             label.setBuddy(field)
             form.addRow(label, field)
+        # CAP-0171 C §12: the readiness rows link to the Language packs page (AC-34).
+        self.packs_link = QPushButton(strings.PACKS_OPEN)
+        self.packs_link.setAccessibleName(strings.PACKS_OPEN)
+        self.packs_link.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.packs_link.clicked.connect(self.host.conversation.open_packs)
+        form.addRow("", self.packs_link)
         layout.addWidget(diagnostics)
         self.diagnostics_view = DiagnosticsView(self.host)
         layout.addWidget(self.diagnostics_view, 1)
