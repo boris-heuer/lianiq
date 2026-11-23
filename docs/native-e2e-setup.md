@@ -23,7 +23,8 @@ no reusable credential and reaches only GitHub, through an allow-list proxy on t
 ### VB-Cable licence
 
 VB-Cable is donationware from VB-Audio Software. Lianiq uses one cable in the test VM only, so
-that the E-03 and E-11 rows have a capture device and the test phrase can be played into it.
+that the E-03, E-11 and E-13 rows have a capture device and the test phrase can be played into
+it; E-13 also plays the spoken translation into it.
 This use is private and non-commercial (PO decision of 2026-11-11). Before any commercial use
 the licence must be clarified with VB-Audio. The package is never committed to this
 repository; the image build records its SHA-256 in `image.json`.
@@ -203,8 +204,8 @@ Open the run in lianiq › Actions › `native-e2e`. It shows **Review deploymen
 environment `native-e2e`. Check that the commit is the one you expect, then approve. Approve
 only runs that you or the requesting agent dispatched for a known commit; reject anything else.
 A changed screenshot is signed off later from the run summary and `compare/application-ui.png`.
-A run is green when every Phase 1 row is `pass` or `pending`. The UIA rows E-01, E-11, E-03
-and E-10 drive the real window: do not use the VM console while a run is going
+A run is green when every Phase 1 row is `pass` or `pending`. The UIA rows E-01, E-11, E-03,
+E-10 and E-13 drive the real window: do not use the VM console while a run is going
 ([native-e2e-rows.md](native-e2e-rows.md)).
 
 ## The 90-day rebuild
