@@ -173,8 +173,11 @@ def test_ac10_scroll_bar_drag_up_stops_following(window, spies) -> None:  # noqa
     fill(window, spies, 14)
     panel = window.source_panel
     bar = panel.text.verticalScrollBar()
-    QTest.mousePress(bar, Qt.MouseButton.LeftButton, pos=QPoint(bar.width() // 2, 3))
-    QTest.mouseRelease(bar, Qt.MouseButton.LeftButton, pos=QPoint(bar.width() // 2, 3))
+    # A page step up in the trough above the handle: a one-line arrow step can be undone by the
+    # playback row settling the scroll range afterwards (CAP-0167).
+    above_handle = QPoint(bar.width() // 2, bar.width() + 2)
+    QTest.mousePress(bar, Qt.MouseButton.LeftButton, pos=above_handle)
+    QTest.mouseRelease(bar, Qt.MouseButton.LeftButton, pos=above_handle)
     settle()
     assert not at_end(panel.text) and not panel.follow
 
