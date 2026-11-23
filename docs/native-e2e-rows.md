@@ -1,8 +1,8 @@
 # Native E2E UIA rows
 
-The rows E-01, E-11, E-03 and E-10 of `python -m native_e2e run` drive the real Lianiq window
-in the VM with UI Automation (pywinauto, `backend="uia"`) and the virtual cable (VB-Cable).
-They run after C-04 and before E-12, inside the S-04 offline window, and only when S-01 passed
+The rows E-01, E-11, E-03, E-10 and E-14 of `python -m native_e2e run` drive the real Lianiq
+window in the VM with UI Automation (pywinauto, `backend="uia"`) and the virtual cable
+(VB-Cable). They run after C-04 and before E-12, inside the S-04 offline window, and only when S-01 passed
 and S-03 recorded the settings backup. Setup, image build and run approval are in
 [native-e2e-setup.md](native-e2e-setup.md).
 
@@ -21,11 +21,15 @@ never retried.
 | E-11 | Writes `config/settings.local.json` from `native_e2e/data/legacy-settings.template.json` with `audio.input_device` set to the PortAudio index of "CABLE Output"; starts the app; waits for "Microphone set to '…' from your previous settings"; closes the app; reads the migrated keys | `name_matches` (never the name); `screens/e11-migration-notice.png` |
 | E-03 | Checks the test phrase WAV against `image.json`; in Settings › Audio devices selects "CABLE Output" as Microphone; in Conversation unticks *Voice output*; **Start** (F8); plays the WAV into "CABLE Input"; waits for a turn in *Original* and *Translation* that two consecutive reads agree on; visits every enabled workspace; presses F9 in Settings; returns to Conversation | `name_matches` for the Microphone (never the name); transcript SHA-256 (never the text); `screens/e03-running.png`, `screens/e03-after.png` |
 | E-10 | Settings › Diagnostics › **Export…**: types the path into the save dialog's file-name `Edit` (`AutomationId` 1001) and presses Enter, first to `%TEMP%\lianiq-e2e\diagnostics-E10.txt`, then onto `%TEMP%\lianiq-e2e\ro\diagnostics-E10.txt`, an existing file in a writable folder whose ACL denies the test user writes (`icacls`). The dialog asks whether to replace the file; the row answers **Yes** (`CommandButton_6`), and Lianiq must show its own "Export failed" notice ("Permission denied") while the file keeps its content | Forbidden pattern classes found (none on a pass); whether the second dialog closed (`dialog-closed`); `screens/e10-export-failed.png` |
+| E-14 | Checks `native_e2e/fixtures/listen_de_16k.wav` (two German sentences, Piper, 16 kHz mono) against the SHA-256 pinned in `rows/e14.py` before any app starts; starts its own app; Listen & translate: German → Mandarin (Simplified), *Microphone* "CABLE Output"; **Start listening (F8)**; waits until the page listens and the strip shows "Listen & translate running"; plays the WAV into "CABLE Input"; waits for two done rows in *Transcript* that two consecutive reads agree on; F9; waits for idle (**Start listening (F8)** enabled); checks that the app process has no WASAPI render session (no output stream was opened); closes the app | `name_matches` for the Microphone (never the name); SHA-256 of the translation texts (never the text); `render_sessions` count; `screens/e14-listen.png` with *Transcript* masked |
 
 E-03 leaves the app open for E-10, so the export holds that session's log. E-10 reads the
 failure from the notice elements only: the notice history logs every posted notice title,
 so the first export's "Diagnostics saved as …" line is always in it. A save dialog still
-open is cancelled before the screenshot and the close. T-01 restores the settings file and T-03 resets the ACLs of `%TEMP%\lianiq-e2e` and deletes it.
+open is cancelled before the screenshot and the close. E-14 (CAP-0170 AC-31) closes any app
+left open and starts and closes its own instance, so its render-session check sees only its
+own Listen session: Windows lists a process's render session from its first output stream
+until the process exits. T-01 restores the settings file and T-03 resets the ACLs of `%TEMP%\lianiq-e2e` and deletes it.
 
 E-10 protects a file, not a folder: the Windows save dialog itself refuses a folder with
 denied writes ("no permission to save in this path"), so that path never reaches Lianiq.
@@ -48,7 +52,7 @@ The PO chose the write-protected file after native run 44267851808.
 
 ## Reviewing a run (e2e plan E-03, E-04)
 
-Read the four rows in `native-evidence.json`: each is `pass`, E-03 and E-11 use the method
+Read the five rows in `native-evidence.json`: each is `pass`, E-03, E-11 and E-14 use the method
 `automated-virtual-device`. Open the screenshots under `screens/`: every device name region
 and both transcript panels are black rectangles. Run `python -m native_e2e verify <artifact-dir>`; it must pass.
 
@@ -64,6 +68,9 @@ and both transcript panels are black rectangles. Run `python -m native_e2e verif
 | E-10 `overwrite-confirmed` fails | The save dialog showed no "replace?" prompt for the protected file (the file is missing, or the prompt has no `CommandButton_6`) |
 | E-10 `failure-notice-shown` fails with `dialog-closed: false` | The save dialog stayed open after **Yes** (an error box over it); the row cancels it before the screenshot |
 | E-10 `failure-notice-shown` fails with `dialog-closed: true` | Lianiq wrote the protected file or showed no "Export failed" notice |
+| E-14 `start-listening` fails with `not-enabled` | A recognition or translation pack of German → Mandarin (Simplified) is missing, or the page shows another readiness block |
+| E-14 `two-done-rows` times out | The German model did not recognise the fixture through the cable, or the VAD closed fewer than two segments |
+| E-14 `no-render-stream` fails | The app opened an output stream during the session (`render_sessions=N`), or Windows audio sessions could not be read (the exception type) |
 | E-10 `file-written` fails | The save dialog did not close after Enter (a prompt is open), or the file-name field was not found |
 
 ## Meeting operator rows (CAP-0177)
