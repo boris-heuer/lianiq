@@ -17,7 +17,7 @@ never retried.
 
 | Row | Steps | Evidence |
 |---|---|---|
-| E-01 | Starts the app; reads the seven sidebar entries (Meeting second, enabled), their order, selection, enabled state and description; checks that Conversation shows no Call Bridge control, Model profile, CUDA box or hardware subtitle; checks with psutil that no app process has a file under `models\` open or mapped before **Start** | Checks; `screens/e01-conversation.png` |
+| E-01 | Starts the app with `--no-setup-assistant`; reads the seven sidebar entries (Meeting second; all enabled), their order, selection, enabled state and description; checks that Conversation shows no Call Bridge control, Model profile, CUDA box or hardware subtitle; checks with psutil that no app process has a file under `models\` open or mapped before **Start** | Checks; `screens/e01-conversation.png` |
 | E-11 | Writes `config/settings.local.json` from `native_e2e/data/legacy-settings.template.json` with `audio.input_device` set to the PortAudio index of "CABLE Output"; starts the app; waits for "Microphone set to '…' from your previous settings"; closes the app; reads the migrated keys | `name_matches` (never the name); `screens/e11-migration-notice.png` |
 | E-03 | Checks the test phrase WAV against `image.json`; in Settings › Audio devices selects "CABLE Output" as Microphone; in Conversation unticks *Voice output*; **Start** (F8); plays the WAV into "CABLE Input"; waits for a turn in *Original* and *Translation* that two consecutive reads agree on; visits every enabled workspace; presses F9 in Settings; returns to Conversation | `name_matches` for the Microphone (never the name); transcript SHA-256 (never the text); `screens/e03-running.png`, `screens/e03-after.png` |
 | E-10 | Settings › Diagnostics › **Export…**: types the path into the save dialog's file-name `Edit` (`AutomationId` 1001) and presses Enter, first to `%TEMP%\lianiq-e2e\diagnostics-E10.txt`, then onto `%TEMP%\lianiq-e2e\ro\diagnostics-E10.txt`, an existing file in a writable folder whose ACL denies the test user writes (`icacls`). The dialog asks whether to replace the file; the row answers **Yes** (`CommandButton_6`), and Lianiq must show its own "Export failed" notice ("Permission denied") while the file keeps its content | Forbidden pattern classes found (none on a pass); whether the second dialog closed (`dialog-closed`); `screens/e10-export-failed.png` |
@@ -111,3 +111,35 @@ SHA-256 is recorded. The run also records the design-intent comparison of the Me
 against spec §2; each deviation needs the operator's recorded acceptance. A row without native evidence is
 blocked, never passed. The code rows C-01..C-03 of the plan are re-read for the same commit and
 never satisfy a native row.
+
+## Language packs operator rows (CAP-0171)
+
+The Language packs rows are operator rows: the row IDs below are those of the CAP-0171
+[e2e validation plan](https://github.com/boris-heuer/app-shared/blob/main/docs/products/lianiq/capabilities/offline-language-provisioning/e2e-validation-plan.md)
+and are unrelated to the `python -m native_e2e` rows of the same names above. None of them runs
+in `python -m native_e2e`: that run launches with `--no-setup-assistant` and needs the image's
+installed models for its own E-03, while these rows need a first launch with an empty `models\`
+folder, real downloads, a USB stick or Narrator. The automated run still contributes code
+evidence: its E-01 checks that Language packs is enabled, and its E-03 opens the Language packs
+page inside the offline window. The PO runs the rows at the real window of the source build
+(`python run_app.py`) of the exact commit: E-01..E-06 on a laptop with network, E-07..E-10 on
+the CAP-0174 VM with egress blocked. The plan holds the full steps, data and pass rules.
+
+| Row | Steps | Evidence |
+|---|---|---|
+| D-01..D-05 | Empty `models\` (rename to `models.backup-e2e\`); settings moved to `%TEMP%\lianiq-e2e\`; after E-03 the five pack roots copied to a USB stick; one corrupt copy of `mt-de-zh-hans`; the German test utterance | Data prepared |
+| S-01..S-04 | Record commit, Windows build, Python version, start time; place D-01, D-02; laptop online, free space recorded; VM with egress blocked and a checkout without `models\` and local settings | Values in `verification-report.md`; `Test-NetConnection huggingface.co -Port 443` fails on the VM |
+| E-01 | Laptop first launch | Assistant *Set up Lianiq* on *What do you want to do?*; no connection before a click (AC-01, AC-03, AC-22) |
+| E-02 | Assistant: usages, languages, audio check, readiness | Screenshots of the four steps (AC-04..AC-06, AC-29) |
+| E-03 | **Get…**, licence, **Download** for all five packs; **Cancel** at ~30 % once, then **Retry** | All five *Validated*; manifest records with `licence_accepted_at`; no `models\.lianiq-staging` (AC-07..AC-09) |
+| E-04 | **Finish**; Conversation **Start**, German utterance, **Stop** | Warm-up without percentage; Mandarin translation (AC-18, AC-20) |
+| E-05 | Remove a pack during a session, after **Stop**, then re-import it from the stick | Refusal text, confirmation, *Downloadable*, then *Validated* with `source: import` (AC-15, AC-16) |
+| E-06 | Relaunch | No assistant (AC-01) |
+| E-07 | VM: launch, **Skip**, Language packs, **Download** one pack | Five *Downloadable*, the empty hint and "Download unavailable: no connection to …"; egress log shows only the attempts after the click (AC-13, AC-21, AC-28) |
+| E-08 | VM: import the corrupt copy, then the five folders | Corrupt copy rejected by name; five *Validated*; no egress (AC-10, AC-11) |
+| E-09 | VM: Conversation **Start**, German utterance, **Stop** | Mandarin translation with zero egress (AC-21, AC-28) |
+| E-10 | Keyboard and Narrator through the assistant (**Run setup assistant**) and the Language packs page with one details dialog | No unnamed Tab stop (AC-26) |
+| T-01..T-03 | Restore `models\` and the settings; delete the stick copies and the VM checkout; reset the VM snapshot | State as before |
+
+Evidence goes into the capability's `verification-report.md` (screenshots by SHA-256 only; no
+recordings, transcripts or endpoint IDs). A row without native evidence is blocked, never passed.

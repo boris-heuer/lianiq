@@ -147,7 +147,9 @@ The script:
    sherpa-onnx voice (pinned archive, size and SHA-256 verified),
 4. validates the installation with the offline doctor.
 
-Model download is the only setup step that requires internet access. Existing downloads are reused
+Model download is the only setup step that requires internet access. Instead of the script you
+can also get each model from inside the app, by download or offline import (see
+[Language packs](#language-packs)). Existing downloads are reused
 from the Hugging Face cache. Spoken output is off by default (`languages.output` is `text`). The
 Mandarin voice is the sherpa-onnx model in `models/sherpa/vits-icefall-zh-aishell3/`
 (`tts.engines["zh-Hans"]`; see [MODEL_LICENSES.md](MODEL_LICENSES.md)); German uses Piper. To
@@ -270,12 +272,56 @@ name are numbered " (2)", " (3)"; no label or tooltip shows an endpoint ID.
 The Call Bridge keeps its own four explicit endpoint selectors in the Call Bridge workspace and
 never follows the Windows default.
 
+### Language packs
+
+Every model is a *language pack*: speech recognition (one pack for German and Mandarin), one
+translation pack per direction, and one voice per language. The **Language packs** page
+(Ctrl+6) lists them by group with their state (*Downloadable*, *Installing…*, *Installed*,
+*Validated*, *Failed*), size and "Needed by"; English, Spanish and French sit in the collapsed
+*Planned languages* group. The header shows the models folder with its free space and **Run
+setup assistant**. Nothing connects to the network before you click **Download**.
+
+- **Setup assistant.** It opens on the first launch (not after an upgrade, not with
+  `--no-setup-assistant`) and again from **Run setup assistant**: tick what you want to do, check
+  the conversation languages, test the microphone and the speakers, then review which packs and
+  devices are ready, with **Get…** for each missing pack. **Skip**, Escape or **Finish** is
+  remembered.
+- **Get a pack.** **Get…** opens the pack details: source, model and version, languages,
+  download and installed size, free disk space, licence, use constraints and the SHA-256 of
+  every file. **Download** and **Import…** stay disabled until you tick *I accept the licence
+  (…)*, and while the free space is too small. The row shows the bytes transferred with
+  **Cancel**, then *Checking integrity… n of m files*, then *Validated*. Every workspace picks
+  the new pack up without a restart.
+- **Offline import.** In the pack details, **Import…** offers **Choose file…** (a `.zip`) and
+  **Choose folder…**. The folder or the root of the `.zip` must hold `lianiq-pack.json` for that
+  pack and every file it lists; only listed files are copied and each is checked against the
+  built-in SHA-256. Every pack installed by this version's app or `scripts\download_models.py`
+  holds this file, so its folder (for example `models\opus-mt-de-zh`) can be copied to a USB
+  stick and imported on a computer without internet. Packs from older versions have no
+  `lianiq-pack.json` and cannot be imported this way. A pack that does not match is rejected with
+  the reason and nothing changes.
+- **Remove, update, repair.** **Remove** names the usages that will not be ready afterwards and
+  is refused while a running session uses the pack. *Update available* with **Update…** appears
+  when the built-in catalog offers a newer version; the old version stays usable until the new
+  one is checked. A pack with a missing or altered file is *Failed* with **Download again** and
+  **Import…**. Only one pack job runs at a time.
+- **Custom path.** If your settings point a model to a path other than the pack's folder, the
+  row shows *Custom path* with the readiness of that path and offers no install or remove.
+
+**Packs and a new release.** Packs live in the `models\` folder of the checkout or of each
+installed version (`%LOCALAPPDATA%\Programs\lianiq\<version>\models`); versions do not share
+them. `scripts\install-release.ps1` downloads and includes the packs for each new version. To
+reuse the packs of an older checkout or version instead, copy its whole `models\` folder,
+including `model-manifest.json`, over the new one while Lianiq is closed; its packs then show
+*Installed*. Packs installed by this version or later can also be imported one by one on the new
+version's Language packs page with **Import…** › **Choose folder…**.
+
 ### Diagnostics and troubleshooting
 
 Settings › Diagnostics **Copy** and **Export…** produce the notice history as local text with
 endpoint IDs, absolute paths and your user name replaced and no transcript text. See
-[`docs/troubleshooting.md`](docs/troubleshooting.md) for each notice, device problem, window
-scaling and the settings keys.
+[`docs/troubleshooting.md`](docs/troubleshooting.md) for each notice, device problem, language
+pack problem, window scaling and the settings keys.
 
 ## Measure latency
 
@@ -423,6 +469,9 @@ installed. Close Lianiq before replacing the version it runs from.
 - German voice: `rhasspy/piper-voices`, `de_DE-thorsten-medium`
 - Mandarin voice: sherpa-onnx `vits-icefall-zh-aishell3` (pinned release archive; licences and
   open provenance questions in [MODEL_LICENSES.md](MODEL_LICENSES.md))
+
+The licence of each pack, as the pack details show it, is listed in
+[MODEL_LICENSES.md](MODEL_LICENSES.md#language-pack-licences).
 
 Review and redistribute all applicable package and model licenses with any binary distribution.
 Review the license for the exact Piper runtime and voice artifacts selected for distribution.

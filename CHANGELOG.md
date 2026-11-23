@@ -6,6 +6,11 @@ All notable user-visible changes are documented here.
 
 ### Added
 
+- Language pack documentation: the README explains the Language packs page, the setup
+  assistant, offline import from a `.zip` or folder, *Custom path*, the licence gate and how
+  packs carry over to a new release; `MODEL_LICENSES.md` lists the licence of every pack;
+  `docs/troubleshooting.md` covers no connection, no space, files in use, a pack in use, a
+  *Failed* pack with **Download again** and the integrity check.
 - `docs/meeting-architecture.md`: how a **Meeting** works (the four device roles, the language
   filter, the no-drop queue, which microphones are muted while Lianiq speaks with *Muted* or
   *Open*), the offline and privacy statement (no audio file is ever written; a transcript only

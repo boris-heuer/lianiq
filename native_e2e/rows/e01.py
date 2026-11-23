@@ -2,8 +2,9 @@
 
 Launch ``python -m lianiq`` (``QT_QPA_PLATFORM`` unset) and read the sidebar with pywinauto
 ``backend="uia"``: seven entries in order (CAP-0177 adds Meeting second, enabled),
-Conversation selected, the planned entries disabled with the description "Planned — not
-available yet", Call Bridge marked "Experimental". The
+Conversation selected, every entry enabled (Text translation CAP-0172, Listen & translate
+CAP-0170, Language packs CAP-0171), none with the description "Planned — not available yet",
+Call Bridge marked "Experimental". The
 shown Conversation page has no Call Bridge control, Model profile, CUDA box or hardware
 subtitle (controls of hidden pages and the sidebar's own entries do not count). Before Start
 no app process has a file under the models folder open or mapped (psutil ``open_files()``
