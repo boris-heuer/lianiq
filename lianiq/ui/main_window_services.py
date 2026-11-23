@@ -78,6 +78,9 @@ class MainWindowServices:
         self.conversation.populate_pairs()
         self.conversation.refresh_availability()
         self.meeting.refresh()
+        text = getattr(self, "text_translation", None)
+        if text is not None:  # the next Translate and Play use the rebuilt adapters
+            text.controller.refresh()
         if self.current_workspace() is WorkspaceId.SETTINGS:
             self.settings.refresh()
 
