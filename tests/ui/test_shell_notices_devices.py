@@ -104,7 +104,7 @@ def test_ac24_transcript_export_failure_keeps_history_and_offers_retry(
     monkeypatch,
     tmp_path,
 ) -> None:
-    from PySide6.QtWidgets import QFileDialog, QPushButton
+    from PySide6.QtWidgets import QFileDialog
 
     one_turn(window, spies)
     window.stop_listening()
@@ -112,7 +112,7 @@ def test_ac24_transcript_export_failure_keeps_history_and_offers_retry(
     monkeypatch.setattr(
         QFileDialog, "getSaveFileName", staticmethod(lambda *_a: (str(target), "Text (*.txt)"))
     )
-    export = next(b for b in window.findChildren(QPushButton) if b.text() == "Export transcript")
+    export = window.conversation.export_button  # Listen & translate has one too
     click(export)
 
     title, _detail, labels = shown(window)
