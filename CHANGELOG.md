@@ -66,6 +66,11 @@ All notable user-visible changes are documented here.
   speakers; no voice is loaded before that, **Start** or **Replay**. Call Bridge and Meeting
   keep the voice settings of their Start: while one runs, **Voice options…** of its languages
   says "Stop <mode> to change this voice", and a change applies at the next Start.
+- The README describes the voice row and which **Voice options…** controls Piper and
+  sherpa-onnx offer; `docs/troubleshooting.md` covers a missing or invalid voice, a voice that
+  fails to load, "Could not speak the translation" and the paused microphone. The native row
+  E-15 speaks one turn through the virtual cable, stops it with F9 during playback and checks
+  that nothing is captured after Stop.
 
 ### Fixed
 
