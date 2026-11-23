@@ -2,8 +2,7 @@
 
 The profile table is the baseline ``lianiq.language.usage-readiness.v1``. Requirements come only
 from CAP-0169 ``ordered_requirements`` and ``meeting_local_speech_requirements``; a profile
-only names the session it builds. The labels are the English defaults of the §11 ``USAGE_*``
-strings.
+only names the session it builds. The labels are the §11 ``USAGE_*`` strings.
 """
 
 from __future__ import annotations
@@ -36,6 +35,7 @@ from lianiq.languages.requirements import (
     ordered_requirements,
 )
 from lianiq.packs.catalog import PackCatalog, PackDefinition
+from lianiq.ui import strings_packs as labels
 from lianiq.ui.shell.workspaces import WorkspaceId
 
 if TYPE_CHECKING:
@@ -102,7 +102,7 @@ def _role_labels(kind: RequirementKind, roles: tuple[str, ...]) -> tuple[str, ..
 USAGE_PROFILES: tuple[UsageProfile, ...] = (
     UsageProfile(
         "conversation",
-        "Conversation",
+        labels.USAGE_CONVERSATION,
         WorkspaceId.CONVERSATION,
         UsageAvailability.ENABLED,
         _conversation,
@@ -111,7 +111,7 @@ USAGE_PROFILES: tuple[UsageProfile, ...] = (
     ),
     UsageProfile(
         "call-bridge",
-        "Call Bridge",
+        labels.USAGE_CALL_BRIDGE,
         WorkspaceId.CALL_BRIDGE,
         UsageAvailability.EXPERIMENTAL,
         _call_bridge,
@@ -120,7 +120,7 @@ USAGE_PROFILES: tuple[UsageProfile, ...] = (
     ),
     UsageProfile(
         "meeting",
-        "Meeting dual-mic",
+        labels.USAGE_MEETING,
         WorkspaceId.MEETING,
         UsageAvailability.ENABLED,
         _meeting,
@@ -129,7 +129,7 @@ USAGE_PROFILES: tuple[UsageProfile, ...] = (
     ),
     UsageProfile(
         "text-translation",
-        "Text translation",
+        labels.USAGE_TEXT,
         WorkspaceId.TEXT_TRANSLATION,
         UsageAvailability.PLANNED,
         None,
@@ -138,7 +138,7 @@ USAGE_PROFILES: tuple[UsageProfile, ...] = (
     ),
     UsageProfile(
         "listen-and-translate",
-        "Listen & translate",
+        labels.USAGE_LISTEN,
         WorkspaceId.LISTEN,
         UsageAvailability.PLANNED,
         None,
@@ -161,7 +161,7 @@ _SEVERITY = {status: rank for rank, status in enumerate(ReviewStatus)}
 
 @dataclass(frozen=True, slots=True)
 class ReviewRow:
-    pack_id: str | None  # None for a device row
+    pack_id: str | None  # None for a device row and for a requirement no catalog pack covers
     requirements: tuple[Requirement, ...]
     status: ReviewStatus  # worst status of its requirements
     optional: bool  # true iff no selected usage requires it
@@ -183,6 +183,12 @@ _DEVICE_KINDS = frozenset(
         RequirementKind.MEETING_ENDPOINTS,
     }
 )
+
+
+def is_device_row(row: ReviewRow) -> bool:
+    """Device rows are told apart by requirement kind: ``pack_id`` is also None for a
+    capability requirement that no catalog pack covers."""
+    return row.requirements[0].kind in _DEVICE_KINDS
 
 
 def _capability_status(requirement: Requirement, catalog: CapabilityCatalog) -> ReadinessStatus:
