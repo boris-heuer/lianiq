@@ -82,6 +82,7 @@ class MainWindowServices:
         text = getattr(self, "text_translation", None)
         if text is not None:  # the next Translate and Play use the rebuilt adapters
             text.controller.refresh()
+        self.listen.refresh()
         if self.current_workspace() is WorkspaceId.SETTINGS:
             self.settings.refresh()
 
