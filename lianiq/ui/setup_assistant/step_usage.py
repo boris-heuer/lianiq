@@ -1,7 +1,8 @@
 """Setup assistant step 1, *What do you want to do?* (CAP-0171 spec §2.2.1 item 2, AC-03).
 
 One checkbox per usage profile (C §7): enabled and experimental profiles are selectable,
-planned ones are disabled and marked *Planned*. **Next** needs at least one ticked usage.
+planned ones are disabled and marked *Planned*. Text translation is selectable since CAP-0172
+(its C §9 row). **Next** needs at least one ticked usage.
 """
 
 from __future__ import annotations
