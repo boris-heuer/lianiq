@@ -1,7 +1,11 @@
-"""Usage profiles and the readiness review (CAP-0171 contract.md §7; Unit halves of AC-05, AC-19)."""
+"""Usage profiles and the readiness review (CAP-0171 contract.md §7; Unit halves of AC-05, AC-19).
+
+The Text translation row is CAP-0172 contract.md §9 (Unit half of its AC-31).
+"""
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -25,6 +29,7 @@ from lianiq.packs.usage import (
     USAGE_PROFILES,
     ReviewStatus,
     UsageAvailability,
+    is_device_row,
     readiness_review,
 )
 from lianiq.ui.shell.workspaces import WorkspaceId
@@ -77,7 +82,13 @@ def test_profile_table_matches_the_contract() -> None:
             UsageAvailability.ENABLED,
             ("Table microphone", "Table speaker", "Your microphone"),
         ),
-        ("text-translation", "Text translation", WorkspaceId.TEXT_TRANSLATION, "planned", ()),
+        (
+            "text-translation",
+            "Text translation",
+            WorkspaceId.TEXT_TRANSLATION,
+            UsageAvailability.ENABLED,
+            ("Speakers",),
+        ),
         ("listen-and-translate", "Listen & translate", WorkspaceId.LISTEN, "planned", ()),
     ]
 
@@ -93,7 +104,30 @@ def test_required_sets_follow_cap0169_rows() -> None:
     assert kinds["conversation"] == [*models, "microphone"]
     assert kinds["call-bridge"][:6] == [*models, "voice de", "voice zh-Hans"]
     assert kinds["meeting"][:5] == [*models, "voice zh-Hans"]  # local de: table speaks Mandarin
-    assert kinds["text-translation"] == []
+    assert kinds["text-translation"] == ["translation de>zh-Hans", "translation zh-Hans>de"]
+    assert [p.id for p in USAGE_PROFILES if p.both_directions] == ["text-translation"]
+
+
+def test_both_directions_needs_fixed_routing() -> None:
+    profile = replace(PROFILES["conversation"], both_directions=True)  # bidirectional session
+    with pytest.raises(ValueError, match="fixed-routing"):
+        profile.required(PAIR, AppConfig())
+
+
+def test_ac31_text_translation_alone_needs_both_directed_packs(tmp_path: Path, builtin) -> None:
+    catalog = CapabilityCatalog.from_config(AppConfig(), BUILTIN_REGISTRY, ReadinessProbe(tmp_path))
+    review = _review(["text-translation"], catalog, builtin, DeviceReadiness(microphone=True))
+    packs = [(row.pack_id, row.optional, row.needed_by) for row in review.rows if row.pack_id]
+    assert packs == [
+        ("mt-de-zh-hans", False, ("Text translation",)),
+        ("mt-zh-hans-de", False, ("Text translation",)),
+        ("tts-zh-hans-aishell3", True, ()),
+        ("tts-de-thorsten-medium", True, ()),
+    ]
+    devices = [row for row in review.rows if is_device_row(row)]
+    assert [(row.requirements[0].kind, row.optional) for row in devices] == [
+        (RequirementKind.PLAYBACK, True)
+    ]  # Speakers optional; no recognition pack, no microphone
 
 
 def test_ac05_review_lists_required_rows_and_optional_voices(tmp_path: Path, builtin) -> None:
