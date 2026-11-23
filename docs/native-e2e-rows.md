@@ -1,8 +1,8 @@
 # Native E2E UIA rows
 
-The rows E-01, E-11, E-03, E-10 and E-14 of `python -m native_e2e run` drive the real Lianiq
-window in the VM with UI Automation (pywinauto, `backend="uia"`) and the virtual cable
-(VB-Cable). They run after C-04 and before E-12, inside the S-04 offline window, and only when S-01 passed
+The rows E-01, E-11, E-03, E-10, E-14 and E-13 of `python -m native_e2e run` drive the real
+Lianiq window in the VM with UI Automation (pywinauto, `backend="uia"`) and the virtual cable
+(VB-Cable). They run after C-04 and before E-12 (E-13 right after E-14), inside the S-04 offline window, and only when S-01 passed
 and S-03 recorded the settings backup. Setup, image build and run approval are in
 [native-e2e-setup.md](native-e2e-setup.md).
 
@@ -22,6 +22,7 @@ never retried.
 | E-03 | Checks the test phrase WAV against `image.json`; in Settings › Audio devices selects "CABLE Output" as Microphone; in Conversation unticks *Voice output*; **Start** (F8); plays the WAV into "CABLE Input"; waits for a turn in *Original* and *Translation* that two consecutive reads agree on; visits every enabled workspace; presses F9 in Settings; returns to Conversation | `name_matches` for the Microphone (never the name); transcript SHA-256 (never the text); `screens/e03-running.png`, `screens/e03-after.png` |
 | E-10 | Settings › Diagnostics › **Export…**: types the path into the save dialog's file-name `Edit` (`AutomationId` 1001) and presses Enter, first to `%TEMP%\lianiq-e2e\diagnostics-E10.txt`, then onto `%TEMP%\lianiq-e2e\ro\diagnostics-E10.txt`, an existing file in a writable folder whose ACL denies the test user writes (`icacls`). The dialog asks whether to replace the file; the row answers **Yes** (`CommandButton_6`), and Lianiq must show its own "Export failed" notice ("Permission denied") while the file keeps its content | Forbidden pattern classes found (none on a pass); whether the second dialog closed (`dialog-closed`); `screens/e10-export-failed.png` |
 | E-14 | Checks `native_e2e/fixtures/listen_de_16k.wav` (two German sentences, Piper, 16 kHz mono) against the SHA-256 pinned in `rows/e14.py` before any app starts; starts its own app; Listen & translate: German → Mandarin (Simplified), *Microphone* "CABLE Output"; **Start listening (F8)**; waits until the page listens and the strip shows "Listen & translate running"; plays the WAV into "CABLE Input"; waits for two done rows in *Transcript* that two consecutive reads agree on; F9; waits for idle (**Start listening (F8)** enabled); checks that the app process has no WASAPI render session (no output stream was opened); closes the app | `name_matches` for the Microphone (never the name); SHA-256 of the translation texts (never the text); `render_sessions` count; `screens/e14-listen.png` with *Transcript* masked |
+| E-13 | CAP-0172 Text translation (its e2e plan row E-09, AC-37). Starts the app; in Settings › Audio devices selects "CABLE Input" as Speakers; sidebar **Text translation**; types the plan's German fixture text D-03 (two paragraphs) into *Source text*; **Translate**; waits for a result in *Translation* that two consecutive reads agree on (300 s); **Play translation**; waits for "Text translation running" in the strip; presses F9; waits until the strip is gone and the button reads **Replay**; checks both texts unchanged; closes the app | `name_matches` for the Speakers (never the name); result SHA-256 (never the text); `screens/e13-result.png`, `screens/e13-playing.png` with both panes masked |
 
 E-03 leaves the app open for E-10, so the export holds that session's log. E-10 reads the
 failure from the notice elements only: the notice history logs every posted notice title,
@@ -37,6 +38,9 @@ The PO chose the write-protected file after native run 44267851808.
 
 ## Privacy of the evidence
 
+- E-13 masks *Source text* and *Translation* in both screenshots whatever they show, and adds
+  the fixture lines and the result lines to the redaction secrets, so any stored copy fails
+  the scan.
 - Transcript texts stay in memory. The row records their SHA-256, and the redaction scan
   fails the run if any of them, with or without its language label, appears in a stored
   file.
@@ -52,8 +56,8 @@ The PO chose the write-protected file after native run 44267851808.
 
 ## Reviewing a run (e2e plan E-03, E-04)
 
-Read the five rows in `native-evidence.json`: each is `pass`, E-03, E-11 and E-14 use the method
-`automated-virtual-device`. Open the screenshots under `screens/`: every device name region
+Read the six rows in `native-evidence.json`: each is `pass`, E-03, E-11, E-14 and E-13 use the
+method `automated-virtual-device`. Open the screenshots under `screens/`: every device name region
 and both transcript panels are black rectangles. Run `python -m native_e2e verify <artifact-dir>`; it must pass.
 
 ## Troubleshooting
@@ -71,6 +75,10 @@ and both transcript panels are black rectangles. Run `python -m native_e2e verif
 | E-14 `start-listening` fails with `not-enabled` | A recognition or translation pack of German → Mandarin (Simplified) is missing, or the page shows another readiness block |
 | E-14 `two-done-rows` times out | The German model did not recognise the fixture through the cable, or the VAD closed fewer than two segments |
 | E-14 `no-render-stream` fails | The app opened an output stream during the session (`render_sessions=N`), or Windows audio sessions could not be read (the exception type) |
+| E-13 `speakers-cable-selected` fails | "CABLE Input" is missing from the Speakers list (T-02 also fails) |
+| E-13 `translation-shown` times out | The German → Mandarin (Simplified) translation pack is missing from the image (`scripts\download_models.py`) |
+| E-13 `strip-text-translation-running` fails with `play-disabled` | The Mandarin (Simplified) voice is missing from the image, or no usable Speakers |
+| E-13 `stopped-with-f9-idle` times out | F9 did not stop the playback, or **Replay** did not appear |
 | E-10 `file-written` fails | The save dialog did not close after Enter (a prompt is open), or the file-name field was not found |
 
 ## Meeting operator rows (CAP-0177)
