@@ -84,12 +84,12 @@ def test_ac33_unsupported_pair(tmp_path, spies, monkeypatch, request) -> None:  
 
 
 def test_ac33_missing_voice(tmp_path, spies, monkeypatch, request) -> None:  # noqa: F811
-    """Text-only output with a warning (also ``test_ac24_missing_voice_*``)."""
+    """The row shows the missing voice; no notice (CAP-0167 C §8, ``test_ac24_missing_*``)."""
     window = styled(tmp_path, monkeypatch, request, configure=without_mandarin_voice)
-    title, detail, _labels = shown(window)
-    assert title == "Warning: Not available: missing voice Mandarin (Simplified)"
-    assert "text only" in detail
-    assert not window.tts_checkbox.isEnabled() and window.start_button.isEnabled()
+    assert window.notices.live() == ()
+    language = window.voice_rows.languages()[1]
+    assert window.voice_rows.state_label(language).text() == "Voice missing"
+    assert not window.voice_rows.switch(language).isEnabled() and window.start_button.isEnabled()
     assert elided(window) == []
 
 
