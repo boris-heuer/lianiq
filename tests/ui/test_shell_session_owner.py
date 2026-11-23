@@ -66,7 +66,7 @@ def test_ac03_registry_lists_seven_entries_in_spec_order_with_settings_last() ->
         (WorkspaceId.CONVERSATION, "Conversation", EntryState.ENABLED),
         (WorkspaceId.MEETING, "Meeting", EntryState.ENABLED),
         (WorkspaceId.TEXT_TRANSLATION, "Text translation", EntryState.ENABLED),  # CAP-0172
-        (WorkspaceId.LISTEN, "Listen & translate", EntryState.PLANNED),
+        (WorkspaceId.LISTEN, "Listen & translate", EntryState.ENABLED),  # CAP-0170
         (WorkspaceId.CALL_BRIDGE, "Call Bridge", EntryState.EXPERIMENTAL),
         (WorkspaceId.LANGUAGE_PACKS, "Language packs", EntryState.ENABLED),
         (WorkspaceId.SETTINGS, "Settings", EntryState.ENABLED),
@@ -83,9 +83,7 @@ def test_ac03_registry_lists_seven_entries_in_spec_order_with_settings_last() ->
 
 
 def test_ac04_ac05_only_planned_entries_are_not_selectable() -> None:
-    assert [item.id for item in DEFAULT_ENTRIES if not item.selectable] == [
-        WorkspaceId.LISTEN,
-    ]
+    assert [item.id for item in DEFAULT_ENTRIES if not item.selectable] == []  # CAP-0170
     assert entry(CALL_BRIDGE).state is EntryState.EXPERIMENTAL and entry(CALL_BRIDGE).selectable
 
 
