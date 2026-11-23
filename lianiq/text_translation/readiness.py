@@ -61,6 +61,11 @@ def text_session(source: LanguageId, target: LanguageId, *, spoken: bool) -> Ses
     return SessionPair(LanguagePair(source, target), mode, fixed_source=source)
 
 
+def any_translation_ready(catalog: CapabilityCatalog) -> bool:
+    """A translation pack is installed for some configured edge (``TEXT_NO_PACK_HINT`` else)."""
+    return any(catalog.translation(edge).status.is_ready for edge in catalog.translation_paths())
+
+
 def text_readiness(
     source: LanguageId,
     target: LanguageId,

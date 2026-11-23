@@ -28,6 +28,7 @@ from lianiq.text_translation.readiness import (
     Speakers,
     TextReadiness,
     TranslateBlock,
+    any_translation_ready,
     text_readiness,
 )
 from lianiq.text_translation.state import DraftState, ResultState, TextResult
@@ -62,6 +63,7 @@ class TextSnapshot:
     replay: bool = False  # played == shown result_id
     status: str | None = None  # cancelled / failed text, never user text
     retry: bool = False  # Retry is offered after a cancel or failure
+    no_pack: bool = False  # no translation pack for any edge: TEXT_NO_PACK_HINT
 
 
 class TextTranslationController:
@@ -78,6 +80,7 @@ class TextTranslationController:
         resolve: Callable[[Sequence[str]], None] = lambda _keys: None,
         playback: TextPlayback | None = None,
         open_audio: Callable[[], None] = lambda: None,
+        open_packs: Callable[[], None] = lambda: None,
     ) -> None:
         self.registry = registry
         self._catalog, self._packs, self._speakers = catalog, packs, speakers
@@ -86,12 +89,13 @@ class TextTranslationController:
         self._notify, self._resolve = notify, resolve
         self.draft = DraftState(*languages)
         self.readiness = self._readiness()
+        self.no_pack = not any_translation_ready(catalog())
         self.translating = False
         self._running_revision: int | None = None  # revision of the running request
         self.status: str | None = None
         self.retry_offered = False
         self._closed = False
-        self.playback, self._open_audio = playback, open_audio
+        self.playback, self._open_audio, self._open_packs = playback, open_audio, open_packs
         if playback is not None:
             playback.on_change, playback.on_failed = self.render, self._playback_failed
 
@@ -146,6 +150,7 @@ class TextTranslationController:
     def refresh(self) -> None:
         """Readiness after a language, device or pack change; no restart needed."""
         self.readiness = self._readiness()
+        self.no_pack = not any_translation_ready(self._catalog())
         self._stop_stale()
         self.render()
 
@@ -209,7 +214,11 @@ class TextTranslationController:
 
     def _playback_failed(self, reason: FailureReason) -> None:
         if not self._closed:
-            self._notify(notices.playback_failed(REASONS[reason], self.where(), self._open_audio))
+            self._notify(
+                notices.playback_failed(
+                    REASONS[reason], self.where(), self._open_audio, self._open_packs
+                )
+            )
 
     def _cancelled(self, request_id: int) -> None:
         if not self._closed:
@@ -247,6 +256,7 @@ class TextTranslationController:
             and playback.played == current.result_id,
             status=self.status,
             retry=self.retry_offered and not self.translating,
+            no_pack=self.no_pack,
         )
 
     def render(self) -> None:
