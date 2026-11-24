@@ -235,3 +235,31 @@ def test_ac12_fixed_source_forces_the_recogniser_and_never_holds() -> None:
     assert pipeline.held_turns() == ()
     assert [(r.source_language, r.target_language) for r in results] == [(ZH, DE)] * 2
     assert [call[1] for call in translator.calls] == ["zh-Hans>de"] * 2
+
+
+EN = LanguageId("en")
+EN_AUTOMATIC = SessionPair(BUILTIN_REGISTRY.pair(EN, ZH), AUTOMATIC.mode)
+EN_TURNS = (
+    SyntheticTurn("A", "Good morning.", EN, ZH),
+    SyntheticTurn("B", "早上好。", ZH, EN),
+    SyntheticTurn("C", "Guten Morgen.", DE, EN),  # outside the pair: held, never translated
+)
+
+
+def test_cap0181_ac08_english_mandarin_routes_both_members_and_holds_german() -> None:
+    translator = RecordingTranslator()
+    pipeline = TranslationPipeline(SequenceRecognizer(EN_TURNS), translator, None, None)
+    results, held, errors = [], [], []
+    runner = PipelineRunner(
+        pipeline, on_result=results.append, on_error=errors.append, on_held=held.append
+    )
+    runner.start(EN_AUTOMATIC)
+    for _turn in EN_TURNS:
+        runner.submit(AUDIO)
+        runner._queue.join()
+
+    assert runner.stop() == 0
+    assert errors == []
+    assert [(r.source_language, r.target_language) for r in results] == [(EN, ZH), (ZH, EN)]
+    assert [call[1] for call in translator.calls] == ["en>zh-Hans", "zh-Hans>en"]
+    assert [(turn.transcript.language, turn.reason) for turn in held] == [(DE, "out_of_pair")]
