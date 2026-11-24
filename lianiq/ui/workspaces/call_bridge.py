@@ -16,6 +16,7 @@ CAP-0168 WI-03: failures and ``BridgeEvent`` errors are notices in the Call Brid
 
 from __future__ import annotations
 
+from functools import partial
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QObject, QTimer, Slot
@@ -25,6 +26,7 @@ from lianiq.audio.endpoints import list_audio_endpoints
 from lianiq.audio.playback_stream import EndpointPlaybackStream
 from lianiq.call_bridge.contracts import CallBridgeLanes, EndpointRole, LaneId
 from lianiq.call_bridge.controller import FullDuplexBridgeController
+from lianiq.call_bridge.echo_guard import EchoGuard
 from lianiq.call_bridge.inference_scheduler import InferenceScheduler
 from lianiq.call_bridge.translation_lane import TranslationLane
 from lianiq.languages.errors import ModeUnavailableError
@@ -39,6 +41,7 @@ from lianiq.ui.shell.workspaces import WorkspaceId
 # the names tests and scripts patch on this module are still looked up here.
 from lianiq.ui.workspaces.call_bridge_lifecycle import CALL_BRIDGE, CallBridgeLifecycle
 from lianiq.ui.workspaces.call_bridge_setup import CallBridgeSetup
+from lianiq.ui.workspaces.call_bridge_status import CallBridgeStatus
 
 if TYPE_CHECKING:
     from lianiq.ui.main_window import MainWindow
@@ -48,7 +51,7 @@ if TYPE_CHECKING:
 ROUTE_TEST_TEXT = {LanguageId("de"): "Kopfhörer-Test.", LanguageId("zh-Hans"): "通话麦克风测试。"}
 
 
-class CallBridgeWorkspace(CallBridgeSetup, CallBridgeLifecycle, QObject):
+class CallBridgeWorkspace(CallBridgeSetup, CallBridgeStatus, CallBridgeLifecycle, QObject):
     def __init__(self, host: MainWindow) -> None:
         super().__init__(host)
         self.host = host
@@ -72,6 +75,7 @@ class CallBridgeWorkspace(CallBridgeSetup, CallBridgeLifecycle, QObject):
         self.owner.register(WorkspaceId.CALL_BRIDGE, self.stop_call_bridge)
         self.owner.subscribe(self._session_changed)
         self.init_setup()  # readiness and route tests (CAP-0166 WI-02)
+        self.init_status()  # lane status lines and live call text (CAP-0166 WI-03)
 
     def route_test_phrase(self, language: LanguageId) -> str | None:
         return ROUTE_TEST_TEXT.get(language)
@@ -106,53 +110,33 @@ class CallBridgeWorkspace(CallBridgeSetup, CallBridgeLifecycle, QObject):
                 assignments[EndpointRole.CALL_MICROPHONE_RENDER]
             )
             inbound_playback = EndpointPlaybackStream(assignments[EndpointRole.LOCAL_HEADPHONES])
-            outbound_lane = TranslationLane(
-                LaneId.OUTBOUND,
-                lanes.outbound,
-                recognizer,
-                translator,
-                synthesizer,
-                outbound_playback.play,
-                scheduler,
-                max_pending_age_ms=self.config.call_bridge.max_pending_age_ms,
-                on_result=bridge.result.emit,
-                on_event=bridge.call_bridge_event.emit,
+            # Inbound playback marks the guard; outbound capture discards muted blocks.
+            guard = EchoGuard(self.config.call_bridge.guard_tail_ms)
+            outbound_lane, inbound_lane = (
+                TranslationLane(
+                    lane,
+                    lanes.edge(lane),
+                    recognizer,
+                    translator,
+                    synthesizer,
+                    playback.play,
+                    scheduler,
+                    max_pending_age_ms=self.config.call_bridge.max_pending_age_ms,
+                    on_result=bridge.call_bridge_result.emit,  # never the Conversation
+                    on_event=bridge.call_bridge_event.emit,
+                    echo_guard=guard,
+                )
+                for lane, playback in (
+                    (LaneId.OUTBOUND, outbound_playback),
+                    (LaneId.INBOUND, inbound_playback),
+                )
             )
-            inbound_lane = TranslationLane(
-                LaneId.INBOUND,
-                lanes.inbound,
-                recognizer,
-                translator,
-                synthesizer,
-                inbound_playback.play,
-                scheduler,
-                max_pending_age_ms=self.config.call_bridge.max_pending_age_ms,
-                on_result=bridge.result.emit,
-                on_event=bridge.call_bridge_event.emit,
+            outbound_capture = self._capture(
+                assignments, EndpointRole.LOCAL_MICROPHONE, outbound_lane.submit
             )
-            outbound_capture = EndpointCaptureStream(
-                assignments[EndpointRole.LOCAL_MICROPHONE],
-                self.config.audio,
-                outbound_lane.submit,
-                on_level=lambda level: bridge.call_bridge_level.emit(
-                    EndpointRole.LOCAL_MICROPHONE, level
-                ),
-                on_error=lambda message: bridge.call_bridge_capture_fault.emit(
-                    EndpointRole.LOCAL_MICROPHONE, message
-                ),
-                on_clip=lambda: self.relay.clipping.emit(EndpointRole.LOCAL_MICROPHONE),
-            )
-            inbound_capture = EndpointCaptureStream(
-                assignments[EndpointRole.CALL_SPEAKER_CAPTURE],
-                self.config.audio,
-                inbound_lane.submit,
-                on_level=lambda level: bridge.call_bridge_level.emit(
-                    EndpointRole.CALL_SPEAKER_CAPTURE, level
-                ),
-                on_error=lambda message: bridge.call_bridge_capture_fault.emit(
-                    EndpointRole.CALL_SPEAKER_CAPTURE, message
-                ),
-                on_clip=lambda: self.relay.clipping.emit(EndpointRole.CALL_SPEAKER_CAPTURE),
+            outbound_capture.muted = outbound_lane.echo_muted
+            inbound_capture = self._capture(
+                assignments, EndpointRole.CALL_SPEAKER_CAPTURE, inbound_lane.submit
             )
             controller = FullDuplexBridgeController(
                 assignments,
@@ -171,16 +155,18 @@ class CallBridgeWorkspace(CallBridgeSetup, CallBridgeLifecycle, QObject):
                 catalog=self.pipeline.catalog,
             )
             self.controller = controller
-            controller.start()
+            controller.start(self._generation)  # stale events are recognisable
         except ModeUnavailableError as exc:
             self.controller = None
             self.owner.mark_idle(self._generation)
+            self.stop_status()
             conversation.refresh_availability()
             self.host.show_unavailable(exc.missing, CALL_BRIDGE)
             return
         except Exception as exc:  # noqa: BLE001 - GUI boundary reports setup failures.
             self.controller = None
             self.owner.mark_idle(self._generation)
+            self.stop_status()
             conversation.refresh_availability()
             self.host.post_notice(
                 catalog.start_failed(
@@ -199,6 +185,17 @@ class CallBridgeWorkspace(CallBridgeSetup, CallBridgeLifecycle, QObject):
         conversation.set_session_controls_enabled(False)
         conversation.set_devices_enabled(False)
         self.host.statusBar().showMessage("Fail-closed full-duplex call bridge is active")
+
+    def _capture(self, assignments, role: EndpointRole, on_utterance) -> EndpointCaptureStream:
+        bridge = self.host.bridge
+        return EndpointCaptureStream(
+            assignments[role],
+            self.config.audio,
+            on_utterance,
+            on_level=partial(bridge.call_bridge_level.emit, role),
+            on_error=partial(bridge.call_bridge_capture_fault.emit, role),
+            on_clip=partial(self.relay.clipping.emit, role),
+        )
 
     @Slot()
     def _reconcile_call_bridge_endpoints(self) -> None:
