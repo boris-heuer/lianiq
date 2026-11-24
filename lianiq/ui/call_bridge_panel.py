@@ -78,7 +78,7 @@ class CallBridgePanel(QWidget):
         note.addWidget(self.experimental_label, 1)
         self.checklist_link = QLabel(f'<a href="checklist">{s.CB_CHECKLIST_LINK}</a>')
         self.checklist_link.setAccessibleName(s.CB_CHECKLIST_LINK)
-        self.checklist_link.linkActivated.connect(lambda _link: self.open_checklist())
+        self.checklist_link.linkActivated.connect(self.open_checklist)
         self.checklist_link.setVisible(self._checklist is not None and self._checklist.is_file())
         note.addWidget(self.checklist_link)
         outer.addLayout(note)
@@ -108,7 +108,7 @@ class CallBridgePanel(QWidget):
         actions.addWidget(self.stop_button)
         actions.addStretch(1)
 
-    def open_checklist(self) -> None:
+    def open_checklist(self, _link: str = "") -> None:
         """Open the local operator checklist in the default viewer (no network)."""
         if self._checklist is not None and self._checklist.is_file():
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._checklist)))
