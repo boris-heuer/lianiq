@@ -79,19 +79,22 @@ def _data() -> dict:
 def test_phase1_rows_follow_the_spec_order() -> None:
     assert PHASE1_ROWS == (
         "S-01", "S-02", "S-03", "S-04", "S-05", "C-04", "E-01", "E-11", "E-03", "E-10",
-        "E-14", "E-13", "E-15", "E-12", "C-03", "SHOT", "T-01", "T-02", "T-03", "T-04",
+        "E-14", "E-13", "E-15", "C-05", "C-06", "C-09", "E-12", "C-03", "SHOT", "T-01",
+        "T-02", "T-05", "T-03", "T-04",
     )  # fmt: skip
 
 
 def test_a_complete_receipt_serialises_to_a_valid_document() -> None:
     receipt = _receipt()
+    at = PHASE1_ROWS.index("SHOT")
     pending = dataclasses.replace(
-        receipt.rows[-5],
+        receipt.rows[at],
         status=Status.PENDING,
         reason="PO sign-off required",
         checks=(Check("ssim", Status.PENDING, "0.981"),),
     )
-    receipt = dataclasses.replace(receipt, rows=(*receipt.rows[:-5], pending, *receipt.rows[-4:]))
+    rows = (*receipt.rows[:at], pending, *receipt.rows[at + 1 :])
+    receipt = dataclasses.replace(receipt, rows=rows)
 
     data = json.loads(receipt.to_json())
 
