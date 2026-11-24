@@ -1,5 +1,7 @@
 """Shared steps of the UIA rows E-01, E-11, E-03, E-10 and E-13 (CAP-0174 contract §5).
 
+``tab_walk`` is the keyboard walk of the accessibility rows (spec §2.1.7).
+
 Every wait polls a state with ``uia.wait_for`` (default 20 s, model readiness 300 s); no row
 sleeps for a fixed time. The visible texts come from ``lianiq.ui.strings`` of the checked-out
 commit, imported when a row runs, so a renamed text fails that row only. ``screenshot`` writes
@@ -129,3 +131,46 @@ def screenshot(ctx: Any, app: Any, relative: str, name: str) -> tuple[Check, Art
     names = [*audio.endpoint_names(), *needles]
     artifact, masked = screens.capture(ctx, app, relative, names, combos)
     return check(name, True, f"masked={masked}"), artifact
+
+
+FOCUS_MOVE_S = 2.0  # how long a Tab may take to move the focus
+
+
+def _moved_focus(app: Any, previous: tuple | None) -> Node | None:
+    """The focused element once it differs from ``previous`` (or after the move timeout)."""
+    found: list[Node | None] = [None]
+
+    def moved() -> bool:
+        found[0] = app.focused()
+        return found[0] is not None and uia.element_key(found[0]) != previous
+
+    try:
+        uia.wait_for(moved, FOCUS_MOVE_S, POLL_S)
+    except TimeoutError:
+        pass  # a one-stop cycle, or no focus: the last read decides
+    return found[0]
+
+
+def tab_walk(app: Any, max_stops: int = 60) -> list[tuple[str, bool]]:
+    """Press Tab until the first focused element repeats (at most ``max_stops`` presses).
+
+    Returns (control type, has a non-empty name) per stop, in order; never a name, so a
+    device or a field value cannot reach the evidence. ``max_stops`` entries mean the
+    focus cycle did not close.
+    """
+    stops: list[tuple[str, bool]] = []
+    first: tuple | None = None
+    previous: tuple | None = None
+    for _ in range(max_stops):
+        app.keys("{TAB}")
+        node = _moved_focus(app, previous)
+        if node is None:
+            stops.append(("", False))
+            continue
+        key = uia.element_key(node)
+        if key == first:
+            break
+        first = key if first is None else first
+        previous = key
+        stops.append((node.control_type, bool(node.name.strip())))
+    return stops
