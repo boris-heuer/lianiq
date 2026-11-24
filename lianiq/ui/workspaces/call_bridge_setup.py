@@ -66,7 +66,12 @@ class CallBridgeSetup:
             availability = check_call_bridge(session, self.pipeline.catalog, EndpointRole)
         except Exception as exc:  # noqa: BLE001 - an invalid setting blocks Start, named.
             return (BlockingReason(ReadinessCode.MODE_UNAVAILABLE, None, str(exc)),)
-        return evaluate_readiness(
+        testing = (
+            (BlockingReason(ReadinessCode.RUNNING, None, s.CB_R_TESTING),)
+            if self.route_test_active()
+            else ()
+        )
+        return testing + evaluate_readiness(
             assignments,
             inventory,
             session,
@@ -76,6 +81,11 @@ class CallBridgeSetup:
             running=running,
             registry=self.pipeline.registry,
         )
+
+    def route_test_active(self) -> bool:
+        """A route test plays or waits for its answer: Start stays disabled (WI-02 advisory)."""
+        book = getattr(self, "route_tests", None)
+        return book is not None and any(book.state(path) not in _IDLE for path in LaneId)
 
     @Slot()
     def refresh_readiness(self) -> None:
@@ -129,6 +139,7 @@ class CallBridgeSetup:
     def _set_test(self, path: LaneId, state: RouteTestState, detail: str = "") -> None:
         self.route_tests.set(path, state, detail)
         self._show_test(path)
+        self.panel.refresh()  # Start follows whether a test is active
 
     @Slot(object)
     def _run_call_bridge_route_test(self, path: LaneId) -> None:
