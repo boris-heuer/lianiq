@@ -250,3 +250,15 @@ def test_invalid_provisioning_values_fail_the_load(
     path.write_text(json.dumps({"schema_version": 2, "provisioning": section}), encoding="utf-8")
     with pytest.raises(ValueError, match=message):
         AppConfig.load(path)
+
+
+def test_call_bridge_guard_tail_is_optional_validated_and_round_trips(tmp_path: Path) -> None:
+    # CAP-0166 spec §3.3: additive optional key, default 300 ms, never negative.
+    assert AppConfig.from_mapping({}).call_bridge.guard_tail_ms == 300
+    path = tmp_path / "settings.json"
+    config = AppConfig.from_mapping({"call_bridge": {"guard_tail_ms": 0}})
+    config.save(path)
+    assert AppConfig.load(path).call_bridge.guard_tail_ms == 0
+    for invalid in (-1, True, "300"):
+        with pytest.raises(ValueError, match="call_bridge.guard_tail_ms"):
+            AppConfig.from_mapping({"call_bridge": {"guard_tail_ms": invalid}})
