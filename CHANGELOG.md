@@ -6,6 +6,10 @@ All notable user-visible changes are documented here.
 
 ### Added
 
+- Call Bridge operator setup (`docs/call-bridge-operator-setup.md`) for the two-path page:
+  which side of two virtual cables goes where, the WeChat Desktop *Microphone* and *Speaker*
+  settings, the readiness list, the route tests with **Yes** / **No**, the live text, the echo
+  pause, Stop or F9 and device loss.
 - Language pack documentation: the README explains the Language packs page, the setup
   assistant, offline import from a `.zip` or folder, *Custom path*, the licence gate and how
   packs carry over to a new release; `MODEL_LICENSES.md` lists the licence of every pack;

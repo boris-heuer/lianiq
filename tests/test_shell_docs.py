@@ -74,7 +74,17 @@ def test_operator_setup_places_the_call_bridge_in_its_workspace() -> None:
     expected = [
         strings.NAV_CALL_BRIDGE,
         strings.NAV_EXPERIMENTAL,
-        "Enable explicit four-endpoint routing",
+        # CAP-0166 page labels; ``strings_call_bridge`` lands with WI-02 (lianiq#212).
+        "You → call",
+        "Call → you",
+        "Your microphone",
+        "Call microphone cable — playback side",
+        "Call speaker cable — recording side",
+        "Your headphones",
+        "Real-call checklist",
+        "Did your partner hear it?",
+        "Paused while you hear the translation",
+        "WeChat › Settings › Audio",
         "Start call bridge",
         "Stop call bridge",
         strings.STOP_ACTION,
@@ -86,6 +96,7 @@ def test_operator_setup_places_the_call_bridge_in_its_workspace() -> None:
         "troubleshooting.md",
     ]
     assert missing(OPERATOR_SETUP, expected) == []
+    assert "Enable explicit four-endpoint routing" not in text(OPERATOR_SETUP)
 
 
 def test_troubleshooting_quotes_every_shell_notice_and_recovery() -> None:
