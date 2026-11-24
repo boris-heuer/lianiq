@@ -14,10 +14,22 @@ os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
 from lianiq.audio.playback import play_wav
-from lianiq.config import LOCAL_CONFIG_PATH, PROJECT_ROOT, AppConfig, TtsConfig, VoiceEngineConfig
+from lianiq.config import (
+    LOCAL_CONFIG_PATH,
+    PROJECT_ROOT,
+    AppConfig,
+    TranslationConfig,
+    TtsConfig,
+    VoiceEngineConfig,
+)
 from lianiq.config_voice import VoicePreferences
 from lianiq.conversation.routing import TurnRouter
-from lianiq.languages.capabilities import MANIFEST_RELATIVE_PATH, CapabilityCatalog, ReadinessProbe
+from lianiq.languages.capabilities import (
+    MANIFEST_RELATIVE_PATH,
+    CapabilityCatalog,
+    DirectedEdge,
+    ReadinessProbe,
+)
 from lianiq.languages.registry import BUILTIN_REGISTRY, LanguageId, LanguageRegistry
 from lianiq.logging_setup import configure_logging
 from lianiq.meeting.controller import MeetingController, SharedEngines
@@ -31,6 +43,15 @@ from lianiq.tts.piper_engine import PiperEngine, piper_controls
 from lianiq.tts.sherpa_onnx_engine import UNLOADED_CONTROLS, SherpaOnnxEngine, SherpaVoiceSettings
 from lianiq.tts.voice_controls import VoiceControls
 from lianiq.tts.voice_router import VoiceEngine, VoiceRouter, bind_options
+
+
+def target_prefixes(translation: TranslationConfig) -> dict[DirectedEdge, str]:
+    """Marian target tokens of the configured edges that need one (CAP-0181 §3.3)."""
+    return {
+        DirectedEdge.from_key(key): edge.target_prefix
+        for key, edge in translation.edges.items()
+        if edge.target_prefix
+    }
 
 
 def build_synthesizer(
@@ -102,6 +123,7 @@ def build_pipeline(
             Glossary(AppConfig.resolve(config.translation.glossary_path)),
             cpu_threads=config.translation.cpu_threads,
             device=config.translation.device,
+            target_prefixes=target_prefixes(config.translation),
         )
 
     def synthesizer() -> VoiceRouter:
