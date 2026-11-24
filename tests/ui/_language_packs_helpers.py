@@ -29,7 +29,8 @@ from tests.packs.conftest import network_attempts  # noqa: F401
 
 STT, MT = "stt-faster-whisper-small", "mt-de-zh-hans"
 VOICE_DE = "tts-de-thorsten-medium"
-ALL = (STT, MT, "mt-zh-hans-de", VOICE_DE, "tts-zh-hans-aishell3")
+ALL = (STT, MT, "mt-zh-hans-de", "mt-en-zh-hans", "mt-zh-hans-en", VOICE_DE)
+ALL += ("tts-zh-hans-aishell3", "tts-en-us-ljspeech-high")
 PLENTY = 10**12
 
 
