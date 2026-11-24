@@ -18,7 +18,10 @@ records no acceptance time).
 | `stt-faster-whisper-small` | `Systran/faster-whisper-small` @ `536b066` | MIT | — |
 | `mt-de-zh-hans` | `Helsinki-NLP/opus-mt-de-zh` @ `cf77098` | Apache-2.0 | — |
 | `mt-zh-hans-de` | `Helsinki-NLP/opus-mt-zh-de` @ `799162f` | Apache-2.0 | — |
+| `mt-en-zh-hans` | `Helsinki-NLP/opus-mt-en-zh` @ `408d9bc` | Apache-2.0 | — |
+| `mt-zh-hans-en` | `Helsinki-NLP/opus-mt-zh-en` @ `cf10909` | CC BY 4.0 | Attribution required: OPUS-MT model by Helsinki-NLP (Jörg Tiedemann, Tatoeba-Challenge / OPUS-MT), CC BY 4.0; see THIRD_PARTY_NOTICES.md. |
 | `tts-de-thorsten-medium` | `rhasspy/piper-voices` `de_DE-thorsten-medium` @ `c10ece1` | MIT (repository); CC0 (Thorsten dataset, see the model card) | Keep the model card with the voice files. |
+| `tts-en-us-ljspeech-high` | `rhasspy/piper-voices` `en_US-ljspeech-high` @ `e534943` | MIT (repository); public domain (LJ Speech dataset, see the model card) | Keep the model card with the voice files. |
 | `tts-zh-hans-aishell3` | sherpa-onnx `vits-icefall-zh-aishell3` (archive SHA-256 `ab468db3`) | Apache-2.0 (icefall VITS recipe; AISHELL-3 dataset) | The archive contains no licence file; the provenance of the lexicon and the text-normalisation rules is still open (lianiq#81). |
 
 ## Mandarin text-to-speech: sherpa-onnx `vits-icefall-zh-aishell3`
