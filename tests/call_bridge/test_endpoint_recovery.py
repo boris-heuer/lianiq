@@ -122,3 +122,45 @@ def test_inventory_reconciliation_fails_closed_then_recovers(tmp_path) -> None:
     assert controller.lost_roles == frozenset()
     assert controller.state is BridgeState.RUNNING
     assert rx_capture.endpoint.runtime_index == 88
+
+
+def test_recovering_one_of_two_lost_lane_endpoints_keeps_the_lane_lost(tmp_path) -> None:
+    """WI-01 advisory: *Listening* only once the lane is whole again (CAP-0166 AC-11)."""
+    from lianiq.call_bridge.contracts import BridgeEventKind, LaneId
+    from lianiq.call_bridge.lane_status import LaneActivity, LaneStatusBook
+
+    assignments = {role: endpoint(role, index) for index, role in enumerate(EndpointRole)}
+    inbound, capture, events = FakeLane(LANES.inbound), RecoverablePort(), []
+    controller = FullDuplexBridgeController(
+        assignments,
+        FakeLane(LANES.outbound),
+        inbound,
+        RecoverablePort(),
+        capture,
+        on_event=events.append,
+        endpoint_ports={role: RecoverablePort() for role in EndpointRole},
+        session=SESSION,
+        catalog=ready_catalog(tmp_path, SESSION),
+    )
+    book = LaneStatusBook()
+    book.reset(5)
+    controller.start(generation=5)
+    controller.endpoint_lost(EndpointRole.CALL_SPEAKER_CAPTURE)
+    controller.endpoint_lost(EndpointRole.LOCAL_HEADPHONES)
+    del events[:]
+    controller.endpoint_recovered(
+        EndpointRole.CALL_SPEAKER_CAPTURE, assignments[EndpointRole.CALL_SPEAKER_CAPTURE]
+    )
+    endpoint_events = [e.category for e in events if e.kind is BridgeEventKind.ENDPOINT]
+    assert endpoint_events == ["endpoint_reconnecting", "endpoint_lost"]
+    assert inbound.available is False and capture.running is False
+    for event in events:
+        book.apply(event, "Headphones")
+    assert book.statuses[LaneId.INBOUND].activity is LaneActivity.DEVICE_LOST
+    assert book.statuses[LaneId.INBOUND].detail == "Headphones"
+    controller.endpoint_recovered(
+        EndpointRole.LOCAL_HEADPHONES, assignments[EndpointRole.LOCAL_HEADPHONES]
+    )
+    assert events[-1].category == "endpoint_recovered" and inbound.available is True
+    book.apply(events[-1])
+    assert book.statuses[LaneId.INBOUND].activity is LaneActivity.LISTENING
