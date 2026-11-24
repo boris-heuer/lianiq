@@ -52,7 +52,7 @@ def synthetic_registry() -> LanguageRegistry:
 # French entries with a 60-character name, diacritics and CJK, and an RTL entry.
 LONG_NAME = "English (fixture) with a display name sixty characters long."
 PRESENTATION_NAMES = {
-    "en": LONG_NAME,
+    "qad": LONG_NAME,  # private use: ``en`` is qualified and has built-in packs
     "es": "Español de México — señal, acción, pingüino",
     "fr": "Français (Québec) — « élève », œuvre, 中文名称",
     "qac": "العربية الفصحى",
@@ -73,7 +73,8 @@ def presentation_registry() -> LanguageRegistry:
         )
         for tag, name in PRESENTATION_NAMES.items()
     ]
-    return LanguageRegistry((builtin[LanguageId("de")], builtin[LanguageId("zh-Hans")], *fixtures))
+    qualified = (builtin[LanguageId(tag)] for tag in ("de", "en", "zh-Hans"))
+    return LanguageRegistry((*qualified, *fixtures))
 
 
 def write_model_directory(root: Path, relative: str, files: Mapping[str, bytes]) -> Path:
