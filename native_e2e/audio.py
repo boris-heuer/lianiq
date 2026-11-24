@@ -1,4 +1,4 @@
-"""The virtual cable for E-11 and E-03 (CAP-0174 contract §5, §6, §7.3 N-01).
+"""The virtual cable for E-11, E-03 and the cable-measured rows (CAP-0174 contract §5, §6).
 
 VB-Cable has two endpoints: the app records from "CABLE Output" (capture) and the row plays
 the N-01 test phrase into "CABLE Input" (render). PortAudio lists each endpoint once per host
@@ -8,6 +8,8 @@ legacy index, WASAPI for the name the app shows) and falls back to the first ent
 ``sounddevice`` (app lock) and numpy are imported lazily; the endpoint identities come from
 the app's own read-only registry reader. No function returns an endpoint name or identifier
 into the evidence: callers compare them or hand them to the redaction scan and the mask.
+``record_cable``, ``CableRecorder`` and ``speech_span`` measure what the app plays into the
+cable (spec §2.1.5): the samples stay in memory and only durations reach the evidence.
 """
 
 from __future__ import annotations
@@ -15,7 +17,7 @@ from __future__ import annotations
 import wave
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Self
 
 from native_e2e.context import CABLE_NAMES
 from native_e2e.evidence.sums import file_sha256
@@ -128,3 +130,98 @@ def _identities() -> list[Any]:
     from lianiq.audio.windows_endpoints import list_windows_endpoint_identities
 
     return list_windows_endpoint_identities()
+
+
+# Cable capture (spec §2.1.5): "CABLE Output" carries what the app plays into "CABLE Input".
+# Samples stay in memory; rows store durations only, never PCM.
+FRAME_S = 0.020
+SPEECH_RMS = 0.01  # about -40 dBFS on float samples in [-1, 1]
+
+
+def _capture_device() -> tuple[int, int]:
+    sd = _sd()
+    rows = devices()
+    index = _required(
+        pick_index(rows, CABLE_OUTPUT, "input", int(sd.default.hostapi)), "capture endpoint"
+    )
+    return index, int(float(rows[index]["default_samplerate"]))
+
+
+def record_cable(seconds: float) -> tuple[int, Any]:
+    """Record "CABLE Output" (shared mode) for ``seconds``: (rate, float32 mono samples)."""
+    sd = _sd()
+    index, rate = _capture_device()
+    frames = sd.rec(int(seconds * rate), samplerate=rate, channels=1, device=index, blocking=True)
+    return rate, frames.reshape(-1)
+
+
+def speech_span(
+    samples: Any, rate: int, threshold: float = SPEECH_RMS
+) -> tuple[float, float] | None:
+    """(first, last) seconds of the 20 ms frames whose RMS exceeds ``threshold``, else
+    ``None``; int16 samples are scaled to [-1, 1] first."""
+    import numpy
+
+    values = numpy.asarray(samples).reshape(-1)
+    if values.dtype.kind in "iu":
+        values = values.astype("float32") / 32768.0
+    size = max(1, int(rate * FRAME_S))
+    count = values.size // size
+    if count == 0:
+        return None
+    frames = values[: count * size].astype("float64").reshape(count, size)
+    loud = numpy.flatnonzero(numpy.sqrt(numpy.mean(frames * frames, axis=1)) > threshold)
+    if loud.size == 0:
+        return None
+    return float(loud[0] * size / rate), float((loud[-1] + 1) * size / rate)
+
+
+class CableRecorder:
+    """Background recording of "CABLE Output": ``start``, then ``mark`` (seconds into the
+    recording, for example at a key press), then ``stop`` → (rate, samples)."""
+
+    def __init__(self) -> None:
+        import threading
+
+        self._lock = threading.Lock()
+        self._chunks: list[Any] = []
+        self._frames = 0
+        self._stream: Any = None
+        self.rate = 0
+
+    def _callback(self, data: Any, frames: int, _time: Any, _status: Any) -> None:
+        with self._lock:
+            self._chunks.append(data[:, 0].copy())
+            self._frames += frames
+
+    def start(self) -> Self:
+        index, self.rate = _capture_device()
+        stream = _sd().InputStream(
+            samplerate=self.rate, channels=1, device=index, callback=self._callback
+        )
+        stream.start()
+        self._stream = stream
+        return self
+
+    def mark(self) -> float:
+        """Seconds of audio received so far (the timeline of the samples ``stop`` returns)."""
+        with self._lock:
+            return self._frames / self.rate if self.rate else 0.0
+
+    def stop(self) -> tuple[int, Any]:
+        import numpy
+
+        if self._stream is not None:
+            self._stream.stop()
+            self._stream.close()
+            self._stream = None
+        with self._lock:
+            chunks, self._chunks = self._chunks, []
+        samples = numpy.concatenate(chunks) if chunks else numpy.zeros(0, dtype="float32")
+        return self.rate, samples
+
+    def __enter__(self) -> Self:
+        return self.start()
+
+    def __exit__(self, *_exc: object) -> None:
+        self.stop()

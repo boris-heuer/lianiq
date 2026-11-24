@@ -1,4 +1,4 @@
-"""T-01..T-04: in-job cleanup after the app rows (contract §5; CAP-0168 T rows).
+"""T-01..T-05: in-job cleanup after the app rows (contract §5; CAP-0168 T rows).
 
 - T-01 restores ``config/settings.local.json`` from the S-03 backup, or deletes it when none
   existed; without an S-03 record it is ``blocked`` and leaves the file alone.
@@ -7,6 +7,9 @@
 - T-03 deletes ``%TEMP%\\lianiq-e2e`` after resetting its ACLs (E-10 denies writes on ``ro``).
 - T-04 removes the S-04 block rule through the admin helper ("reconnect the network") and
   confirms display scale 100 % and no Narrator.
+- T-05 (CAP-0174 AC-08, spec §2.1.1) points the checkout's ``models`` junction at the image's
+  ``models_dir`` again if a scratch-model row left it elsewhere, checks that it does and
+  deletes every recorded scratch folder. It runs before T-03.
 
 After the upload the host reverts the checkpoint; the next run's S-01 marker check proves it.
 """
@@ -16,7 +19,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 
-from native_e2e import admin, winenv
+from native_e2e import admin, models_swap, winenv
 from native_e2e.context import RunContext
 from native_e2e.evidence.model import Row
 from native_e2e.evidence.sums import file_sha256
@@ -74,7 +77,23 @@ def t04(ctx: RunContext) -> Row:
     return make_row("T-04", checks, reason="cleanup-failed")
 
 
-STEPS = (("T-01", t01), ("T-02", t02), ("T-03", t03), ("T-04", t04))
+def t05(ctx: RunContext) -> Row:
+    try:
+        restored = models_swap.restore(ctx)
+    except (OSError, RuntimeError, KeyError, ValueError) as error:
+        restored, detail = False, type(error).__name__
+    else:
+        detail = None
+    left = models_swap.delete_scratch(ctx)
+    checks = [
+        check("models-junction-targets-image", restored, detail),
+        check("scratch-folders-deleted", not left, f"left={len(left)}"),
+    ]
+    return make_row("T-05", checks, reason="models-not-restored")
+
+
+# T-05 before T-03: it must find the scratch folders that T-03's delete would remove.
+STEPS = (("T-01", t01), ("T-02", t02), ("T-05", t05), ("T-03", t03), ("T-04", t04))
 
 
 def run(ctx: RunContext) -> list[Row]:

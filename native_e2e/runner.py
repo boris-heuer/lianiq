@@ -1,8 +1,9 @@
 """Row order of one run (CAP-0174 spec §2.2.1 step 4, §2.3; contract §5).
 
 S-01 → S-02 → S-03 → (S-04 window opens) → S-05 → C-04 → E-01 → E-11 → E-03 → E-10
-→ E-14 → E-13 → E-15 → E-12 → C-03 → SHOT → (app left open is closed; S-04 window closes, S-04 recorded)
-→ T-01..T-04.
+→ E-14 → E-13 → E-15 → C-05 → C-06 → C-09 → E-12 → C-03 → SHOT → (app left open is closed;
+S-04 window closes, S-04 recorded) → T-01 → T-02 → T-05 → T-03 → T-04 (T-05 checks the
+models junction before T-03 deletes the scratch folders' parent).
 
 Rules: only a passing S-01 lets any later row run (fork commit, leftover marker). Without
 an S-03 backup the app rows, UIA rows included, do not run (CAP-0168: T-01 would be
@@ -21,6 +22,7 @@ from native_e2e.evidence.model import Row, Status
 from native_e2e.rows import (
     c03,
     c04,
+    c05,
     e01,
     e03,
     e10,
@@ -66,6 +68,9 @@ def _app_rows() -> tuple[tuple[str, Callable[[RunContext], Row]], ...]:
         ("E-14", e14.run),  # CAP-0170: starts and closes its own app
         ("E-13", e13.run),
         ("E-15", e15.run),
+        ("C-05", c05.c05),  # C-05, C-06, C-09: repository scripts
+        ("C-06", c05.c06),
+        ("C-09", c05.c09),
         ("E-12", e12.run),
         ("C-03", c03.run),
         ("SHOT", shot.run),

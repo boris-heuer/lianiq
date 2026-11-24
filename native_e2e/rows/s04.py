@@ -6,6 +6,7 @@ the counting window opens, and two probes check the helper's allow-list: one unl
 and one foreign path must both be rejected. ``finish`` runs after the last app row and counts
 WFP events 5156/5157 of that interpreter with a non-loopback address since ``begin``. Pass
 iff the rule was added, both probes were rejected and the count is 0. T-04 removes the rule.
+``count_since`` is the same count for one row's window (spec §2.1.6; no new verb).
 No check detail carries a path.
 """
 
@@ -67,3 +68,16 @@ def finish(ctx: RunContext) -> Row:
     detail = f"count={count.value}" if counted else (count.error or "unreadable")
     checks.append(check("non-loopback-attempts", counted and count.value == "0", detail))
     return make_row("S-04", checks, reason="offline-proof-failed")
+
+
+def now_iso() -> str:
+    """The current UTC time in the form ``wfp-count`` takes (``since`` of ``count_since``)."""
+    return datetime.now(UTC).isoformat(timespec="seconds")
+
+
+def count_since(ctx: RunContext, since_iso: str) -> int | None:
+    """Non-loopback connection events of the app interpreter since ``since_iso`` (the
+    ``wfp-count`` verb, as ``finish``); ``None`` when the helper gives no count."""
+    count = _ask("wfp-count", interpreter(), since_iso, timeout_s=COUNT_TIMEOUT_S)
+    value = count.value or ""
+    return int(value) if count.ok and value.isdigit() else None

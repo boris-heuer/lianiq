@@ -39,7 +39,7 @@ jobs:
     name: Native rows
     runs-on: [self-hosted, windows, win11-native-e2e]
     environment: native-e2e
-    timeout-minutes: 150
+    timeout-minutes: 240
     defaults:
       run:
         # The image has Windows PowerShell 5.1 only.

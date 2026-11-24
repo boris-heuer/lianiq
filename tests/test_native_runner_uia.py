@@ -28,7 +28,7 @@ def test_without_an_s03_backup_no_app_row_runs_but_teardown_does(
     calls: list[str] = []
     install(monkeypatch, calls, s03_status=status)
     rows = runner.execute(context(tmp_path, repo, "a" * 40))
-    assert calls == ["S-01", "S-02", "S-03", "T-01", "T-02", "T-03", "T-04"]
+    assert calls == ["S-01", "S-02", "S-03", "T-01", "T-02", "T-05", "T-03", "T-04"]
     assert not {"E-01", "E-11", "E-03", "E-10", "E-15"} & set(rows)
 
 

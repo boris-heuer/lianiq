@@ -190,7 +190,9 @@ Python do. Pass only when the host, the LAN address, example.com and the activat
    `Copy-VMFile`. The `e2e` logon task starts the runner with it
    ([`runner-logon.ps1`](../tools/native-e2e/guest/runner-logon.ps1)).
 3. **Approve** the run in GitHub (next section).
-4. **Wait.** The job runs the rows; the runner exits after its one job. The host script then
+4. **Wait.** The job runs the rows; the runner exits after its one job. The job timeout is
+   240 minutes: the automated PO rows (E-16..E-40, C-05, C-06, C-09) add about 25 app rows of 1–4
+   minutes each, so a full run can exceed the former 150 minutes. The host script then
    shuts the VM down, reverts it to `clean`, stops the proxy and prints the run URL and the
    SHA-256 of `native-evidence.json`. A copy of the artifact stays under
    `C:\ProgramData\lianiq-native-e2e\runs\<run-id>`.
