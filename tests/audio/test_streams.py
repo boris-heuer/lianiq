@@ -95,3 +95,23 @@ def test_playback_reports_start_and_end_around_the_audio_also_on_failure(monkeyp
         pass
 
     assert states == [True, ("play", 7), False, True, ("play", 7), False]
+
+
+def test_cap0166_ac12_muted_blocks_are_discarded_and_the_segmenter_resets() -> None:
+    """The outbound echo guard: a muted block never reaches the segmenter."""
+    utterances, muted = [], [True]
+    config = AudioConfig(chunk_ms=30, start_rms=0.02, end_silence_ms=90, min_speech_ms=60)
+    stream = EndpointCaptureStream(
+        endpoint(EndpointFlow.CAPTURE), config, utterances.append, muted=lambda: muted[0]
+    )
+    voiced = np.full(480, 0.1, dtype=np.float32)
+    silent = np.zeros(480, dtype=np.float32)
+    stream._pending = np.concatenate([voiced] * 4)
+    stream._consume_target_blocks()  # speech while inbound playback is audible
+    muted[0] = False
+    stream._pending = np.concatenate([silent] * 4)
+    stream._consume_target_blocks()
+    assert utterances == []  # the muted speech never became a turn
+    stream._pending = np.concatenate([voiced] * 4 + [silent] * 4)
+    stream._consume_target_blocks()
+    assert len(utterances) == 1  # unmuted speech still segments
