@@ -6,6 +6,12 @@ All notable user-visible changes are documented here.
 
 ### Added
 
+- English ↔ Mandarin (Simplified): English is a qualified language and the pair is offered
+  once its packs are installed. Three new offline packs on the Language packs page —
+  translation English → Mandarin (Simplified) (`mt-en-zh-hans`, Apache-2.0), Mandarin
+  (Simplified) → English (`mt-zh-hans-en`, CC BY 4.0) and the English (US) voice
+  `tts-en-us-ljspeech-high` (Piper LJSpeech) — and the recognition pack now lists English.
+  Existing settings gain the English defaults on load; German ↔ Mandarin is unchanged.
 - Language pack documentation: the README explains the Language packs page, the setup
   assistant, offline import from a `.zip` or folder, *Custom path*, the licence gate and how
   packs carry over to a new release; `MODEL_LICENSES.md` lists the licence of every pack;
