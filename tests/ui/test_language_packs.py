@@ -50,7 +50,7 @@ def test_ac34_the_empty_page_lists_every_pack_downloadable_and_planned_collapsed
     assert all(page.rows[p].primary_button.text() == strings.PACK_GET for p in ALL)
     assert page.layout.empty_hint.isVisible()
     assert page.layout.empty_hint.text() == strings.PACK_EMPTY_HINT
-    assert page.layout.planned_names == ["English", "Spanish", "French"]
+    assert page.layout.planned_names == ["Spanish", "French"]
     assert not page.layout.planned_list.isVisible()  # collapsed
     assert page.layout.folder_label.text().startswith("Models folder: ")
     row = page.rows[MT]
