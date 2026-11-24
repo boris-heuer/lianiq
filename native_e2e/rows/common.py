@@ -25,6 +25,9 @@ ROW_ACS: dict[str, tuple[str, ...]] = {
     "E-14": ("AC-31",),  # CAP-0170 AC-31 (Listen & translate); the others are CAP-0174 ACs
     "E-13": ("AC-37",),  # CAP-0172 Text translation (its spec §5)
     "E-15": ("AC-25",),  # CAP-0167 AC-25: spoken output (the receipt names the capability)
+    "C-05": ("AC-12",),  # C-05, C-06, C-09: code rows of the automated PO rows (spec §2.2)
+    "C-06": ("AC-12",),
+    "C-09": ("AC-12",),
     "E-12": ("AC-12",),
     "C-03": ("AC-12",),
     "SHOT": ("AC-13",),
@@ -32,6 +35,7 @@ ROW_ACS: dict[str, tuple[str, ...]] = {
     "T-02": ("AC-08",),
     "T-03": ("AC-08",),
     "T-04": ("AC-08",),
+    "T-05": ("AC-08",),
 }
 
 
