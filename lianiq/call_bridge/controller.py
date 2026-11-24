@@ -35,7 +35,12 @@ def check_call_bridge(
     return check(session, catalog, devices)
 
 
+_OUTBOUND_ROLES = frozenset({EndpointRole.LOCAL_MICROPHONE, EndpointRole.CALL_MICROPHONE_RENDER})
+
+
 class LanePort(Protocol):
+    generation: int  # set by the controller at each start; stamped on the lane's events
+
     @property
     def edge(self) -> DirectedEdge: ...
 
@@ -88,14 +93,23 @@ class FullDuplexBridgeController:
         self.endpoint_ports = dict(endpoint_ports or {})
         self._lost_roles: set[EndpointRole] = set()
         self.state = BridgeState.STOPPED
+        self.generation = 0  # the current start generation, stamped on every event
 
     @property
     def lost_roles(self) -> frozenset[EndpointRole]:
         return frozenset(self._lost_roles)
 
-    def start(self) -> None:
+    def start(self, generation: int | None = None) -> None:
+        """Start both lanes; ``generation`` (default: the previous one + 1) stamps every event.
+
+        The Call Bridge workspace passes its ``ActiveSessionOwner`` generation, so stale
+        events of an earlier start are recognisable (CAP-0166 AC-08).
+        """
         if self.state is BridgeState.RUNNING:
             return
+        self.generation = self.generation + 1 if generation is None else generation
+        for lane in (self.outbound_lane, self.inbound_lane):
+            lane.generation = self.generation
         self._set_state(BridgeState.VALIDATING_ENDPOINTS)
         try:
             # Fail closed before any lane or capture starts, naming every missing item.
@@ -161,6 +175,8 @@ class FullDuplexBridgeController:
         if endpoint.flow is not configured.flow:
             raise ValueError("Recovered endpoint flow does not match configured endpoint")
         port = self.endpoint_ports.get(role)
+        lane_id = LaneId.OUTBOUND if role in _OUTBOUND_ROLES else LaneId.INBOUND
+        self._emit(lane_id, BridgeEventKind.ENDPOINT, "endpoint_reconnecting", "lane_reconnecting")
         if port is not None:
             port.rebind(endpoint)
         self.assignments[role] = endpoint
@@ -209,4 +225,4 @@ class FullDuplexBridgeController:
         message: str,
     ) -> None:
         if self.on_event:
-            self.on_event(BridgeEvent(lane_id, kind, category, message))
+            self.on_event(BridgeEvent(lane_id, kind, category, message, None, self.generation))
