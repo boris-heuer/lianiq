@@ -81,3 +81,5 @@ CB_HELP_IN = (
 )
 CB_READINESS = "Before you can start"  # accessible name of the readiness list
 CB_TEXT_EMPTY = "Nothing translated yet."
+CB_TEXT_TITLE = "Live call text"  # label and accessible name of the live text view
+CB_R_TESTING = "Finish or cancel the route test first"
