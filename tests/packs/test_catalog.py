@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -16,13 +17,18 @@ from lianiq.languages.registry import Availability
 from lianiq.packs.catalog import BUILTIN_CATALOG_PATH, PackCatalog, PackKind
 from lianiq.packs.errors import PackCatalogError, UnknownPackError
 
+# SHA-256 of the five German/Mandarin entries at f0506b1 (canonical JSON, sorted keys).
+BASELINE_DIGEST = "5cf7a0e257cd747c51065eabc561482648c7af455303de4b4868bd3b4d259dd6"
 HEX64 = re.compile(r"[0-9a-f]{64}")
 BUILTIN_IDS = (
     "stt-faster-whisper-small",
     "mt-de-zh-hans",
     "mt-zh-hans-de",
+    "mt-en-zh-hans",
+    "mt-zh-hans-en",
     "tts-de-thorsten-medium",
     "tts-zh-hans-aishell3",
+    "tts-en-us-ljspeech-high",
 )
 
 
@@ -31,13 +37,13 @@ def builtin() -> PackCatalog:
     return PackCatalog.load(BUILTIN_CATALOG_PATH, BUILTIN_REGISTRY)
 
 
-def test_ac30_builtin_catalog_lists_the_five_first_stage_packs(builtin: PackCatalog) -> None:
+def test_ac30_builtin_catalog_lists_the_builtin_packs(builtin: PackCatalog) -> None:
     assert BUILTIN_CATALOG_PATH.name == "builtin_catalog.json"
     assert BUILTIN_CATALOG_PATH.parent == Path(__file__).resolve().parents[2] / "lianiq/packs"
     assert tuple(pack.id for pack in builtin.packs()) == BUILTIN_IDS
     assert all(pack.version == "1" for pack in builtin.packs())
     kinds = [pack.kind for pack in builtin.packs()]
-    assert kinds == [PackKind.RECOGNITION, *[PackKind.TRANSLATION] * 2, *[PackKind.VOICE] * 2]
+    assert kinds == [PackKind.RECOGNITION, *[PackKind.TRANSLATION] * 4, *[PackKind.VOICE] * 3]
     assert builtin.get("tts-zh-hans-aishell3").archive is not None
 
 
@@ -57,7 +63,7 @@ def test_ac30_provides_are_qualified_registry_ids_and_unique(builtin: PackCatalo
                 assert definition.availability is Availability.QUALIFIED
             assert (pack.kind, subject) not in seen
             seen.add((pack.kind, subject))
-    assert len({pack.root for pack in builtin.packs()}) == 5
+    assert len({pack.root for pack in builtin.packs()}) == len(BUILTIN_IDS)
 
 
 def test_ac30_urls_are_https_and_digests_are_64_hex(builtin: PackCatalog) -> None:
@@ -88,12 +94,12 @@ def test_ac30_roots_equal_the_default_settings_paths(builtin: PackCatalog) -> No
     stt = builtin.get("stt-faster-whisper-small")
     assert stt.root == config.speech_to_text.model_path == settings["speech_to_text"]["model_path"]
     assert set(stt.provides) == set(config.speech_to_text.languages)
-    for pack_id in ("mt-de-zh-hans", "mt-zh-hans-de"):
+    for pack_id in ("mt-de-zh-hans", "mt-zh-hans-de", "mt-en-zh-hans", "mt-zh-hans-en"):
         pack = builtin.get(pack_id)
         (key,) = pack.provides
         assert pack.root == config.translation.edges[key].model_path
         assert pack.root == settings["translation"]["edges"][key]["model_path"]
-    for pack_id in ("tts-de-thorsten-medium", "tts-zh-hans-aishell3"):
+    for pack_id in ("tts-de-thorsten-medium", "tts-zh-hans-aishell3", "tts-en-us-ljspeech-high"):
         pack = builtin.get(pack_id)
         (language,) = pack.provides
         voice = config.tts.voices[language]
@@ -120,17 +126,43 @@ def test_ac30_files_match_the_download_script_pins(builtin: PackCatalog) -> None
     assert marian.upstream_revision.startswith("cf77098")
 
 
+def test_ac02_english_packs_and_unchanged_baseline_entries(builtin: PackCatalog) -> None:
+    expected = {
+        "mt-en-zh-hans": ("en>zh-Hans", "models/opus-mt-en-zh", "Apache-2.0"),
+        "mt-zh-hans-en": ("zh-Hans>en", "models/opus-mt-zh-en", "CC BY 4.0"),
+        "tts-en-us-ljspeech-high": ("en", "models/piper-en_US-ljspeech-high", "MIT (repository)"),
+    }
+    for pack_id, (subject, root, licence) in expected.items():
+        pack = builtin.get(pack_id)
+        assert (pack.provides, pack.root) == ((subject,), root)
+        assert pack.licence.startswith(licence)
+    assert "Tiedemann" in builtin.get("mt-zh-hans-en").use_constraints
+    voice = builtin.get("tts-en-us-ljspeech-high")
+    assert [item.path for item in voice.files] == [
+        "en_US-ljspeech-high.onnx",
+        "en_US-ljspeech-high.onnx.json",
+        "en_US-ljspeech-high.MODEL_CARD.md",
+    ]
+    assert builtin.get("stt-faster-whisper-small").provides == ("de", "zh-Hans", "en")
+    entries = json.loads(BUILTIN_CATALOG_PATH.read_bytes())["packs"]
+    baseline = [entry for entry in entries if entry["id"] not in expected]
+    baseline[0]["provides"].remove("en")  # the recognition pack, first in the file
+    canonical = json.dumps(baseline, sort_keys=True, ensure_ascii=False).encode()
+    assert hashlib.sha256(canonical).hexdigest() == BASELINE_DIGEST
+
+
 def test_for_requirement_maps_capabilities_and_devices(builtin: PackCatalog) -> None:
     def pack_for(kind: RequirementKind, subject: str | None = None) -> str | None:
         pack = builtin.for_requirement(Requirement(kind, subject))
         return None if pack is None else pack.id
 
-    de, zh = (definition.id for definition in BUILTIN_REGISTRY.languages()[:2])
+    de, zh = (BUILTIN_REGISTRY.get(tag).id for tag in ("de", "zh-Hans"))
     assert pack_for(RequirementKind.RECOGNITION, de) == "stt-faster-whisper-small"
     assert pack_for(RequirementKind.RECOGNITION, zh) == "stt-faster-whisper-small"
     assert pack_for(RequirementKind.TRANSLATION, DirectedEdge(zh, de).key) == "mt-zh-hans-de"
     assert pack_for(RequirementKind.VOICE, de) == "tts-de-thorsten-medium"
-    assert pack_for(RequirementKind.VOICE, "en") is None
+    assert pack_for(RequirementKind.VOICE, "en") == "tts-en-us-ljspeech-high"
+    assert pack_for(RequirementKind.VOICE, "es") is None
     for kind in (RequirementKind.MICROPHONE, RequirementKind.PLAYBACK):
         assert pack_for(kind) is None
     assert pack_for(RequirementKind.CALL_ENDPOINTS, "local_microphone") is None
@@ -158,10 +190,10 @@ def _file(entry: dict[str, Any], **changes: Any) -> dict[str, Any]:
 
 ARCHIVE = {"url": "https://example.test/a.tar.bz2", "size": 3, "sha256": "a" * 64, "top_level": "a"}
 INVALID: dict[str, list[dict[str, Any]]] = {
-    "planned language": [_set(voice_entry(), "provides", ["en"])],
+    "planned language": [_set(voice_entry(), "provides", ["es"])],
     "unknown language": [_set(voice_entry(), "provides", ["xx"])],
     "non-canonical id": [_set(voice_entry(), "provides", ["DE"])],
-    "edge to a planned language": [_set(mt_entry(), "provides", ["de>en"])],
+    "edge to a planned language": [_set(mt_entry(), "provides", ["de>es"])],
     "malformed edge": [_set(mt_entry(), "provides", ["de"])],
     "no provides": [_set(mt_entry(), "provides", [])],
     "root outside models": [_set(mt_entry(), "root", "elsewhere/opus")],
