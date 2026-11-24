@@ -197,6 +197,9 @@ class CallPathBox(QGroupBox):
             combo.setEnabled(enabled)
 
     def set_lane_status(self, text: str) -> None:
+        """The accessible name changes with the text, so it is announced; focus stays."""
+        if text == self.status_label.text():
+            return
         self.status_label.setText(text)
         self.status_label.setAccessibleName(f"{s.CB_LANE_STATUS}: {text}")
 
