@@ -139,7 +139,7 @@ The same two settings apply to any call application. Each path box repeats them 
   strip shows "Call Bridge running" in every workspace.
 - **Device loss.** If an endpoint disappears, only the affected lane shows
   *Device lost — <device>* with a notice at the top of the page, for example
-  "Call Bridge outbound lane failed closed: …" with "This lane is muted; the other lane
+  "Call Bridge · You → call lane failed closed: Device lost — …" with "This lane is muted; the other lane
   continues." No default device is opened. The lane recovers (*Reconnecting…*, then *Listening*)
   only when the same device identity returns; otherwise stop and select the device again.
 
