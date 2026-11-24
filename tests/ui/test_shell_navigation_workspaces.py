@@ -57,8 +57,12 @@ def test_ac05_call_bridge_is_experimental_with_explicit_endpoint_selectors_only(
 # AC-08 ------------------------------------------------------------------------------------
 
 
-def settled_synthesis(window, spy_set) -> int:
-    """The synthesis count once the spoken output of the filled turns is idle and stable."""
+def settled_synthesis(window, spy_set, turns: int) -> int:
+    """The synthesis count once every filled turn is spoken and the output is idle.
+
+    Waits for the expected call count itself: a count that is only stable for a moment can
+    still be one short while the last turn is queued on the synthesis thread.
+    """
     from PySide6.QtTest import QTest
 
     from lianiq.conversation.spoken_output import PlaybackState
@@ -67,14 +71,14 @@ def settled_synthesis(window, spy_set) -> int:
         return len(spy_set.synthesizer.calls) if spy_set.synthesizer else 0
 
     spoken = getattr(window.pipeline, "spoken", None)
-    deadline = time.monotonic() + 5
-    last = -1
+    expected = turns if spy_set.synthesizer else 0
+    deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
         idle = spoken is None or spoken.state is PlaybackState.IDLE
-        if idle and count() == last:
-            return last
-        last = count()
-        QTest.qWait(100)
+        if idle and count() >= expected:
+            break
+        QTest.qWait(50)
+    QTest.qWait(200)  # nothing more may follow the last turn
     return count()
 
 
@@ -98,7 +102,8 @@ def test_ac08_navigating_away_and_back_keeps_turns_scroll_selection_and_pair(
     cursor.setPosition(12, QTextCursor.MoveMode.KeepAnchor)
     source.setTextCursor(cursor)
     calls = []
-    spoken = settled_synthesis(window, spies)  # the 12 turns, spoken after their text
+    spoken = settled_synthesis(window, spies, 12)  # the 12 turns, spoken after their text
+    assert spoken == (12 if spies.synthesizer else 0)
     capture = window.capture
     monkeypatch.setattr(capture, "start", lambda: calls.append("start"))
     monkeypatch.setattr(capture, "stop", lambda: calls.append("stop"))
