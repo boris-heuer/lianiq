@@ -25,11 +25,13 @@ from tests.ui._language_packs_helpers import (  # noqa: F401 - the fixtures are 
     open_page,
     packs_network,
     packs_shaped,
+    state,
     wait_until,
 )
 
 TEXT = WorkspaceId.TEXT_TRANSLATION
 PACKS = WorkspaceId.LANGUAGE_PACKS
+JOB_TIMEOUT = 30.0
 
 
 def text_page(window):
@@ -180,9 +182,16 @@ def test_ac32_a_pack_job_makes_translate_ready_without_restart(window, spies) ->
     assert controller.readiness.translate is TranslateBlock.PACK_MISSING and controller.no_pack
     old = window.pipeline.text_translator()  # the adapter cached before the job
     page = open_page(window)
-    download(page, MT)
+    download(page, MT, wait=False)
+    # Await the pack job itself, then the status rescan; a loaded CI runner can take
+    # longer than the helper's default five seconds.
+    assert wait_until(lambda: page.runner.current is None, timeout=JOB_TIMEOUT)
+    assert page.runner.last_error is None
+    assert wait_until(lambda: state(page, MT) == strings.PACK_STATE_VALIDATED, timeout=JOB_TIMEOUT)
     # The CAP-0171 refresh hook updates the page while Language packs is still shown.
-    assert wait_until(lambda: controller.readiness.translate is TranslateBlock.NONE)
+    assert wait_until(
+        lambda: controller.readiness.translate is TranslateBlock.NONE, timeout=JOB_TIMEOUT
+    )
     assert not controller.no_pack
     workspace = text_page(window)
     assert workspace.result_edit.placeholderText() == strings.TEXT_RESULT_EMPTY
