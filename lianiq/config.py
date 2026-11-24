@@ -14,6 +14,7 @@ from lianiq.config_migration import (
     read_settings_file,
 )
 from lianiq.config_provisioning import ProvisioningConfig, provisioning_from_mapping
+from lianiq.config_translation import TranslationEdgeConfig, edges_from_mapping, union_languages
 from lianiq.config_voice import VoiceEngineConfig, VoiceOutputPreference, output_preferences
 
 PROJECT_ROOT = (
@@ -82,24 +83,19 @@ class AudioConfig:
 @dataclass(slots=True)
 class SpeechToTextConfig:
     model_path: str = "models/faster-whisper-small"
-    languages: list[str] = field(default_factory=lambda: ["de", "zh-Hans"])
+    languages: list[str] = field(default_factory=lambda: ["de", "zh-Hans", "en"])
     device: str = "auto"
     compute_type: str = "int8"
     cpu_threads: int = 8
     beam_size: int = 1
 
 
-@dataclass(slots=True)
-class TranslationEdgeConfig:
-    """One directed translation edge; its reverse edge is configured separately."""
-
-    model_path: str
-
-
 def _default_edges() -> dict[str, TranslationEdgeConfig]:
     return {
         "de>zh-Hans": TranslationEdgeConfig("models/opus-mt-de-zh"),
         "zh-Hans>de": TranslationEdgeConfig("models/opus-mt-zh-de"),
+        "en>zh-Hans": TranslationEdgeConfig("models/opus-mt-en-zh", ">>cmn_Hans<<"),
+        "zh-Hans>en": TranslationEdgeConfig("models/opus-mt-zh-en"),
     }
 
 
@@ -113,14 +109,7 @@ class TranslationConfig:
     glossary_path: str = "config/glossary.json"
 
     def __post_init__(self) -> None:
-        self.edges = {
-            key: edge if isinstance(edge, TranslationEdgeConfig) else TranslationEdgeConfig(**edge)
-            for key, edge in self.edges.items()
-        }
-        for key in self.edges:
-            source, separator, target = key.partition(">")
-            if not separator or not source or not target or ">" in target:
-                raise ValueError(f"translation.edges key must be '<source>><target>': {key!r}")
+        self.edges = edges_from_mapping(self.edges)
 
 
 @dataclass(slots=True)
@@ -132,6 +121,7 @@ class TtsConfig:
         default_factory=lambda: {
             "de": "models/piper/de_DE-thorsten-medium.onnx",
             "zh-Hans": "models/sherpa/vits-icefall-zh-aishell3",
+            "en": "models/piper-en_US-ljspeech-high/en_US-ljspeech-high.onnx",
         }
     )
     # Per-language engine selection (CAP-0169 WI-09); languages without an entry use Piper.
@@ -139,6 +129,7 @@ class TtsConfig:
         default_factory=lambda: {
             "de": VoiceEngineConfig("piper"),
             "zh-Hans": VoiceEngineConfig("sherpa-onnx", speaker_id=20, length_scale=1.15),
+            "en": VoiceEngineConfig("piper"),
         }
     )
     length_scale: float = 1.0
@@ -239,12 +230,18 @@ class AppConfig:
 
     @classmethod
     def from_mapping(cls, raw: dict[str, Any]) -> AppConfig:
-        """Build the configuration from a (possibly partial) schema v2 mapping."""
+        """Build the configuration from a (possibly partial) schema v2 mapping.
+
+        Saved recognition languages gain the missing defaults (CAP-0181 spec §3.2).
+        """
+        stt = dict(raw.get("speech_to_text", {}))
+        if "languages" in stt:
+            stt["languages"] = union_languages(stt["languages"], SpeechToTextConfig().languages)
         return cls(
             schema_version=raw.get("schema_version", SCHEMA_VERSION),
             languages=LanguagesConfig(**raw.get("languages", {})),
             audio=AudioConfig(**raw.get("audio", {})),
-            speech_to_text=SpeechToTextConfig(**raw.get("speech_to_text", {})),
+            speech_to_text=SpeechToTextConfig(**stt),
             translation=TranslationConfig(**raw.get("translation", {})),
             tts=TtsConfig(**raw.get("tts", {})),
             ui=UiConfig(**raw.get("ui", {})),
