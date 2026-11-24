@@ -136,9 +136,10 @@ NOTICE_TURNS_DROPPED = (
     "and were dropped."
 )
 NOTICE_HELD_DISCARDED = "{count} turn(s) with an unclear language were discarded"
-NOTICE_BRIDGE_FAILED = "Call Bridge {lane} lane failed closed: {category}"
-NOTICE_BRIDGE_DROPPED = "Call Bridge dropped stale work: {category}"
-NOTICE_BRIDGE_CAPTURE = "Call Bridge capture muted: {reason}"
+# ``{bridge}``: "Call Bridge", or "Call Bridge · <lane direction>" (CAP-0166 §4.3).
+NOTICE_BRIDGE_FAILED = "{bridge} lane failed closed: {category}"
+NOTICE_BRIDGE_DROPPED = "{bridge} dropped stale work: {category}"
+NOTICE_BRIDGE_CAPTURE = "{bridge} capture muted: {reason}"
 NOTICE_BRIDGE_RECOVERY = "Endpoint recovery check failed: {reason}"
 NOTICE_SPEAKERS = "Speakers"
 NOTICE_MICROPHONE = "Microphone"
