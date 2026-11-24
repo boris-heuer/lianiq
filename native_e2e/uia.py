@@ -39,10 +39,18 @@ def wait_for(predicate: Callable[[], bool], timeout_s: float, poll_s: float = 0.
         time.sleep(poll_s)
 
 
-def launch_app(python: str, repo: Path) -> subprocess.Popen[bytes]:
-    """Start ``python -m lianiq`` in the signed-in session, without the setup assistant."""
+def launch_app(
+    python: str, repo: Path, *, setup_assistant: bool = False
+) -> subprocess.Popen[bytes]:
+    """Start ``python -m lianiq`` in the signed-in session, by default without the setup
+    assistant (``--no-setup-assistant``); ``setup_assistant=True`` is a first launch."""
+    args = (
+        [python, "-m", "lianiq"]
+        if setup_assistant
+        else [python, "-m", "lianiq", "--no-setup-assistant"]
+    )
     return subprocess.Popen(
-        [python, "-m", "lianiq", "--no-setup-assistant"],
+        args,
         cwd=repo,
         env=child_env(),
         stdout=subprocess.DEVNULL,
@@ -187,6 +195,24 @@ def read_node(element: Any, parents: tuple[str, ...] = ()) -> Node:
         scroll=scroll,
         handle=element,
     )
+
+
+def focused() -> Node | None:
+    """The element that has the keyboard focus now (UIA ``GetFocusedElement``), if any."""
+    from pywinauto.controls.uiawrapper import UIAWrapper
+    from pywinauto.uia_defines import IUIA
+    from pywinauto.uia_element_info import UIAElementInfo
+
+    element = _quiet(lambda: IUIA().iuia.GetFocusedElement())
+    if element is None:
+        return None
+    return _quiet(lambda: read_node(UIAWrapper(UIAElementInfo(element))))
+
+
+def element_key(node: Node) -> tuple:
+    """A stable identity of ``node``: its UIA runtime id, else its read properties."""
+    runtime = _quiet(lambda: tuple(node.handle.element_info.runtime_id))
+    return runtime or (node.automation_id, node.control_type, node.name, node.rect)
 
 
 def snapshot(root: Any) -> list[Node]:
