@@ -56,7 +56,8 @@ class FakeCaptureStream:
         self, endpoint, _config, on_utterance, on_level=None, on_error=None, on_clip=None
     ) -> None:
         self.endpoint = endpoint
-        self.on_level, self.on_clip = on_level, on_clip
+        self.on_level, self.on_clip, self.on_error = on_level, on_clip, on_error
+        self.muted = None  # the outbound echo-guard hook, set by the workspace
         self.on_utterance = on_utterance
         self.running = False
         FakeCaptureStream.instances.append(self)
@@ -115,6 +116,7 @@ def build_call_bridge_window(
     config = config_without_stt_and_voices(tmp_path)
     provision_stt_and_voices(tmp_path, config)
     config.call_bridge.local_language = local_language
+    config.call_bridge.guard_tail_ms = 0  # fake playback is instant; echo tests set their own
     if configure is not None:
         configure(config, tmp_path)
     pipeline = build_pipeline(config, registry or BUILTIN_REGISTRY, probe=ReadinessProbe(tmp_path))
