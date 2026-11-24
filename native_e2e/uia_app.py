@@ -8,7 +8,7 @@ return until the dialog closes), ``keys``
 (SendInput to the focused window), ``choose`` (expand a combo box, click an item), ``window_nodes``
 (a top-level window of the app such as the export dialog), ``type_into``, ``processes``
 (psutil, for the E-01 model-file check), ``popup_nodes`` and ``click`` (dialogs and popup
-menus, for ``packs_import``), ``focused`` (``rows.ui.tab_walk``) and ``close``. ``launch``
+menus, for ``packs_import``), ``focused`` (``rows.ui.tab_walk``), ``set_value`` (a slider, E-28) and ``close``. ``launch``
 starts with ``--no-setup-assistant`` unless ``setup_assistant=True`` (first-run rows: the
 local settings file is deleted first); ``settings_reset`` resets it to S-03's.
 E-03 keeps its app in ``ctx.state["app"]`` for E-10; ``close_open`` closes whatever is left
@@ -131,6 +131,10 @@ class App:
         """A real click on ``node`` without focusing the main window first (a popup menu
         closes when the main window is activated)."""
         node.handle.click_input()
+
+    def set_value(self, node: Node, value: float) -> None:
+        """Set a slider through UIA RangeValue (Qt applies it as a user change)."""
+        node.handle.iface_range_value.SetValue(value)
 
     def focused(self) -> Node | None:
         return uia.focused()
