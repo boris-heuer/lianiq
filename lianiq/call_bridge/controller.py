@@ -36,6 +36,7 @@ def check_call_bridge(
 
 
 _OUTBOUND_ROLES = frozenset({EndpointRole.LOCAL_MICROPHONE, EndpointRole.CALL_MICROPHONE_RENDER})
+_INBOUND_ROLES = frozenset({EndpointRole.CALL_SPEAKER_CAPTURE, EndpointRole.LOCAL_HEADPHONES})
 
 
 class LanePort(Protocol):
@@ -169,6 +170,11 @@ class FullDuplexBridgeController:
         self._emit(lane_id, BridgeEventKind.ENDPOINT, "endpoint_lost", "lane_muted")
 
     def endpoint_recovered(self, role: EndpointRole, endpoint: AudioEndpointRef) -> None:
+        """Rebind ``role``; *Listening* (``endpoint_recovered``) only once its lane is whole.
+
+        While the lane's other endpoint is still lost, the lane stays muted and the event is
+        ``endpoint_lost`` again, so its status names the device that is still missing.
+        """
         configured = self.assignments[role]
         if endpoint.endpoint_id != configured.endpoint_id:
             raise ValueError("Recovered endpoint identity does not match configured endpoint")
@@ -181,26 +187,20 @@ class FullDuplexBridgeController:
             port.rebind(endpoint)
         self.assignments[role] = endpoint
         self._lost_roles.discard(role)
-        if role in {
-            EndpointRole.LOCAL_MICROPHONE,
-            EndpointRole.CALL_MICROPHONE_RENDER,
-        }:
-            if not self._lost_roles.intersection(
-                {EndpointRole.LOCAL_MICROPHONE, EndpointRole.CALL_MICROPHONE_RENDER}
-            ):
-                self.outbound_lane.set_available(True)
-                self.outbound_capture.start()
-            lane_id = LaneId.OUTBOUND
-        else:
-            if not self._lost_roles.intersection(
-                {EndpointRole.CALL_SPEAKER_CAPTURE, EndpointRole.LOCAL_HEADPHONES}
-            ):
-                self.inbound_lane.set_available(True)
-                self.inbound_capture.start()
-            lane_id = LaneId.INBOUND
+        lane_roles = _OUTBOUND_ROLES if lane_id is LaneId.OUTBOUND else _INBOUND_ROLES
+        restored = not self._lost_roles.intersection(lane_roles)
+        if restored and lane_id is LaneId.OUTBOUND:
+            self.outbound_lane.set_available(True)
+            self.outbound_capture.start()
+        elif restored:
+            self.inbound_lane.set_available(True)
+            self.inbound_capture.start()
         if not self._lost_roles:
             self._set_state(BridgeState.RUNNING)
-        self._emit(lane_id, BridgeEventKind.ENDPOINT, "endpoint_recovered", "lane_restored")
+        if restored:
+            self._emit(lane_id, BridgeEventKind.ENDPOINT, "endpoint_recovered", "lane_restored")
+        else:  # the lane's other endpoint is still lost: the lane stays muted
+            self._emit(lane_id, BridgeEventKind.ENDPOINT, "endpoint_lost", "lane_muted")
 
     def reconcile_endpoints(self, inventory: EndpointInventory) -> None:
         for role, configured in tuple(self.assignments.items()):
