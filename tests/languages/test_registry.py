@@ -22,8 +22,8 @@ def test_ac01_builtin_registry_lists_qualified_and_planned_languages() -> None:
 
     assert [(item.id, item.availability) for item in languages] == [
         ("de", Availability.QUALIFIED),
+        ("en", Availability.QUALIFIED),
         ("zh-Hans", Availability.QUALIFIED),
-        ("en", Availability.PLANNED),
         ("es", Availability.PLANNED),
         ("fr", Availability.PLANNED),
     ]
@@ -66,7 +66,7 @@ def test_pair_rejects_same_planned_and_unknown_members() -> None:
     with pytest.raises(SameLanguagePairError):
         BUILTIN_REGISTRY.pair("zh-Hans", "ZH-HANS")
     with pytest.raises(PlannedLanguageError):
-        BUILTIN_REGISTRY.pair("de", "en")
+        BUILTIN_REGISTRY.pair("en", "es")
     with pytest.raises(UnknownLanguageError):
         BUILTIN_REGISTRY.pair("de", "qaa")
 
@@ -78,6 +78,8 @@ def test_pair_members_follow_registry_order_and_other_stays_within_the_pair() ->
     assert pair.members == ("de", "zh-Hans")
     assert pair.other(LanguageId("de")) == "zh-Hans"
     assert pair.other(LanguageId("zh-Hans")) == "de"
+    assert BUILTIN_REGISTRY.pair("zh-Hans", "en").members == ("en", "zh-Hans")
+    assert BUILTIN_REGISTRY.pair("en", "de").members == ("de", "en")
     with pytest.raises(ValueError):
         pair.other(LanguageId("en"))
     with pytest.raises(SameLanguagePairError):
