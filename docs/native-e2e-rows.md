@@ -24,6 +24,15 @@ never retried.
 | E-10 | Settings › Diagnostics › **Export…**: types the path into the save dialog's file-name `Edit` (`AutomationId` 1001) and presses Enter, first to `%TEMP%\lianiq-e2e\diagnostics-E10.txt`, then onto `%TEMP%\lianiq-e2e\ro\diagnostics-E10.txt`, an existing file in a writable folder whose ACL denies the test user writes (`icacls`). The dialog asks whether to replace the file; the row answers **Yes** (`CommandButton_6`), and Lianiq must show its own "Export failed" notice ("Permission denied") while the file keeps its content | Forbidden pattern classes found (none on a pass); whether the second dialog closed (`dialog-closed`); `screens/e10-export-failed.png` |
 | E-14 | Checks `native_e2e/fixtures/listen_de_16k.wav` (two German sentences, Piper, 16 kHz mono) against the SHA-256 pinned in `rows/e14.py` before any app starts; starts its own app; Listen & translate: German → Mandarin (Simplified), *Microphone* "CABLE Output"; **Start listening (F8)**; waits until the page listens and the strip shows "Listen & translate running"; plays the WAV into "CABLE Input"; waits for two done rows in *Transcript* that two consecutive reads agree on; F9; waits for idle (**Start listening (F8)** enabled); checks that the app process has no WASAPI render session (no output stream was opened); closes the app | `name_matches` for the Microphone (never the name); SHA-256 of the translation texts (never the text); `render_sessions` count; `screens/e14-listen.png` with *Transcript* masked |
 | E-13 | CAP-0172 Text translation (its e2e plan row E-09, AC-37). Starts the app; in Settings › Audio devices selects "CABLE Input" as Speakers; sidebar **Text translation**; types the plan's German fixture text D-03 (two paragraphs) into *Source text*; **Translate**; waits for a result in *Translation* that two consecutive reads agree on (300 s); **Play translation**; waits for "Text translation running" in the strip; presses F9; waits until the strip is gone and the button reads **Replay**; checks both texts unchanged; closes the app | `name_matches` for the Speakers (never the name); result SHA-256 (never the text); `screens/e13-result.png`, `screens/e13-playing.png` with both panes masked |
+| C-05 | `scripts\self_test.py` with the run's Python from the checkout, timeout 600 s (CAP-0167 C-03) | Exit code; `logs/c05-self-test.txt` with the output's SHA-256 and the duration only (the script prints recognised and translated text) |
+| C-06 | `scripts\call_bridge_self_test.py` without arguments: both lanes over the image models (CAP-0167 C-03; C-04 already runs `--synthetic`) | Exit code; `logs/c06-call-bridge-self-test.txt` (SHA-256 and duration only) |
+| C-09 | `scripts\doctor.py` (CAP-0171 C-02), then the S-04 count of the app interpreter's non-loopback connections since the row started | Exit code; `logs/c09-doctor.txt` (SHA-256 and duration only); `connection-count-0` with `count=N` (a late WFP event still counts in S-04) |
+| T-05 | After T-02 and before T-03 (which deletes `%TEMP%\lianiq-e2e`): points the checkout's `models` junction at the image `models_dir` again if a scratch-model group left it elsewhere, then deletes every recorded `%TEMP%\lianiq-e2e\models-<group>` folder | `models-junction-targets-image`; `scratch-folders-deleted` with `left=N` |
+
+C-05, C-06 and C-09 run after E-15 and before E-12, inside the S-04 window. C-03 already
+runs `ui_self_test.py` and C-04 `call_bridge_self_test.py --synthetic`, so neither is run
+again. `scripts\download_models.py` never runs: it always downloads and stages into `models`
+(read-only in the VM), and a blocked download attempt counts against S-04.
 
 E-15 runs after E-13 and closes its app at the end. It plays the translation into the cable, so
 the paused microphone is what keeps Lianiq from hearing its own voice; the second WAV is played
@@ -40,6 +49,43 @@ until the process exits. T-01 restores the settings file and T-03 resets the ACL
 E-10 protects a file, not a folder: the Windows save dialog itself refuses a folder with
 denied writes ("no permission to save in this path"), so that path never reaches Lianiq.
 The PO chose the write-protected file after native run 44267851808.
+
+## Building blocks of the automated PO rows
+
+The rows of the automated PO rows (spec `native-test-automation/automated-po-rows`) share these
+helpers in `native_e2e/`:
+
+- **Scratch models** (`models_swap.scratch_models(ctx, group)`): points the checkout's
+  `models` junction at a new, empty, writable `%TEMP%\lianiq-e2e\models-<group>` (one folder
+  per group of scratch-model rows, not per row) and back at the image `models_dir` when the
+  block ends, also when a row raises. A junction is removed with `os.rmdir`, which never
+  deletes its target; a real `models` folder is never touched. The app must be closed on entry
+  and on exit. T-05 checks the junction and deletes the folders before T-03 runs.
+- **Pack import** (`packs_import.import_folder(app, pack_id, folder)`): Language packs › the
+  pack row's **Get…** › licence box › **Import…** › **Choose folder…**; types the folder path
+  into the native folder picker without Enter (Enter navigates into the folder) and presses
+  **Select Folder**; waits for *Validated* (300 s). **Download** is never pressed, so no helper
+  makes a network attempt inside the S-04 window. Sources are the image's read-only pack
+  folders (`image_pack_dir`); a folder without `lianiq-pack.json` (images built before
+  lianiq#170) returns `image-packs-without-pack-file` before the UI is touched, and the row is
+  `blocked` with that reason. `make_corrupt_copy` copies a pack folder and flips one byte in
+  its largest file.
+- **First launch** (`uia_app.launch(ctx, setup_assistant=True)`): the assistant opens only
+  without `config\settings.local.json` and with `provisioning.first_run` pending, so the
+  helper deletes the local settings file first (it needs the S-03 backup) and starts without
+  `--no-setup-assistant`; the default launch is unchanged. `uia_app.settings_reset`
+  puts the S-03 baseline back (or deletes the file when none existed) between row groups.
+- **Speech fixtures** (`native_e2e/fixtures/`, `fixtures.checked(name)`): synthetic 16 kHz
+  mono WAVs, SHA-256 pinned in `native_e2e/fixtures.py`, generator
+  `native_e2e/data/make_fixtures.py`, texts and licences in `native_e2e/fixtures/README.md`.
+  A row adds the fixture texts to the redaction secrets (`fixtures.remember`).
+- **Cable capture** (`audio.record_cable`, `audio.CableRecorder`, `audio.speech_span`):
+  records "CABLE Output" into memory; only durations (first and last 20 ms frame above the RMS
+  threshold, a key-press mark) are stored, never PCM.
+- **Connection count per row** (`s04.count_since(ctx, since)`): the `wfp-count` verb of the
+  admin helper for the app interpreter since a time; no new verb.
+- **Keyboard walk** (`rows.ui.tab_walk(app)`): Tab until the first focused element repeats;
+  control type and "has a name" per stop, never a name.
 
 ## Privacy of the evidence
 
@@ -90,6 +136,10 @@ and both transcript panels are black rectangles. Run `python -m native_e2e verif
 | E-13 `strip-text-translation-running` fails with `play-disabled` | The Mandarin (Simplified) voice is missing from the image, or no usable Speakers |
 | E-13 `stopped-with-f9-idle` times out | F9 did not stop the playback, or **Replay** did not appear |
 | E-10 `file-written` fails | The save dialog did not close after Enter (a prompt is open), or the file-name field was not found |
+| C-05, C-06 or C-09 `exit-code-0` fails | Run the script in a source checkout of the same commit: the log keeps no output line (`timeout` after 600 s) |
+| C-09 `connection-count-0` fails | The app interpreter tried a non-loopback connection during the row (`count=N`), or the admin helper gave no count (`unreadable`) |
+| T-05 `models-junction-targets-image` fails | The checkout's `models` is no junction any more (`RuntimeError`) or `image.json` is unreadable; the next run starts from the reverted checkpoint |
+| T-05 `scratch-folders-deleted` fails | A file in a scratch folder was still open (an app process left running) |
 
 ## Meeting operator rows (CAP-0177)
 
