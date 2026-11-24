@@ -60,7 +60,7 @@ def test_ac02_the_controls_are_visible_at_both_sizes(window, size) -> None:
         right = widget.mapTo(page.page, widget.rect().topRight()).x()
         assert right <= page.page.width(), widget.accessibleName()
     names = [page.source_combo.itemText(i) for i in range(page.source_combo.count())]
-    assert names[:2] == ["German", "Mandarin (Simplified)"]
+    assert names[:3] == ["German", "English", "Mandarin (Simplified)"]
     planned = [i for i, name in enumerate(names) if strings.PAIR_PLANNED_SUFFIX in name]
     assert planned and not page.source_combo.model().item(planned[0]).isEnabled()
 
