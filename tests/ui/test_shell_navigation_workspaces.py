@@ -50,7 +50,7 @@ def test_ac05_call_bridge_is_experimental_with_explicit_endpoint_selectors_only(
     assert sorted(map(id, combos)) == sorted(map(id, panel.endpoint_combos.values()))
     for combo in combos:
         items = [combo.itemText(i) for i in range(combo.count())]
-        assert items[0] == "Select an endpoint …" and combo.itemData(0) is None
+        assert items[0] == "Select a device …" and combo.itemData(0) is None
         assert not any("default" in item.lower() for item in items)
 
 

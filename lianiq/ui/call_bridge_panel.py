@@ -1,108 +1,99 @@
-"""The Call Bridge panel: four explicit endpoint selectors, levels, route tests, Start/Stop.
+"""The Call Bridge setup page: two path boxes, readiness list and Start/Stop (CAP-0166 §2).
 
-CAP-0168 WI-02: while another mode holds the active session, **Start** is disabled and its
-tooltip names that session (``set_session_busy``).
+The page shows the experimental note with the *Real-call checklist* link, the **You → call**
+and **Call → you** path boxes (``call_bridge_paths.CallPathBox``) and the readiness list.
+**Start** is enabled only when the injected ``readiness`` callable (the workspace's
+``evaluate_readiness``) returns no reason; it is re-evaluated on every selector, language,
+model, busy or running change. While another mode holds the session, **Start** also carries
+the CAP-0168 ``SESSION_BUSY`` tooltip. ``call_bridge.enabled`` is no longer a gate.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
+from pathlib import Path
 
-from PySide6.QtCore import Signal
-from PySide6.QtWidgets import (
-    QCheckBox,
-    QComboBox,
-    QGridLayout,
-    QGroupBox,
-    QHBoxLayout,
-    QLabel,
-    QProgressBar,
-    QPushButton,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtCore import QUrl, Signal
+from PySide6.QtGui import QDesktopServices
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
+from lianiq.audio.endpoints import EndpointInventory
 from lianiq.call_bridge.contracts import (
     AudioEndpointRef,
-    BridgeState,
-    EndpointFlow,
     EndpointRole,
+    LaneId,
     validate_endpoint_assignments,
 )
-from lianiq.config import CallBridgeConfig
+from lianiq.call_bridge.readiness import BlockingReason, configured_assignments
+from lianiq.call_bridge.route_tests import RouteTestState
+from lianiq.config import PROJECT_ROOT, CallBridgeConfig
+from lianiq.ui import strings_call_bridge as s
+from lianiq.ui.call_bridge_paths import CallPathBox
 
-ROLE_LABELS = {
-    EndpointRole.LOCAL_MICROPHONE: "Local microphone · {local} source",
-    EndpointRole.CALL_MICROPHONE_RENDER: "Call microphone output · {remote} to call",
-    EndpointRole.CALL_SPEAKER_CAPTURE: "Call speaker input · {remote} from call",
-    EndpointRole.LOCAL_HEADPHONES: "Local headphones · {local} playback",
-}
-OUTBOUND_TEST_LABEL = "Test {remote} → call mic"
-INBOUND_TEST_LABEL = "Test {local} → headphones"
-
-
-def role_labels(local: str, remote: str) -> dict[EndpointRole, str]:
-    """Role labels for the local and remote language display names of the session pair."""
-    return {
-        role: template.format(local=local, remote=remote) for role, template in ROLE_LABELS.items()
-    }
+OPERATOR_SETUP = PROJECT_ROOT / "docs" / "call-bridge-operator-setup.md"
+Readiness = Callable[..., tuple[BlockingReason, ...]]
 
 
 class CallBridgePanel(QWidget):
     start_requested = Signal()
     stop_requested = Signal()
-    route_test_requested = Signal(object)
+    route_test_requested = Signal(object)  # LaneId of the path
+    route_test_cancelled = Signal(object)
+    route_test_answered = Signal(object, bool)
+    selection_changed = Signal()
 
-    def __init__(self, config: CallBridgeConfig, *, local_name: str, remote_name: str) -> None:
+    def __init__(
+        self,
+        config: CallBridgeConfig,
+        *,
+        local_name: str,
+        remote_name: str,
+        readiness: Readiness,
+        checklist: Path | None = OPERATOR_SETUP,
+    ) -> None:
         super().__init__()
         self.config = config
-        self._language_names = (local_name, remote_name)
-        self.role_labels = role_labels(local_name, remote_name)
-        self.role_label_widgets: dict[EndpointRole, QLabel] = {}
-        self.endpoint_combos: dict[EndpointRole, QComboBox] = {}
-        self.level_bars: dict[EndpointRole, QProgressBar] = {}
+        self._readiness = readiness
+        self._checklist = checklist
         self._endpoints: dict[str, AudioEndpointRef] = {}
+        self._inventory: EndpointInventory | None = None
         self._models_ready = False
         self._busy_reason: str | None = None
+        self._running = False
+        self.reasons: tuple[BlockingReason, ...] | None = None
+        self.paths = {path: CallPathBox(path) for path in LaneId}
+        self.endpoint_combos = {
+            role: combo for box in self.paths.values() for role, combo in box.combos.items()
+        }
         self._build_ui()
+        self.set_languages(local_name, remote_name)
 
     def _build_ui(self) -> None:
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
-        group = QGroupBox("Full-duplex call bridge")
-        layout = QGridLayout(group)
-
-        self.enabled_checkbox = QCheckBox("Enable explicit four-endpoint routing")
-        self.enabled_checkbox.setChecked(self.config.enabled)
-        self.enabled_checkbox.toggled.connect(self._refresh_enabled_state)
-        layout.addWidget(self.enabled_checkbox, 0, 0, 1, 4)
-
-        for row, role in enumerate(EndpointRole, start=1):
-            label = QLabel(self.role_labels[role])
-            self.role_label_widgets[role] = label
-            layout.addWidget(label, row, 0)
-            combo = QComboBox()
-            label.setBuddy(combo)
-            combo.setMinimumContentsLength(28)
-            self.endpoint_combos[role] = combo
-            layout.addWidget(combo, row, 1, 1, 2)
-            if role in {EndpointRole.LOCAL_MICROPHONE, EndpointRole.CALL_SPEAKER_CAPTURE}:
-                level = QProgressBar()
-                level.setRange(0, 100)
-                level.setTextVisible(False)
-                self.level_bars[role] = level
-                layout.addWidget(level, row, 3)
-
-        self.outbound_test_button = QPushButton()
-        self.outbound_test_button.clicked.connect(
-            lambda: self.route_test_requested.emit(EndpointRole.CALL_MICROPHONE_RENDER)
-        )
-        layout.addWidget(self.outbound_test_button, 5, 0)
-        self.inbound_test_button = QPushButton()
-        self.inbound_test_button.clicked.connect(
-            lambda: self.route_test_requested.emit(EndpointRole.LOCAL_HEADPHONES)
-        )
-        layout.addWidget(self.inbound_test_button, 5, 1)
+        note = QHBoxLayout()
+        self.experimental_label = QLabel(s.CB_EXPERIMENTAL)
+        self.experimental_label.setWordWrap(True)
+        self.experimental_label.setAccessibleName(s.CB_EXPERIMENTAL)
+        note.addWidget(self.experimental_label, 1)
+        self.checklist_link = QLabel(f'<a href="checklist">{s.CB_CHECKLIST_LINK}</a>')
+        self.checklist_link.setAccessibleName(s.CB_CHECKLIST_LINK)
+        self.checklist_link.linkActivated.connect(self.open_checklist)
+        self.checklist_link.setVisible(self._checklist is not None and self._checklist.is_file())
+        note.addWidget(self.checklist_link)
+        outer.addLayout(note)
+        for box in self.paths.values():
+            box.selection_changed.connect(self._selection_changed)
+            box.test_requested.connect(self.route_test_requested.emit)
+            box.cancel_requested.connect(self.route_test_cancelled.emit)
+            box.answered.connect(self.route_test_answered.emit)
+            outer.addWidget(box)
+        self.readiness_list = QWidget()
+        self.readiness_list.setAccessibleName(s.CB_READINESS)
+        self._readiness_layout = QVBoxLayout(self.readiness_list)
+        self._readiness_layout.setContentsMargins(0, 0, 0, 0)
+        self.readiness_labels: list[QLabel] = []
+        outer.addWidget(self.readiness_list)
         # CAP-0168 WI-05: Start/Stop sit in their own row, which the workspace keeps outside
         # its scroll area (spec §2.3.7).
         self.session_actions = QWidget()
@@ -117,121 +108,126 @@ class CallBridgePanel(QWidget):
         actions.addWidget(self.stop_button)
         actions.addStretch(1)
 
-        self.state_label = QLabel("Disabled")
-        layout.addWidget(self.state_label, 6, 0, 1, 4)
-        outer.addWidget(group)
-        self._apply_language_labels(*self._language_names)
-        self._refresh_enabled_state()
-
-    def _apply_language_labels(self, local_name: str, remote_name: str) -> None:
-        self._language_names = (local_name, remote_name)
-        self.role_labels = role_labels(local_name, remote_name)
-        for role, label in self.role_label_widgets.items():
-            label.setText(self.role_labels[role])
-            self.endpoint_combos[role].setAccessibleName(self.role_labels[role])
-        self.outbound_test_button.setText(OUTBOUND_TEST_LABEL.format(remote=remote_name))
-        self.inbound_test_button.setText(INBOUND_TEST_LABEL.format(local=local_name))
+    def open_checklist(self, _link: str = "") -> None:
+        """Open the local operator checklist in the default viewer (no network)."""
+        if self._checklist is not None and self._checklist.is_file():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._checklist)))
 
     def set_languages(self, local_name: str, remote_name: str) -> None:
-        """Rebuild role labels and test buttons for another pair or local language."""
-        self._apply_language_labels(local_name, remote_name)
+        """Path titles for another pair or local language; readiness is re-evaluated."""
+        for box in self.paths.values():
+            box.set_languages(local_name, remote_name)
+        self.refresh()
+
+    def selected_ids(self) -> dict[EndpointRole, str | None]:
+        """The selected (or persisted, not listed) endpoint ID of every role."""
+        ids: dict[EndpointRole, str | None] = {}
+        for box in self.paths.values():
+            ids.update(box.selected_ids())
+        return {role: ids.get(role) for role in EndpointRole}
 
     def assigned_roles(self) -> frozenset[EndpointRole]:
         """Roles with a selected endpoint that is present in the current inventory."""
         return frozenset(
-            role
-            for role, combo in self.endpoint_combos.items()
-            if combo.currentData() is not None and combo.currentData() in self._endpoints
+            role for role, value in self.selected_ids().items() if value in self._endpoints
         )
 
-    def set_endpoints(self, endpoints: Iterable[AudioEndpointRef]) -> None:
-        self._endpoints = {endpoint.endpoint_id: endpoint for endpoint in endpoints}
-        configured = {
-            EndpointRole.LOCAL_MICROPHONE: self.config.local_microphone_endpoint_id,
-            EndpointRole.CALL_MICROPHONE_RENDER: self.config.call_microphone_render_endpoint_id,
-            EndpointRole.CALL_SPEAKER_CAPTURE: self.config.call_speaker_capture_endpoint_id,
-            EndpointRole.LOCAL_HEADPHONES: self.config.local_headphones_endpoint_id,
-        }
-        for role, combo in self.endpoint_combos.items():
-            combo.clear()
-            combo.addItem("Select an endpoint …", None)
-            expected_flow = (
-                EndpointFlow.CAPTURE
-                if role in {EndpointRole.LOCAL_MICROPHONE, EndpointRole.CALL_SPEAKER_CAPTURE}
-                else EndpointFlow.RENDER
-            )
-            for endpoint in self._endpoints.values():
-                if endpoint.flow is not expected_flow:
-                    continue
-                label = (
-                    f"{endpoint.display_name} · {endpoint.host_api} · "
-                    f"{endpoint.channels} ch / {endpoint.sample_rate} Hz"
-                )
-                combo.addItem(label, endpoint.endpoint_id)
-            selected = combo.findData(configured[role])
-            combo.setCurrentIndex(max(selected, 0))
-        self._refresh_enabled_state()
+    def endpoint(self, role: EndpointRole) -> AudioEndpointRef | None:
+        """The listed endpoint selected for ``role``, else ``None``."""
+        return self._endpoints.get(self.selected_ids()[role] or "")
+
+    def set_endpoints(self, endpoints: Iterable[AudioEndpointRef] | None) -> None:
+        """The inventory to list; ``None`` when enumeration failed (nothing is listed)."""
+        listed = tuple(endpoints) if endpoints is not None else ()
+        self._endpoints = {endpoint.endpoint_id: endpoint for endpoint in listed}
+        self._inventory = EndpointInventory(listed) if endpoints is not None else None
+        configured = configured_assignments(self.config)
+        for box in self.paths.values():
+            box.set_endpoints(listed, configured)
 
     def assignments(self) -> dict[EndpointRole, AudioEndpointRef]:
         assignments: dict[EndpointRole, AudioEndpointRef] = {}
-        for role, combo in self.endpoint_combos.items():
-            endpoint_id = combo.currentData()
+        for role, endpoint_id in self.selected_ids().items():
+            label = s.CB_ROLE_LABELS[role]
             if endpoint_id is None:
-                raise ValueError(f"Select an endpoint for {self.role_labels[role]}")
+                raise ValueError(s.CB_R_SELECT.format(role=label))
             endpoint = self._endpoints.get(endpoint_id)
             if endpoint is None:
-                raise ValueError(f"Configured endpoint is unavailable for {self.role_labels[role]}")
+                raise ValueError(s.CB_R_NOT_FOUND.format(role=label))
             assignments[role] = endpoint
         validate_endpoint_assignments(assignments)
         return assignments
 
     def apply_to_config(self) -> None:
-        self.config.enabled = self.enabled_checkbox.isChecked()
-        values = {role: combo.currentData() for role, combo in self.endpoint_combos.items()}
-        self.config.local_microphone_endpoint_id = values[EndpointRole.LOCAL_MICROPHONE]
-        self.config.call_microphone_render_endpoint_id = values[EndpointRole.CALL_MICROPHONE_RENDER]
-        self.config.call_speaker_capture_endpoint_id = values[EndpointRole.CALL_SPEAKER_CAPTURE]
-        self.config.local_headphones_endpoint_id = values[EndpointRole.LOCAL_HEADPHONES]
+        """Persist the four endpoint IDs; ``call_bridge.enabled`` is never written."""
+        for role, endpoint_id in self.selected_ids().items():
+            setattr(self.config, f"{role.value}_endpoint_id", endpoint_id)
 
     def set_models_ready(self, ready: bool) -> None:
         self._models_ready = ready
-        self._refresh_enabled_state()
+        self.refresh()
 
     def set_running(self, running: bool) -> None:
-        self.enabled_checkbox.setEnabled(not running)
-        for combo in self.endpoint_combos.values():
-            combo.setEnabled(not running)
-        ready = not running and self.enabled_checkbox.isChecked() and self._models_ready
-        self.start_button.setEnabled(ready and self._busy_reason is None)
-        self.stop_button.setEnabled(running)
-        self.outbound_test_button.setEnabled(ready)
-        self.inbound_test_button.setEnabled(ready)
-        self.state_label.setText("Running" if running else "Ready")
+        self._running = running
+        for box in self.paths.values():
+            box.set_selectors_enabled(not running)
+            box.set_stream_open(running)
+            # WI-03 drives the lane status lines from ``LaneStatusBook``.
+            box.set_lane_status(s.CB_LANE_LISTENING if running else s.CB_LANE_STOPPED)
+        self.refresh()
 
     def set_session_busy(self, reason: str | None) -> None:
         """``reason`` (``SESSION_BUSY``) while another session runs; ``None`` when idle."""
         self._busy_reason = reason
         self.start_button.setToolTip(reason or "")
-        if reason is not None:
-            self.start_button.setEnabled(False)
-        elif not self.stop_button.isEnabled():
-            self._refresh_enabled_state()
+        self.refresh()
 
-    def set_state(self, state: BridgeState | str, message: str = "") -> None:
-        value = state.value if isinstance(state, BridgeState) else state
-        self.state_label.setText(f"{value.replace('_', ' ').title()}: {message}".rstrip(": "))
+    def set_route_test(
+        self, path: LaneId, state: RouteTestState, detail: str, blocked: str
+    ) -> None:
+        self.paths[path].show_test(state, detail, blocked)
+
+    def _capture_box(self, role: EndpointRole) -> CallPathBox | None:
+        return next((box for box in self.paths.values() if box.capture_role is role), None)
 
     def set_level(self, role: EndpointRole, level: float) -> None:
-        bar = self.level_bars.get(role)
-        if bar is not None:
-            bar.setValue(round(max(0.0, min(level, 1.0)) * 100))
+        if (box := self._capture_box(role)) is not None:
+            box.set_level(level)
 
-    def _refresh_enabled_state(self) -> None:
-        enabled = self.enabled_checkbox.isChecked()
-        for combo in self.endpoint_combos.values():
-            combo.setEnabled(enabled)
-        self.start_button.setEnabled(enabled and self._models_ready and self._busy_reason is None)
-        self.outbound_test_button.setEnabled(enabled and self._models_ready)
-        self.inbound_test_button.setEnabled(enabled and self._models_ready)
-        if not enabled:
-            self.state_label.setText("Disabled")
+    def set_clipping(self, role: EndpointRole) -> None:
+        if (box := self._capture_box(role)) is not None:
+            box.set_clipping()
+
+    def showEvent(self, event) -> None:  # Qt override
+        super().showEvent(event)
+        self.refresh()  # models or voices may have changed while the page was hidden
+
+    def _selection_changed(self) -> None:
+        self.refresh()
+        self.selection_changed.emit()
+
+    def refresh(self) -> None:
+        """Re-evaluate readiness: the list and **Start** follow it (no blocking work)."""
+        reasons = self._readiness(
+            self.selected_ids(),
+            self._inventory,
+            models_ready=self._models_ready,
+            busy_reason=self._busy_reason,
+            running=self._running,
+        )
+        self.start_button.setEnabled(not reasons)
+        self.stop_button.setEnabled(self._running)
+        if reasons == self.reasons:
+            return
+        self.reasons = reasons
+        for label in self.readiness_labels:
+            label.setParent(None)
+            label.deleteLater()
+        self.readiness_labels = []
+        for reason in reasons:
+            label = QLabel(f"• {reason.text}")
+            label.setWordWrap(True)
+            label.setAccessibleName(reason.text)
+            self._readiness_layout.addWidget(label)
+            self.readiness_labels.append(label)
+        self.readiness_list.setVisible(bool(reasons))

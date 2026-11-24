@@ -121,7 +121,7 @@ def test_start_stop_and_the_strip_stay_outside_the_scroll_areas(window) -> None:
     assert in_view(window.start_button, window) and in_view(window.stop_button, window)
     for workspace, inside in (
         (WorkspaceId.CONVERSATION, window.source_text),
-        (WorkspaceId.CALL_BRIDGE, window.call_bridge_panel.enabled_checkbox),
+        (WorkspaceId.CALL_BRIDGE, window.call_bridge_panel.experimental_label),
         (WorkspaceId.SETTINGS, window.settings.readiness_field),
     ):
         assert scroll_area_of(inside) is not None, workspace

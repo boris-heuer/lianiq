@@ -131,4 +131,5 @@ def test_the_docs_and_changelog_name_mingit_and_its_licence() -> None:
     assert "C:\\ProgramData\\lianiq-e2e\\mingit" in doc
     assert "machine `PATH`" in doc
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-    assert "MinGit" in changelog[: changelog.index("### Changed")]
+    release = changelog[changelog.index("## 0.2.0") :]  # MinGit shipped with 0.2.0 (Added)
+    assert "MinGit" in release[: release.index("### Changed")]

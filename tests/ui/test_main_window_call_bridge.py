@@ -12,7 +12,7 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from lianiq.call_bridge.contracts import BridgeState, EndpointRole
+from lianiq.call_bridge.contracts import BridgeState, EndpointRole, LaneId
 from lianiq.domain import Transcript
 from tests._spy_window import spies  # noqa: F401
 from tests.call_bridge.support import DE, ZH
@@ -30,14 +30,21 @@ from tests.ui._call_bridge_window import (
 )
 
 
-def test_ac09_click_start_with_a_missing_voice_and_endpoint_starts_nothing_and_names_both(
+def test_ac09_start_with_a_missing_voice_and_endpoint_starts_nothing_and_names_both(
     window,
     spies,  # noqa: F811
 ) -> None:
     remove_voice(window, ZH)
     assign(window, skip=EndpointRole.CALL_MICROPHONE_RENDER)
+    # CAP-0166 AC-02: the readiness list names both, and Start is disabled.
+    panel = window.call_bridge_panel
+    assert [label.accessibleName() for label in panel.readiness_labels] == [
+        "Call microphone cable — playback side: select a device",
+        "Not available: missing voice Mandarin (Simplified)",
+    ]
+    assert not panel.start_button.isEnabled()
 
-    click(window.call_bridge_panel.start_button)
+    window.start_call_bridge()  # a programmatic request still runs the row-7 gate
 
     assert bridge_notice(window) == (
         "Not available: missing voice Mandarin (Simplified), call microphone endpoint"
@@ -45,17 +52,17 @@ def test_ac09_click_start_with_a_missing_voice_and_endpoint_starts_nothing_and_n
     assert spies.constructed == []  # refused before any model loads
     assert window.call_bridge_controller is None
     assert FakeCaptureStream.instances == []  # no lane, no capture
-    assert window.call_bridge_panel.start_button.isEnabled()
     assert window.start_button.isEnabled()
 
 
-def test_ac09_click_start_with_only_an_endpoint_missing_names_that_endpoint(
+def test_ac09_start_with_only_an_endpoint_missing_names_that_endpoint(
     window,
     spies,  # noqa: F811
 ) -> None:
     assign(window, skip=EndpointRole.LOCAL_HEADPHONES)
+    assert not window.call_bridge_panel.start_button.isEnabled()
 
-    click(window.call_bridge_panel.start_button)
+    window.start_call_bridge()
 
     assert bridge_notice(window) == "Not available: missing local headphones endpoint"
     assert spies.constructed == []
@@ -125,7 +132,9 @@ def test_ac09_voice_lost_while_models_load_fails_closed_at_controller_start(
     assert window.call_bridge_controller is None
     assert not any(capture.running for capture in FakeCaptureStream.instances)
     assert FakePlaybackStream.played == []
-    assert window.call_bridge_panel.start_button.isEnabled()
+    panel = window.call_bridge_panel  # readiness now names the lost voice
+    assert "Not available: missing voice German" in [r.text for r in panel.reasons]
+    assert not panel.start_button.isEnabled()
 
 
 def test_ac09_local_language_setting_selects_lane_directions_and_labels(
@@ -136,12 +145,9 @@ def test_ac09_local_language_setting_selects_lane_directions_and_labels(
     window = build_call_bridge_window(tmp_path, monkeypatch, local_language=ZH)
     try:
         panel = window.call_bridge_panel
-        assert (
-            panel.role_label_widgets[EndpointRole.LOCAL_MICROPHONE].text()
-            == "Local microphone · Mandarin (Simplified) source"
-        )
-        assert panel.outbound_test_button.text() == "Test German → call mic"
-        assert panel.inbound_test_button.text() == "Test Mandarin (Simplified) → headphones"
+        outbound, inbound = panel.paths[LaneId.OUTBOUND], panel.paths[LaneId.INBOUND]
+        assert outbound.title() == "You → call · Mandarin (Simplified) → German"
+        assert inbound.title() == "Call → you · German → Mandarin (Simplified)"
         assign(window)
 
         click(panel.start_button)
@@ -158,7 +164,7 @@ def test_ac09_local_language_setting_selects_lane_directions_and_labels(
 def test_route_test_uses_the_remote_language_for_the_call_mic(window, spies) -> None:  # noqa: F811
     assign(window)
 
-    click(window.call_bridge_panel.outbound_test_button)
+    click(window.call_bridge_panel.paths[LaneId.OUTBOUND].test_button)
 
     assert wait_until(lambda: FakePlaybackStream.played)
     assert FakePlaybackStream.played == [("id-call_microphone_render", "synthetic-zh-Hans.wav")]

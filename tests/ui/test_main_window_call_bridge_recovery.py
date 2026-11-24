@@ -13,7 +13,7 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from lianiq.call_bridge.contracts import EndpointRole
+from lianiq.call_bridge.contracts import LaneId
 from lianiq.domain import Transcript
 from tests._spy_window import spies  # noqa: F401
 from tests.call_bridge.support import DE, ZH
@@ -119,7 +119,8 @@ def test_selecting_another_pair_rebuilds_call_bridge_labels_and_lanes(
     )
     try:
         panel = window.call_bridge_panel
-        assert panel.outbound_test_button.text() == "Test Mandarin (Simplified) → call mic"
+        outbound, inbound = panel.paths[LaneId.OUTBOUND], panel.paths[LaneId.INBOUND]
+        assert outbound.title() == "You → call · German → Mandarin (Simplified)"
         index = next(
             i
             for i in range(window.pair_combo.count())
@@ -129,11 +130,8 @@ def test_selecting_another_pair_rebuilds_call_bridge_labels_and_lanes(
         window.pair_combo.setCurrentIndex(index)
 
         assert window.config.languages.pair == [DE, QAA]
-        assert panel.role_label_widgets[EndpointRole.CALL_MICROPHONE_RENDER].text() == (
-            "Call microphone output · Synthetic A to call"
-        )
-        assert panel.outbound_test_button.text() == "Test Synthetic A → call mic"
-        assert panel.inbound_test_button.text() == "Test German → headphones"
+        assert outbound.title() == "You → call · German → Synthetic A"
+        assert inbound.title() == "Call → you · Synthetic A → German"
         lanes = CallBridgeLanes.from_session(window.call_bridge_session())
         assert (lanes.outbound.key, lanes.inbound.key) == ("de>qaa", "qaa>de")
     finally:
@@ -150,14 +148,10 @@ def test_ac18_call_bridge_and_result_labels_show_registry_names(
     from tests.ui._language_helpers import assert_no_language_codes, blocks
 
     panel = window.call_bridge_panel
-    assert {role: label.text() for role, label in panel.role_label_widgets.items()} == {
-        EndpointRole.LOCAL_MICROPHONE: "Local microphone · German source",
-        EndpointRole.CALL_MICROPHONE_RENDER: "Call microphone output · Mandarin (Simplified) to call",
-        EndpointRole.CALL_SPEAKER_CAPTURE: "Call speaker input · Mandarin (Simplified) from call",
-        EndpointRole.LOCAL_HEADPHONES: "Local headphones · German playback",
-    }
-    assert panel.outbound_test_button.text() == "Test Mandarin (Simplified) → call mic"
-    assert panel.inbound_test_button.text() == "Test German → headphones"
+    assert [box.title() for box in panel.paths.values()] == [
+        "You → call · German → Mandarin (Simplified)",
+        "Call → you · Mandarin (Simplified) → German",
+    ]
     assign(window)
 
     click(panel.start_button)
@@ -201,4 +195,7 @@ def test_stopping_the_call_bridge_restores_start_from_the_current_availability(
     assert not window.start_button.isEnabled()  # not blindly re-enabled
     assert window.state_label.text() == "Not available"
     assert window.pair_combo.isEnabled()  # the session lock is released
-    assert window.call_bridge_panel.start_button.isEnabled()
+    # CAP-0166 AC-02: the Call Bridge Start follows readiness, which names the lost model.
+    reasons = [reason.text for reason in window.call_bridge_panel.reasons]
+    assert any("speech recognition" in text for text in reasons)
+    assert not window.call_bridge_panel.start_button.isEnabled()

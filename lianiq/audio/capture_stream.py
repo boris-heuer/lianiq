@@ -16,6 +16,7 @@ from lianiq.config import AudioConfig
 from lianiq.domain import AudioUtterance
 
 LOGGER = logging.getLogger(__name__)
+CLIP_PEAK = 0.99  # a sample at or above this full-scale fraction counts as clipping
 
 
 class StreamFactory(Protocol):
@@ -33,6 +34,8 @@ class EndpointCaptureStream:
         on_level: Callable[[float], None] | None = None,
         on_error: Callable[[str], None] | None = None,
         stream_factory: StreamFactory | None = None,
+        *,
+        on_clip: Callable[[], None] | None = None,
     ) -> None:
         if endpoint.flow is not EndpointFlow.CAPTURE:
             raise ValueError("EndpointCaptureStream requires a capture endpoint")
@@ -41,6 +44,7 @@ class EndpointCaptureStream:
         self.on_utterance = on_utterance
         self.on_level = on_level
         self.on_error = on_error
+        self.on_clip = on_clip  # a block reached full scale (the Call Bridge meter caption)
         self._stream_factory = stream_factory
         self._stream = None
         self._thread: threading.Thread | None = None
@@ -177,6 +181,8 @@ class EndpointCaptureStream:
             if self.on_level:
                 level = float(np.sqrt(np.mean(np.square(frame), dtype=np.float64)))
                 self.on_level(min(level / max(self.config.start_rms * 3, 0.001), 1.0))
+            if self.on_clip and float(np.max(np.abs(frame))) >= CLIP_PEAK:
+                self.on_clip()
             utterance = self._segmenter.push(frame)
             if utterance is not None:
                 self.on_utterance(AudioUtterance(utterance, self.config.sample_rate))
