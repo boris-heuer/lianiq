@@ -6,10 +6,10 @@
 [![CodeQL](https://github.com/boris-heuer/lianiq/actions/workflows/codeql.yml/badge.svg)](https://github.com/boris-heuer/lianiq/actions/workflows/codeql.yml)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
 
-**Private, offline German-Mandarin speech translation for Windows.**
+**Private, offline German-Mandarin and English-Mandarin speech translation for Windows.**
 
 `lianiq` is a Windows desktop prototype for private, **near-real-time, utterance-based** conversations between
-German and Mandarin Chinese. Audio is segmented at pauses, then transcribed, translated, and spoken;
+German or English and Mandarin Chinese. Audio is segmented at pauses, then transcribed, translated, and spoken;
 it is not a simultaneous or word-by-word interpreter. Runtime audio processing and model inference
 are local after the one-time model download.
 
@@ -55,7 +55,7 @@ Microphone (16 kHz mono)
   -> bounded real-time queue
   -> Faster-Whisper small (CPU INT8)
   -> MarianMT, one model per translation direction of the selected language pair
-  -> voice per language: Piper (German), sherpa-onnx (Mandarin)
+  -> voice per language: Piper (German, English), sherpa-onnx (Mandarin)
   -> selected speakers
 ```
 
@@ -64,10 +64,11 @@ its own output. If the bounded queue fills, the oldest pending segment is droppe
 conversation from accumulating increasing delay.
 
 Languages are identified by BCP 47 language IDs from a built-in registry (`de` German,
-`zh-Hans` Mandarin (Simplified)); English, Spanish, and French are listed as planned and cannot be
-selected yet. Automatic routing detects and routes every completed utterance independently, but
+`en` English, `zh-Hans` Mandarin (Simplified)); the pairs are German ↔ Mandarin (Simplified) and
+English ↔ Mandarin (Simplified). Spanish and French are listed as planned and cannot be selected
+yet; German ↔ English has no translation pack and is never offered. Automatic routing detects and routes every completed utterance independently, but
 only within the selected language pair. It never assumes that participants alternate, so any number
-of German or Mandarin turns may occur consecutively. See
+of turns in either pair language may occur consecutively. See
 [`docs/conversation-architecture.md`](docs/conversation-architecture.md) for multi-participant
 scenarios, overlap limitations, and the TDD strategy.
 
@@ -143,8 +144,9 @@ The script:
 
 1. creates a Python 3.12 virtual environment in `.venv`,
 2. installs the hash-locked Windows dependencies and the application,
-3. downloads Faster-Whisper, both MarianMT models, the German Piper voice, and the Mandarin
-   sherpa-onnx voice (pinned archive, size and SHA-256 verified),
+3. downloads Faster-Whisper, the four MarianMT models (German and English, each way with
+   Mandarin), the German and English Piper voices, and the Mandarin sherpa-onnx voice (pinned
+   revisions and archive, size and SHA-256 verified),
 4. validates the installation with the offline doctor.
 
 Model download is the only setup step that requires internet access. Instead of the script you
@@ -152,7 +154,7 @@ can also get each model from inside the app, by download or offline import (see
 [Language packs](#language-packs)). Existing downloads are reused
 from the Hugging Face cache. Spoken output is off by default (`languages.output` is `text`). The
 Mandarin voice is the sherpa-onnx model in `models/sherpa/vits-icefall-zh-aishell3/`
-(`tts.engines["zh-Hans"]`; see [MODEL_LICENSES.md](MODEL_LICENSES.md)); German uses Piper. To
+(`tts.engines["zh-Hans"]`; see [MODEL_LICENSES.md](MODEL_LICENSES.md)); German and English use Piper. To
 validate an existing installation without requesting models:
 
 ```powershell
@@ -204,8 +206,9 @@ selected.
 ### Conversation
 
 - `F8`: **Start**; `F9`: **Stop** the active session from any workspace.
-- Choose the **Language pair**. It is currently German ↔ Mandarin (Simplified); planned languages
-  are shown as "planned, unavailable" and cannot be selected.
+- Choose the **Language pair**: German ↔ Mandarin (Simplified) or English ↔ Mandarin
+  (Simplified), once its packs are ready; planned languages are shown as "planned, unavailable"
+  and cannot be selected.
 - Choose automatic direction within the pair, German → Mandarin (Simplified), or Mandarin
   (Simplified) → German. An unavailable entry is disabled, and its tooltip names what is missing.
 - Choose the microphone and speakers in Settings › Audio devices before starting (see below).
@@ -270,8 +273,11 @@ format with the language IDs of every turn, in capture order.
 
 **Meeting** (sidebar, second entry, **Ctrl+2**) translates a face-to-face meeting with two
 microphones at once: the customers speak Mandarin (Simplified) into a USB speakerphone on the
-table, you speak German into your own microphone.
+table, you speak German or English into your own microphone.
 
+- *Your language* lists the two languages of the pair (German or English, and Mandarin
+  (Simplified)); the other one is the *Table language*. It is locked while a meeting runs. The
+  lines and labels below use the chosen language, e.g. "Speak English for me".
 - Under *Table speakerphone* choose the *Table microphone* and *Table speaker* (choosing one
   suggests the other half of the same device). *Your microphone* follows the Windows default or
   a chosen microphone; it must not be the table microphone.
@@ -292,7 +298,7 @@ guard, the privacy statement, the speakerphone setup (Jabra Speak2 75) and the k
 ### Text translation
 
 **Text translation** (sidebar, third entry, **Ctrl+3**) translates typed or pasted text offline,
-German ↔ Mandarin (Simplified), without a microphone or a running session.
+in the selected pair, without a microphone or a running session.
 
 - Choose the *Source language* and *Target language*; **Swap languages** exchanges them and keeps
   your text. Type or paste up to 5,000 characters into *Source text*; the counter turns into a
@@ -349,10 +355,10 @@ never follows the Windows default.
 
 ### Language packs
 
-Every model is a *language pack*: speech recognition (one pack for German and Mandarin), one
+Every model is a *language pack*: speech recognition (one pack for German, English and Mandarin), one
 translation pack per direction, and one voice per language. The **Language packs** page
 (Ctrl+6) lists them by group with their state (*Downloadable*, *Installing…*, *Installed*,
-*Validated*, *Failed*), size and "Needed by"; English, Spanish and French sit in the collapsed
+*Validated*, *Failed*), size and "Needed by"; Spanish and French sit in the collapsed
 *Planned languages* group. The header shows the models folder with its free space and **Run
 setup assistant**. Nothing connects to the network before you click **Download**.
 
@@ -430,6 +436,23 @@ the session with **Stop (F9)** from Settings, and checks that the transcript and
 workspace (Conversation, Call Bridge, Settings) at 850×560, 1120×720, 1280×720 and 1440×900 to that
 local folder, with generic devices and no transcript, and prints one `<sha256>  <file>` line per
 screenshot. Keep the screenshots local; record the SHA-256 lines as evidence.
+
+## Check a language pair
+
+`scripts\qualify_pair.py` translates a fixed set of 20 synthetic meeting sentences per direction
+offline with the installed packs and writes a review sheet for a person to mark:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\qualify_pair.py --pair en:zh-Hans --out C:\path\outside-repo
+```
+
+`review.md` lists each sentence with its translation, back-translation, a flag for Traditional-only
+characters in Mandarin output and the latency, plus an empty *Accepted* column; `summary.json`
+holds the counts, median latencies and peak memory. `--audio` also speaks each sentence with the
+source voice and runs recognition first. Nothing is written inside the repository, and the exit
+code is 0 whatever the result: the verdict is the reviewer's. English ↔ Mandarin (Simplified) is
+qualified when at least 18 of 20 sentences per direction are accepted, every number and negation
+sentence is correct and no Traditional character is flagged.
 
 ## Configuration and glossary
 
@@ -542,8 +565,11 @@ installed. Close Lianiq before replacing the version it runs from.
 ## Model sources and licensing
 
 - Speech recognition: `Systran/faster-whisper-small`
-- Translation: `Helsinki-NLP/opus-mt-de-zh` and `Helsinki-NLP/opus-mt-zh-de`
+- Translation: `Helsinki-NLP/opus-mt-de-zh`, `Helsinki-NLP/opus-mt-zh-de`,
+  `Helsinki-NLP/opus-mt-en-zh` (Apache-2.0) and `Helsinki-NLP/opus-mt-zh-en` (CC BY 4.0, attribution
+  in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md))
 - German voice: `rhasspy/piper-voices`, `de_DE-thorsten-medium`
+- English voice: `rhasspy/piper-voices`, `en_US-ljspeech-high` (LJ Speech, public domain)
 - Mandarin voice: sherpa-onnx `vits-icefall-zh-aishell3` (pinned release archive; licences and
   open provenance questions in [MODEL_LICENSES.md](MODEL_LICENSES.md))
 
