@@ -3,13 +3,16 @@
 ``run_tool`` runs one command with a timeout and returns its exit code and combined output;
 it never retries. ``child_env`` drops ``QT_QPA_PLATFORM`` so the child uses the real window.
 ``tool_row`` is the shared shape of S-02, C-03 and C-04: exit 0 passes, the redacted output
-(or its last lines) is stored under ``logs/``.
+(or its last lines) is stored under ``logs/``. With ``digest_only`` the log holds only the
+output's SHA-256 and the duration, never an output line (scripts that print transcripts).
 """
 
 from __future__ import annotations
 
+import hashlib
 import os
 import subprocess
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -60,6 +63,12 @@ def tool_check(name: str, result: ToolResult) -> Check:
     return check(name, result.code == 0, detail)
 
 
+def digest_text(result: ToolResult, seconds: float) -> str:
+    """The digest-only log: the output's SHA-256 and the duration, no output line."""
+    digest = hashlib.sha256(result.output.encode("utf-8")).hexdigest()
+    return f"output_sha256={digest}\nduration_s={seconds:.1f}\n"
+
+
 def tool_row(
     ctx: RunContext,
     row_id: str,
@@ -67,13 +76,18 @@ def tool_row(
     log: str,
     timeout_s: float,
     tail: int | None = None,
+    digest_only: bool = False,
 ) -> Row:
     """Run ``python <script...>`` from the checkout; pass iff it exits 0."""
+    started = time.monotonic()
     result = run_tool([ctx.python, *script], ctx.repo, timeout_s)
-    lines = result.output.splitlines()
-    if tail is not None:
-        lines = lines[-tail:]
-    artifact = ctx.write_log(log, "\n".join(lines) + "\n")
+    if digest_only:
+        artifact = ctx.write_log(log, digest_text(result, time.monotonic() - started))
+    else:
+        lines = result.output.splitlines()
+        if tail is not None:
+            lines = lines[-tail:]
+        artifact = ctx.write_log(log, "\n".join(lines) + "\n")
     passed = tool_check("exit-code-0", result)
     reason = None if passed.result is Status.PASS else "tool-failed"
     return make_row(row_id, (passed,), (artifact,), reason=reason)
