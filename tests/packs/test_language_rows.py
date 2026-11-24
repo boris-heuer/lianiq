@@ -53,8 +53,16 @@ def test_builtin_rows_map_qualified_capabilities_to_their_packs(
         "mt-zh-hans-de"
     )
     assert _row(builtin_rows, PackKind.VOICE, ZH).pack_id == "tts-zh-hans-aishell3"
+    assert _row(builtin_rows, PackKind.RECOGNITION, EN).pack_id == "stt-faster-whisper-small"
+    assert _row(builtin_rows, PackKind.TRANSLATION, DirectedEdge(EN, ZH)).pack_id == (
+        "mt-en-zh-hans"
+    )
+    assert _row(builtin_rows, PackKind.TRANSLATION, DirectedEdge(ZH, EN)).pack_id == (
+        "mt-zh-hans-en"
+    )
+    assert _row(builtin_rows, PackKind.VOICE, EN).pack_id == "tts-en-us-ljspeech-high"
     pack_rows = [row for row in builtin_rows if row.pack_id is not None]
-    assert len(pack_rows) == 6  # the six capabilities of the five packs
+    assert len(pack_rows) == 10  # the ten capabilities of the eight packs
     assert all(row.state is PackState.DOWNLOADABLE for row in pack_rows)
 
 
@@ -66,14 +74,16 @@ def test_planned_languages_and_their_edges_are_planned(
         for definition in BUILTIN_REGISTRY.languages()
         if definition.availability.value == "planned"
     ]
-    assert EN in planned
+    assert EN not in planned
+    assert planned
     for language in planned:
         for kind in (PackKind.RECOGNITION, PackKind.VOICE):
             row = _row(builtin_rows, kind, language)
             assert (row.state, row.pack_id) == (PackState.PLANNED, None)
         row = _row(builtin_rows, PackKind.TRANSLATION, DirectedEdge(DE, language))
         assert (row.state, row.pack_id) == (PackState.PLANNED, None)
-    assert not [row for row in builtin_rows if row.state is PackState.UNSUPPORTED]
+    unsupported = [row.subject for row in builtin_rows if row.state is PackState.UNSUPPORTED]
+    assert unsupported == [DirectedEdge(DE, EN), DirectedEdge(EN, DE)]
 
 
 def test_rows_follow_registry_order_grouped_by_kind(
