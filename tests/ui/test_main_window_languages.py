@@ -78,7 +78,7 @@ def test_ac02_planned_languages_are_listed_but_cannot_be_selected(window) -> Non
 
 def test_ac02_registry_rejects_planned_and_same_language_pairs() -> None:
     with pytest.raises(PlannedLanguageError):
-        BUILTIN_REGISTRY.pair("de", "en")
+        BUILTIN_REGISTRY.pair("de", "es")
     with pytest.raises(SameLanguagePairError):
         BUILTIN_REGISTRY.pair("de", "de")
 
