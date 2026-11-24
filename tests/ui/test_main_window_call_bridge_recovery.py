@@ -166,13 +166,15 @@ def test_ac18_call_bridge_and_result_labels_show_registry_names(
     assert controller.outbound_lane.wait_until_idle(timeout=2.0)
     inbound_capture.on_utterance(AUDIO)
     assert controller.inbound_lane.wait_until_idle(timeout=2.0)
-    assert wait_until(lambda: len(window.history) == 2)
+    view, NL = window.call_bridge_panel.text_view, chr(10)
+    assert wait_until(lambda: len(view.turns()) == 2)
 
-    assert blocks(window.source_text) == ["German: Guten Tag", "Mandarin (Simplified): 你好"]
-    assert blocks(window.target_text) == [
-        "Mandarin (Simplified): [de>zh-Hans] Guten Tag",
-        "German: [zh-Hans>de] 你好",
+    # CAP-0166 AC-13: direction, original and translation in the live call text only.
+    assert view.turns() == [
+        "You → call" + NL + "Guten Tag" + NL + "[de>zh-Hans] Guten Tag",
+        "Call → you" + NL + "你好" + NL + "[zh-Hans>de] 你好",
     ]
+    assert blocks(window.source_text) == [] and window.history == []
     assert_no_language_codes(window)
 
 
