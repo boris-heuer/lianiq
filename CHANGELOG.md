@@ -31,6 +31,11 @@ All notable user-visible changes are documented here.
   pack or voice is named with **Open Language packs**; the setup assistant offers **Text
   translation** and lists both translation packs as needed and the voices as optional. The
   texts are never saved, logged or exported, and nothing connects to the network.
+- Pair qualification kit: `python scripts/qualify_pair.py --pair en:zh-Hans --out <folder>`
+  translates 40 synthetic meeting sentences offline in both directions and back, flags
+  Traditional-only characters in Mandarin (Simplified) output and writes a `review.md` sheet
+  with an empty *Accepted* column and a `summary.json` (counts, median latency, peak memory)
+  outside the repository; `--audio` also runs voice → recognition → translation.
 - `docs/meeting-architecture.md`: how a **Meeting** works (the four device roles, the language
   filter, the no-drop queue, which microphones are muted while Lianiq speaks with *Muted* or
   *Open*), the offline and privacy statement (no audio file is ever written; a transcript only
