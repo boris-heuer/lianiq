@@ -88,7 +88,10 @@ def test_ac07_english_pair_without_english_voice_runs_with_text_output(
     start(window)
     submit(window, spies, transcript("Good morning", "en"))
     assert wait_until(lambda: len(window.history) == 1)
-    assert spies.synthesizer.calls == []  # into Mandarin: the Mandarin voice is not required
+    # The Mandarin voice is installed, so speech goes out in Mandarin; the missing
+    # English voice only silences the other direction. Wait for the synth thread.
+    assert wait_until(lambda: len(spies.synthesizer.calls) == 1)
+    assert spies.synthesizer.calls[0][1] == ZH
     window.stop_listening()
 
 
