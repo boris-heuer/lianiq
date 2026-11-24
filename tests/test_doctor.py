@@ -146,7 +146,7 @@ def test_a_manifest_mismatch_is_invalid_even_for_an_optional_voice(
 
 def test_an_unusable_pair_fails_with_its_reason(doctor, capsys) -> None:
     config = AppConfig()
-    config.languages.pair = ["de", "en"]
+    config.languages.pair = ["de", "es"]
 
     assert doctor.check_capabilities(config, require_voices=False) == [False]
     assert "[MISSING] Language pair:" in capsys.readouterr().out
