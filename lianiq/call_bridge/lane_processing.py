@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
 
-from lianiq.call_bridge.contracts import BridgeEventKind
+from lianiq.call_bridge.contracts import BridgeEventKind, LaneId
 from lianiq.call_bridge.health import LaneHealthSnapshot
 from lianiq.domain import AudioUtterance, TranslationResult
 
@@ -37,9 +37,41 @@ class _PendingUtterance:
 
 
 class LaneProcessing:
-    """``TranslationLane`` base: one utterance through STT, translation, TTS and playback."""
+    """``TranslationLane`` base: one utterance through STT, translation, TTS and playback.
+
+    Activity events (CAP-0166 spec §3.1): ``translating`` when STT starts, ``speaking`` when
+    playback starts, ``listening`` when the turn ends. The inbound lane brackets its playback
+    with ``echo_guard.playback_started/finished``; the outbound capture asks ``echo_muted``.
+    """
+
+    def echo_muted(self) -> bool:
+        """Outbound capture hook, per block: ``True`` while inbound playback (+ tail) runs.
+
+        The caller discards muted frames and resets its segmenter. The lane reports
+        ``echo_paused`` once when the pause begins and ``listening`` once when it ends.
+        """
+        guard = self.echo_guard
+        muted = guard is not None and self.lane_id is LaneId.OUTBOUND and guard.outbound_muted()
+        with self._echo_lock:
+            changed = muted != self._echo_paused
+            self._echo_paused = muted
+            if changed:
+                self._emit(BridgeEventKind.ACTIVITY, "echo_paused" if muted else "listening", "")
+        return muted
+
+    def _idle(self) -> None:
+        with self._echo_lock:
+            idle = "echo_paused" if self._echo_paused else "listening"
+            self._emit(BridgeEventKind.ACTIVITY, idle, "")
 
     def _process(self, item: _PendingUtterance) -> None:
+        self._emit(BridgeEventKind.ACTIVITY, "translating", "", item.sequence)
+        try:
+            self._process_turn(item)
+        finally:
+            self._idle()
+
+    def _process_turn(self, item: _PendingUtterance) -> None:
         utterance = item.utterance
         started = time.perf_counter()
         try:
@@ -75,10 +107,17 @@ class LaneProcessing:
                     item.sequence,
                 )
                 return
+            self._emit(BridgeEventKind.ACTIVITY, "speaking", "", item.sequence)
+            guard = self.echo_guard if self.lane_id is LaneId.INBOUND else None
+            if guard is not None:
+                guard.playback_started()
             try:
                 self.playback(output)
             except Exception:  # noqa: BLE001 - external playback adapter boundary.
                 raise _StageFailure("playback_failure") from None
+            finally:
+                if guard is not None:
+                    guard.playback_finished()
         finally:
             if isinstance(output, Path):
                 output.unlink(missing_ok=True)

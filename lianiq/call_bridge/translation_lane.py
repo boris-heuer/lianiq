@@ -13,6 +13,7 @@ from lianiq.call_bridge.contracts import (
     BridgeEventKind,
     LaneId,
 )
+from lianiq.call_bridge.echo_guard import EchoGuard
 from lianiq.call_bridge.health import LaneHealthSnapshot
 from lianiq.call_bridge.inference_scheduler import InferenceScheduler
 from lianiq.call_bridge.lane_processing import (  # CAP-0168 file-size split
@@ -46,6 +47,7 @@ class TranslationLane(LaneProcessing):
         queue_size: int = 2,
         on_result: Callable[[TranslationResult], None] | None = None,
         on_event: Callable[[BridgeEvent], None] | None = None,
+        echo_guard: EchoGuard | None = None,
     ) -> None:
         if not isinstance(edge, DirectedEdge):
             raise TypeError("A translation lane needs a DirectedEdge")
@@ -62,6 +64,10 @@ class TranslationLane(LaneProcessing):
         self.queue_size = queue_size
         self.on_result = on_result
         self.on_event = on_event
+        self.echo_guard = echo_guard  # inbound: marks playback; outbound: ``echo_muted``
+        self.generation = 0  # the controller's start generation, stamped on every event
+        self._echo_lock = threading.RLock()
+        self._echo_paused = False
         self._queue: queue.Queue[_PendingUtterance | None] = queue.Queue(maxsize=queue_size)
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
@@ -108,6 +114,8 @@ class TranslationLane(LaneProcessing):
         self._thread.start()
 
     def submit(self, utterance: AudioUtterance) -> bool:
+        if self.echo_muted():
+            return False  # inbound playback is audible: muted audio never becomes a turn
         if self._stop.is_set() or not self._available.is_set():
             self._emit(BridgeEventKind.DROPPED, "lane_unavailable", "utterance_dropped")
             return False
@@ -254,7 +262,8 @@ class TranslationLane(LaneProcessing):
         sequence: int | None = None,
     ) -> None:
         if self.on_event:
-            self.on_event(BridgeEvent(self.lane_id, kind, category, message, sequence))
+            event = BridgeEvent(self.lane_id, kind, category, message, sequence, self.generation)
+            self.on_event(event)
         if kind is BridgeEventKind.DROPPED:
             with self._health_lock:
                 current = self._health

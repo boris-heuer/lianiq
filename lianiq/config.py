@@ -161,15 +161,18 @@ class UiConfig:
 @dataclass(slots=True)
 class CallBridgeConfig:
     local_language: str = "de"
-    enabled: bool = False
+    enabled: bool = False  # still read from old files; never a Start gate (CAP-0166 §3.3)
     local_microphone_endpoint_id: str | None = None
     call_microphone_render_endpoint_id: str | None = None
     call_speaker_capture_endpoint_id: str | None = None
     local_headphones_endpoint_id: str | None = None
     failure_policy: str = "mute"
     max_pending_age_ms: int = 4_000
+    guard_tail_ms: int = 300  # echo guard tail after inbound playback (CAP-0166 §3.3)
 
     def __post_init__(self) -> None:
+        if type(self.guard_tail_ms) is not int or self.guard_tail_ms < 0:
+            raise ValueError(f"call_bridge.guard_tail_ms must be >= 0: {self.guard_tail_ms!r}")
         if self.failure_policy != "mute":
             raise ValueError("Only the fail-closed 'mute' call bridge policy is supported")
         if self.max_pending_age_ms <= 0:

@@ -41,6 +41,9 @@ class BridgeEventKind(str, Enum):
     DROPPED = "dropped"
     ERROR = "error"
     ENDPOINT = "endpoint"
+    # A lane's activity (CAP-0166 spec §3.1): ``translating``, ``speaking``, ``listening``
+    # and, outbound only, ``echo_paused``.
+    ACTIVITY = "activity"
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,6 +109,8 @@ class BridgeEvent:
     category: str
     message: str
     sequence: int | None = None
+    # The controller's start generation (CAP-0166, CAP-0168 advisory A8); 0 = no start.
+    generation: int = 0
 
 
 EXPECTED_ENDPOINT_FLOWS = MappingProxyType(
