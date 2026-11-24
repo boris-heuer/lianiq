@@ -24,7 +24,7 @@ in the operator setup.
 
 | What you see | Cause | What to do |
 |---|---|---|
-| **Start (F8)** is disabled and the status bar says `Not available: missing …` | A model, voice or device the selected mode needs is missing | Get the missing pack on the **Language packs** page (see [Language packs](#language-packs)), or run `.\.venv\Scripts\python.exe .\scripts\doctor.py` and provision what it reports with `scripts\setup.ps1` or `scripts\download_models.py`. A missing voice only disables **Voice output**; text output still works |
+| **Start (F8)** is disabled and the status bar says `Not available: missing …` | A model, voice or device the selected mode needs is missing | Get the missing pack on the **Language packs** page (see [Language packs](#language-packs)), or run `.\.venv\Scripts\python.exe .\scripts\doctor.py` and provision what it reports with `scripts\setup.ps1` or `scripts\download_models.py`. A missing voice only turns off that language's voice switch; text output still works |
 | A sidebar entry is greyed out and cannot be opened | It is a planned entry ("Planned — not available yet") | Nothing to fix; it is not available in this version |
 | The notice "No language pair is ready" with **Open Language packs** | Speech recognition or a translation direction of the pair is not installed | Press **Open Language packs** and get the packs marked "Needed by: Conversation"; the notice disappears once the pair is ready, without a restart |
 | A Start button is disabled with the tooltip `Stop the Conversation session first` (or `Stop the Call Bridge session first`) | Only one session runs at a time | Press **Stop (F9)** in the session strip, then start the other mode |
@@ -101,6 +101,26 @@ record only the pack id, version, operation, state and error class of a job.
 | "Listen & translate needs a microphone. Choose one here or in Settings › Audio devices." | Choose a *Microphone* on the page, or press **Open audio settings** |
 | "The microphone <name> is no longer available. Listening stopped; your text is kept." | Replug the device and press **Reconnect**, or press **Choose device** and pick another one; then **Start listening (F8)**. Lianiq never switches the microphone by itself |
 | "Listening — nothing heard yet." stays, or rows show "Not understood" | Check the hardware mute switch and the Windows input level, and that the speaker uses the *Source language* |
+
+## Voice output
+
+The voice row (Conversation and Settings › Voice output) has one switch per language, named
+`Speak <language>`, with its state. See the
+[README voice output section](../README.md#voice-output) for the controls.
+
+| What you see | Cause | What to do |
+|---|---|---|
+| *Voice missing* next to a disabled switch, with **Open Language packs** | The voice files of that language are not installed | Press **Open Language packs** and get the voice, or run `scripts\download_models.py`. Until then that language is shown as text only; no notice appears |
+| *Voice files invalid* next to a disabled switch | The voice files are present but incomplete or changed | Install the voice again from **Open Language packs**; `scripts\doctor.py` reports its state |
+| **Start** stays disabled although a voice is ready | A switched-on voice needs speakers, and none are available | Choose speakers in Settings › Audio devices, or turn the voice switches off to run text only |
+| A blocking notice `Models could not be prepared: …` with **Retry** after **Start** | A voice (or another model) failed to load; nothing started | Check the voice with `scripts\doctor.py` and press **Retry**; turn that voice off to start without it |
+| `Could not speak the translation (<language>)` | The voice failed for one turn. "The translation is shown as text. Later turns are spoken again." Recording continues | Nothing for a single turn. If it repeats, open **Voice options…**, return Rate and Volume to 1.00× and 100 %, or install the voice again |
+| `Speakers '<name>' disconnected. Spoken output stopped; translations still appear as text.` | The speakers were lost during speech; the session continues as text and **Replay** stays off | See [Audio devices](#audio-devices) |
+| "Microphone paused while the translation is spoken" and the level meter at 0 | Expected: Lianiq does not listen while it speaks, so it never translates its own voice | Wait for the speech to end, or press **Stop playback**; listening resumes at once |
+| **Replay** is disabled with "Nothing to replay yet" | No translation was spoken in the running session | Speak a turn into a language whose switch is on; **Replay** is also disabled during speech |
+| **Voice options…** is missing next to a ready voice | The engine offers no control for this voice | Nothing to fix |
+| **Voice options…** is disabled with `Stop <mode> to change this voice.` | Call Bridge or Meeting keeps the voice options of its Start | Stop that session; the change applies at the next Start |
+| The voice switches are disabled while a Conversation runs | The spoken languages are bound at **Start** | Press **Stop (F9)**, change the switches and start again; **Voice options…** stays usable |
 
 ## Window size, scaling and accessibility
 
