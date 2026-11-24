@@ -12,12 +12,12 @@ target Windows machine.
 
 | Surface | Reachable path | Safety gate |
 |---|---|---|
-| Enable call bridge | Main window → Full-duplex call bridge → Enable | Disabled by default |
-| Four endpoint selectors | Same panel | Capture/render role validation, all roles required, IDs unique |
-| Start/stop | Same panel | Start rejects incomplete/unsafe mapping; stop releases both streams and workers |
-| Outbound route test | Same panel → Test Mandarin → call mic | Explicit action; targets only configured TX render endpoint |
-| Inbound route test | Same panel → Test German → headphones | Explicit action; targets only configured local render endpoint |
-| State and levels | Same panel | Shows lane levels and stopped/running/degraded state without speech content |
+| Call Bridge page | Sidebar → Call Bridge (Experimental) | Start disabled until the readiness list is empty |
+| Four endpoint selectors | Same page | Capture/render role validation, all roles required, IDs unique |
+| Start/stop | Same page | Start rejects incomplete/unsafe mapping; stop releases both streams and workers |
+| Outbound route test | Same page → You → call → Test | Explicit action; targets only configured TX render endpoint |
+| Inbound route test | Same page → Call → you → Test | Explicit action; targets only configured local render endpoint |
+| State and levels | Same page | Shows lane levels and stopped/running/degraded state without speech content |
 | Redacted diagnostics | `scripts/call_bridge_diagnostics.py` | Excludes endpoint IDs, display names, transcript, prompts, and PCM |
 
 ## Quality characteristics
