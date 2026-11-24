@@ -8,7 +8,6 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 from lianiq.call_bridge.contracts import (
     BridgeEvent,
     BridgeEventKind,
-    BridgeState,
     CallBridgeLanes,
     EndpointRole,
     LaneId,
@@ -48,11 +47,15 @@ class CallBridgeLifecycle:
     def build_panel(self) -> CallBridgePanel:
         local_name, remote_name = self._language_names()
         self.panel = CallBridgePanel(
-            self.config.call_bridge, local_name=local_name, remote_name=remote_name
+            self.config.call_bridge,
+            local_name=local_name,
+            remote_name=remote_name,
+            readiness=self.readiness_reasons,
         )
         self.panel.start_requested.connect(self.start_call_bridge)
         self.panel.stop_requested.connect(self.stop_call_bridge)
-        self.panel.route_test_requested.connect(self._run_call_bridge_route_test)
+        self.connect_setup(self.panel)
+        self.show_route_tests()
         return self.panel
 
     def active(self) -> bool:
@@ -78,6 +81,7 @@ class CallBridgeLifecycle:
 
     def update_languages(self) -> None:
         self.panel.set_languages(*self._language_names())
+        self.show_route_tests()  # a pair or local-language change resets both paths
 
     def lanes_name(self) -> str:
         """The Call Bridge languages for its notices: "<local> ↔ <remote>"."""
@@ -178,8 +182,6 @@ class CallBridgeLifecycle:
         conversation.start_button.setEnabled(idle)
         conversation.set_session_controls_enabled(idle)
         conversation.set_devices_enabled(True)
-        for role in (EndpointRole.LOCAL_MICROPHONE, EndpointRole.CALL_SPEAKER_CAPTURE):
-            self.panel.set_level(role, 0.0)
         self.host.statusBar().showMessage(
             "Call bridge stopped; all explicit endpoints were released"
         )
@@ -190,6 +192,7 @@ class CallBridgeLifecycle:
         self.panel.set_session_busy(
             session_busy_message(active) if busy and active is not None else None
         )
+        self.show_route_tests()  # tests are disabled while the Call Bridge runs
 
     @Slot(object, str)
     def _handle_call_bridge_capture_fault(self, role: EndpointRole, message: str) -> None:
@@ -200,9 +203,8 @@ class CallBridgeLifecycle:
 
     @Slot(object)
     def _show_call_bridge_event(self, event: BridgeEvent) -> None:
-        if event.kind is BridgeEventKind.STATE:
-            self.panel.set_state(event.category)
-        elif event.kind is BridgeEventKind.ERROR:
+        # The lane status lines follow ``LaneStatusBook`` in WI-03; here only notices.
+        if event.kind is BridgeEventKind.ERROR:
             if event.category == "playback_failure" and self.controller is not None:
                 output_role = (
                     EndpointRole.CALL_MICROPHONE_RENDER
@@ -210,7 +212,6 @@ class CallBridgeLifecycle:
                     else EndpointRole.LOCAL_HEADPHONES
                 )
                 self.controller.endpoint_lost(output_role)
-            self.panel.set_state(BridgeState.DEGRADED, event.category)
             lane = event.lane_id.value if event.lane_id else None
             self.host.diagnostics.record("call-bridge", f"{event.category}: {event.message}")
             self.host.post_notice(
@@ -219,11 +220,6 @@ class CallBridgeLifecycle:
         elif event.kind is BridgeEventKind.DROPPED:
             self.host.post_notice(
                 catalog.bridge_dropped(event.category, self._lane_source(event.lane_id))
-            )
-        elif event.kind is BridgeEventKind.ENDPOINT:
-            self.panel.set_state(
-                BridgeState.DEGRADED if event.category == "endpoint_lost" else BridgeState.RUNNING,
-                event.message,
             )
 
     @Slot(object, float)
