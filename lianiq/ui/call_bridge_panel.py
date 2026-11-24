@@ -29,6 +29,7 @@ from lianiq.call_bridge.route_tests import RouteTestState
 from lianiq.config import PROJECT_ROOT, CallBridgeConfig
 from lianiq.ui import strings_call_bridge as s
 from lianiq.ui.call_bridge_paths import CallPathBox
+from lianiq.ui.call_bridge_text import CallBridgeTextView
 
 OPERATOR_SETUP = PROJECT_ROOT / "docs" / "call-bridge-operator-setup.md"
 Readiness = Callable[..., tuple[BlockingReason, ...]]
@@ -94,6 +95,8 @@ class CallBridgePanel(QWidget):
         self._readiness_layout.setContentsMargins(0, 0, 0, 0)
         self.readiness_labels: list[QLabel] = []
         outer.addWidget(self.readiness_list)
+        self.text_view = CallBridgeTextView()  # live call text, memory only (CAP-0166 WI-03)
+        outer.addWidget(self.text_view)
         # CAP-0168 WI-05: Start/Stop sit in their own row, which the workspace keeps outside
         # its scroll area (spec §2.3.7).
         self.session_actions = QWidget()
@@ -171,9 +174,7 @@ class CallBridgePanel(QWidget):
         self._running = running
         for box in self.paths.values():
             box.set_selectors_enabled(not running)
-            box.set_stream_open(running)
-            # WI-03 drives the lane status lines from ``LaneStatusBook``.
-            box.set_lane_status(s.CB_LANE_LISTENING if running else s.CB_LANE_STOPPED)
+            box.set_stream_open(running)  # the status lines follow ``LaneStatusBook``
         self.refresh()
 
     def set_session_busy(self, reason: str | None) -> None:

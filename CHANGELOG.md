@@ -93,6 +93,14 @@ All notable user-visible changes are documented here.
   asks *Did your partner hear it?* or *Did you hear it?*; **Yes** / **No** record *Test passed*
   or *Test failed*, and a device, pair or language change resets that path to *Not tested*. An
   experimental note links the local *Real-call checklist*.
+- While the **Call Bridge** runs, each path shows its own lane status (*Listening*,
+  *Translating…*, *Speaking*, *Muted — …*, *Device lost — <device>*, *Reconnecting…*); a lost
+  device mutes only its lane, and only the same device brings it back. A live call text below
+  the paths lists the last 200 turns with direction, original and translation (memory only,
+  cleared at Start); Call Bridge turns no longer appear in the Conversation transcript. While
+  you hear the translation, your microphone is paused (*Paused while you hear the
+  translation*). Start waits for a playing or unanswered route test, and the Call Bridge
+  notices name the lane direction (*You → call*, *Call → you*).
 
 ### Fixed
 

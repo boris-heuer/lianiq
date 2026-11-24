@@ -223,8 +223,10 @@ def test_ac24_bridge_errors_name_the_lane_and_language() -> None:
     item = catalog.bridge_failed(
         "inbound", "recognition_failure", "Call Bridge · inbound · Mandarin"
     )
-    assert item.title == "Call Bridge inbound lane failed closed: recognition_failure"
+    assert item.title == "Call Bridge · Call → you lane failed closed: recognition_failure"
     assert "inbound" in item.source and "Mandarin" in item.source
     assert item.continues == "This lane is muted; the other lane continues."
+    outbound = catalog.bridge_dropped("stale", "Call Bridge · outbound · German", "outbound")
+    assert outbound.title == "Call Bridge · You → call dropped stale work: stale"
     unknown = catalog.bridge_failed(None, "route_test_failed", "Call Bridge")
     assert unknown.title == "Call Bridge lane failed closed: route_test_failed"

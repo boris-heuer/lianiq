@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from lianiq.ui import strings
+from lianiq.ui import strings_call_bridge as cb
 from lianiq.ui.notice_catalog_base import (
     BRIDGE_CAPTURE,
     BRIDGE_DROPPED,
@@ -177,12 +178,21 @@ def export_result(workspace: WorkspaceId, title: str, where: str) -> Notice:
 
 # Call Bridge (``BridgeEvent``; event content owned by CAP-0166) ---------------------------
 
+# The lane direction labels of the bridge notices (CAP-0166 spec §4.3); keys are unchanged.
+_DIRECTIONS = {"outbound": cb.CB_PATH_OUT_NAME, "inbound": cb.CB_PATH_IN_NAME}
+
+
+def bridge_name(lane: str | None) -> str:
+    """The notice name, with the direction label of a lane value (``outbound``, ``inbound``)."""
+    direction = _DIRECTIONS.get(lane or "")
+    return f"{strings.NAV_CALL_BRIDGE} · {direction}" if direction else strings.NAV_CALL_BRIDGE
+
 
 def bridge_failed(lane: str | None, category: str, where: str) -> Notice:
     return _notice(
         bridge_failed_key(lane),
         Severity.WARNING,
-        strings.NOTICE_BRIDGE_FAILED.format(lane=lane or "", category=category).replace("  ", " "),
+        strings.NOTICE_BRIDGE_FAILED.format(bridge=bridge_name(lane), category=category),
         strings.DETAIL_BRIDGE,
         where,
         strings.CONTINUES_LANE,
@@ -190,11 +200,11 @@ def bridge_failed(lane: str | None, category: str, where: str) -> Notice:
     )
 
 
-def bridge_dropped(category: str, where: str) -> Notice:
+def bridge_dropped(category: str, where: str, lane: str | None = None) -> Notice:
     return _notice(
         BRIDGE_DROPPED,
         Severity.INFO,
-        strings.NOTICE_BRIDGE_DROPPED.format(category=category),
+        strings.NOTICE_BRIDGE_DROPPED.format(bridge=bridge_name(lane), category=category),
         strings.DETAIL_NONE,
         where,
         strings.CONTINUES_RECORDING,
@@ -202,11 +212,11 @@ def bridge_dropped(category: str, where: str) -> Notice:
     )
 
 
-def bridge_capture_muted(reason: str, where: str) -> Notice:
+def bridge_capture_muted(reason: str, where: str, lane: str | None = None) -> Notice:
     return _notice(
         BRIDGE_CAPTURE,
         Severity.WARNING,
-        strings.NOTICE_BRIDGE_CAPTURE.format(reason=reason),
+        strings.NOTICE_BRIDGE_CAPTURE.format(bridge=bridge_name(lane), reason=reason),
         strings.DETAIL_BRIDGE,
         where,
         strings.CONTINUES_LANE,

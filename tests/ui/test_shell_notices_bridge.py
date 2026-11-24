@@ -51,14 +51,14 @@ def test_ac24_a_bridge_error_is_one_notice_naming_the_lane_and_its_language(wind
     window.bridge.call_bridge_event.emit(event)  # a repeat updates the one notice
 
     (notice,) = bridge_notices(window)
-    assert notice.title == "Call Bridge inbound lane failed closed: recognition_failure"
+    assert notice.title == "Call Bridge · Call → you lane failed closed: recognition_failure"
     # The inbound lane listens to the remote language (Mandarin), not its German target.
     assert notice.source == "Call Bridge · inbound · Mandarin (Simplified)"
     assert notice.continues == "This lane is muted; the other lane continues."
     assert notice.repeats == 1 and notice.severity is Severity.WARNING
     banner = window.banners[CALL_BRIDGE]
     assert banner.title_label.text() == (
-        "Warning: Call Bridge inbound lane failed closed: recognition_failure (2×)"
+        "Warning: Call Bridge · Call → you lane failed closed: recognition_failure (2×)"
     )
     assert window.notices.live(CONVERSATION) == ()
 
@@ -76,7 +76,7 @@ def test_ac24_a_capture_fault_is_one_notice_naming_the_lane_and_its_language(win
     window.bridge.call_bridge_capture_fault.emit(EndpointRole.CALL_SPEAKER_CAPTURE, "stream error")
 
     (notice,) = bridge_notices(window)
-    assert notice.title == "Call Bridge capture muted: stream error"
+    assert notice.title == "Call Bridge · Call → you capture muted: stream error"
     assert notice.source == "Call Bridge · inbound · Mandarin (Simplified)"
     assert "lane is muted" in notice.continues
 
@@ -90,7 +90,7 @@ def test_ac24_a_dropped_turn_is_an_info_notice(window) -> None:
         BridgeEvent(LaneId.OUTBOUND, BridgeEventKind.DROPPED, "stale_turn", "too old", 3)
     )
     (notice,) = bridge_notices(window)
-    assert notice.title == "Call Bridge dropped stale work: stale_turn"
+    assert notice.title == "Call Bridge · You → call dropped stale work: stale_turn"
     assert notice.severity is Severity.INFO
     assert notice.source == "Call Bridge · outbound · German"
 

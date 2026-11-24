@@ -71,6 +71,10 @@ class LaneStatusBook:
         self._generation = generation
         self._set_all(LaneActivity.STARTING)
 
+    def stop(self) -> None:
+        """Both lanes *Stopped* (Stop before the controller existed, or a failed start)."""
+        self._set_all(LaneActivity.STOPPED)
+
     def apply(self, event: BridgeEvent, detail: str = "") -> LaneStatus | None:
         """Apply one event; ``detail`` names the lost device of an ``endpoint_lost`` event."""
         if event.generation != self._generation:

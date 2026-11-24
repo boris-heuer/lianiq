@@ -36,6 +36,7 @@ class EndpointCaptureStream:
         stream_factory: StreamFactory | None = None,
         *,
         on_clip: Callable[[], None] | None = None,
+        muted: Callable[[], bool] | None = None,
     ) -> None:
         if endpoint.flow is not EndpointFlow.CAPTURE:
             raise ValueError("EndpointCaptureStream requires a capture endpoint")
@@ -45,6 +46,8 @@ class EndpointCaptureStream:
         self.on_level = on_level
         self.on_error = on_error
         self.on_clip = on_clip  # a block reached full scale (the Call Bridge meter caption)
+        # Asked per block (CAP-0166 echo guard): a muted block is discarded, the segmenter reset.
+        self.muted = muted
         self._stream_factory = stream_factory
         self._stream = None
         self._thread: threading.Thread | None = None
@@ -183,6 +186,9 @@ class EndpointCaptureStream:
                 self.on_level(min(level / max(self.config.start_rms * 3, 0.001), 1.0))
             if self.on_clip and float(np.max(np.abs(frame))) >= CLIP_PEAK:
                 self.on_clip()
+            if self.muted is not None and self.muted():
+                self._segmenter.reset()
+                continue
             utterance = self._segmenter.push(frame)
             if utterance is not None:
                 self.on_utterance(AudioUtterance(utterance, self.config.sample_rate))
