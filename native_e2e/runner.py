@@ -1,8 +1,8 @@
 """Row order of one run (CAP-0174 spec §2.2.1 step 4, §2.3; contract §5).
 
 S-01 → S-02 → S-03 → (S-04 window opens) → S-05 → C-04 → E-01 → E-11 → E-03 → E-10
-→ E-14 → E-13 → E-15 → E-27 → E-28 → E-29 → E-30 → C-05 → C-06 → C-09 → E-12 → C-03
-→ SHOT → (app left open is closed; S-04 window closes, S-04 recorded) → T-01 → T-02
+→ E-14 → E-13 → E-15 → E-27 → E-28 → E-29 → E-23 → E-20 → E-21 → E-22 → E-30 → C-05
+→ C-06 → C-09 → E-12 → C-03 → SHOT → (app left open is closed; S-04 window closes, S-04 recorded) → T-01 → T-02
 → T-05 → T-03 → T-04 (T-05 checks the models junction before T-03 deletes the scratch
 folders' parent).
 
@@ -32,6 +32,8 @@ from native_e2e.rows import (
     e13,
     e14,
     e15,
+    e20,
+    e23,
     e27,
     e28,
     e29,
@@ -76,6 +78,10 @@ def _app_rows() -> tuple[tuple[str, Callable[[RunContext], Row]], ...]:
         ("E-27", e27.run),  # E-27..E-30: voice output (CAP-0167), each with its own app
         ("E-28", e28.run),
         ("E-29", e29.run),
+        ("E-23", e23.run),  # CAP-0172 session rule, limit, privacy (image models)
+        ("E-20", e20.run),  # E-20..E-22: one scratch-model group, run by e20.run
+        ("E-21", e20.run_e21),
+        ("E-22", e20.run_e22),
         ("E-30", e30.run),  # scratch models: restores the junction itself
         ("C-05", c05.c05),  # C-05, C-06, C-09: repository scripts
         ("C-06", c05.c06),
