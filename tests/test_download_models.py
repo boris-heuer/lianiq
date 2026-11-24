@@ -93,8 +93,17 @@ def test_components_select_built_in_packs_by_kind() -> None:
     ids = {c: [p.id for p in module.selected_packs(packs, c)] for c in module.COMPONENTS}
     assert ids["all"] == [pack.id for pack in packs.packs()]
     assert ids["stt"] == ["stt-faster-whisper-small"]
-    assert ids["translation"] == ["mt-de-zh-hans", "mt-zh-hans-de"]
-    assert ids["tts"] == ["tts-de-thorsten-medium", "tts-zh-hans-aishell3"]
+    assert ids["translation"] == [
+        "mt-de-zh-hans",
+        "mt-zh-hans-de",
+        "mt-en-zh-hans",
+        "mt-zh-hans-en",
+    ]
+    assert ids["tts"] == [
+        "tts-de-thorsten-medium",
+        "tts-zh-hans-aishell3",
+        "tts-en-us-ljspeech-high",
+    ]
     assert module.COMPONENTS["tts"] == (PackKind.VOICE,)
 
 

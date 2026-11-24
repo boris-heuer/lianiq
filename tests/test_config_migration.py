@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from lianiq.config import AppConfig
+from lianiq.config import AppConfig, merge_dict
 from lianiq.config_migration import SettingsMigrationError, migrate_settings
 from tests._config_migration_helpers import (
     LEGACY_LOCAL_FIXTURE,
@@ -39,12 +39,14 @@ def test_ac16_todays_v1_default_migrates_to_the_shipped_v2_default() -> None:
         "output": "text",
         "detection_min_probability": 0.7,
     }
-    assert shipped["speech_to_text"]["languages"] == ["de", "zh-Hans"]
+    assert shipped["speech_to_text"]["languages"] == ["de", "zh-Hans", "en"]
     assert shipped["call_bridge"]["local_language"] == "de"
     assert "enabled" not in shipped["tts"]
     assert "mode" not in shipped["ui"]
-    # The shipped v2 default is exactly what loading today's v1 default produces.
-    assert AppConfig.from_mapping(migrate_settings(legacy)) == AppConfig.load(REPO_DEFAULT)
+    # The shipped v2 default is exactly what loading today's v1 default produces; v1 has no
+    # English keys, so they come from the shipped default as in ``AppConfig.load()``.
+    migrated = merge_dict(shipped, migrate_settings(legacy))
+    assert AppConfig.from_mapping(migrated) == AppConfig.load(REPO_DEFAULT)
 
 
 def test_ac16_legacy_local_overlay_is_migrated_backed_up_once_and_idempotent(

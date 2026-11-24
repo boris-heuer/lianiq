@@ -45,7 +45,11 @@ if TYPE_CHECKING:
 
 # Route-test phrases per language (functional data). The Call Bridge lanes themselves come
 # from the session pair and ``call_bridge.local_language`` (``CallBridgeLanes``).
-ROUTE_TEST_TEXT = {LanguageId("de"): "Kopfhörer-Test.", LanguageId("zh-Hans"): "通话麦克风测试。"}
+ROUTE_TEST_TEXT = {
+    LanguageId("de"): "Kopfhörer-Test.",
+    LanguageId("en"): "Headphone test.",
+    LanguageId("zh-Hans"): "通话麦克风测试。",
+}
 
 
 class CallBridgeWorkspace(CallBridgeSetup, CallBridgeLifecycle, QObject):

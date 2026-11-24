@@ -180,7 +180,8 @@ def test_ac05_review_lists_required_rows_and_optional_voices(tmp_path: Path, bui
     assert (voice_zh.optional, voice_zh.needed_by) == (True, ())
     assert (microphone.status, playback.status) == (ReviewStatus.READY, "device_not_found")
     assert playback.optional and playback.requirements[0].kind is RequirementKind.PLAYBACK
-    assert review.missing_bytes == sum(pack.download_bytes for pack in builtin.packs())
+    listed = [builtin.get(row.pack_id) for row in review.rows if row.pack_id]
+    assert review.missing_bytes == sum(pack.download_bytes for pack in listed)
     assert review.free_bytes == 7
 
 

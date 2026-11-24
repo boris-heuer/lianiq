@@ -86,17 +86,17 @@ def test_ac03_usage_step_offers_enabled_and_experimental_usages_only() -> None:
 
 
 def test_ac04_languages_follow_the_registry_with_planned_disabled() -> None:
-    step = LanguagesStep(BUILTIN_REGISTRY)
+    step = LanguagesStep(BUILTIN_REGISTRY, ["de", "zh-Hans"])
     first = step.lists[0]
     assert texts(first) == [
         "German",
+        "English",
         "Mandarin (Simplified)",
-        "English — Planned",
         "Spanish — Planned",
         "French — Planned",
     ]
-    assert enabled(first) == [True, True, False, False, False]
-    assert step.pair() == BUILTIN_REGISTRY.pair("de", "zh-Hans")  # preselected
+    assert enabled(first) == [True, True, True, False, False]
+    assert step.pair() == BUILTIN_REGISTRY.pair("de", "zh-Hans")
     step.lists[1].setCurrentRow(0)
     assert not step.complete()  # the same language twice
     synthetic = LanguagesStep(synthetic_registry())

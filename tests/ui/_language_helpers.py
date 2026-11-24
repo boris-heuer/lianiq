@@ -30,7 +30,6 @@ AUTOMATIC = "Automatic (German ↔ Mandarin (Simplified))"
 DE_TO_ZH = "German → Mandarin (Simplified)"
 ZH_TO_DE = "Mandarin (Simplified) → German"
 PLANNED = [
-    "English – planned, unavailable",
     "Spanish – planned, unavailable",
     "French – planned, unavailable",
 ]

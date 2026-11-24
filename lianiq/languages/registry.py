@@ -133,18 +133,18 @@ BUILTIN_LANGUAGES: tuple[LanguageDefinition, ...] = (
         Availability.QUALIFIED,
     ),
     LanguageDefinition(
+        LanguageId("en"),
+        "English",
+        "English",
+        {"whisper": "en", "piper": "en_US"},
+        Availability.QUALIFIED,
+    ),
+    LanguageDefinition(
         LanguageId("zh-Hans"),
         "Mandarin (Simplified)",
         "普通话（简体）",
         {"whisper": "zh", "piper": "zh_CN", "sherpa-onnx": "zh"},
         Availability.QUALIFIED,
-    ),
-    LanguageDefinition(
-        LanguageId("en"),
-        "English",
-        "English",
-        {"whisper": "en", "piper": "en_US"},
-        Availability.PLANNED,
     ),
     LanguageDefinition(
         LanguageId("es"),

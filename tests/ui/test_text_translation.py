@@ -51,7 +51,7 @@ def test_ac01_the_entry_is_enabled_third_and_opens_the_page(window) -> None:
 def test_ac02_combos_list_registry_names_with_planned_disabled(window) -> None:
     workspace = page(window)
     names = [workspace.source_combo.itemText(i) for i in range(workspace.source_combo.count())]
-    assert names[:2] == ["German", "Mandarin (Simplified)"]
+    assert names[:3] == ["German", "English", "Mandarin (Simplified)"]
     planned = [i for i, name in enumerate(names) if name.endswith(strings.PAIR_PLANNED_SUFFIX)]
     assert planned
     model = workspace.source_combo.model()
@@ -88,8 +88,8 @@ def test_ac03_ac16_swap_keeps_the_draft_and_marks_the_result_stale(window) -> No
 
 def test_choosing_the_other_language_in_a_combo_swaps_them(window) -> None:
     workspace = page(window)
-    workspace.source_combo.setCurrentIndex(1)
-    workspace.source_combo.activated.emit(1)
+    workspace.source_combo.setCurrentIndex(2)
+    workspace.source_combo.activated.emit(2)
     assert workspace.controller.draft.source == "zh-Hans"
     assert workspace.target_combo.currentText() == "German"
 

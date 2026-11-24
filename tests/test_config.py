@@ -41,7 +41,10 @@ def test_v2_language_settings_round_trip(tmp_path: Path) -> None:
 
     assert loaded == config
     saved = json.loads(path.read_text(encoding="utf-8"))
-    assert saved["translation"]["edges"]["de>zh-Hans"] == {"model_path": "models/custom-de-zh"}
+    assert saved["translation"]["edges"]["de>zh-Hans"] == {
+        "model_path": "models/custom-de-zh",
+        "target_prefix": "",
+    }
     assert saved["tts"]["voices"]["zh-Hans"] == "models/piper/zh.onnx"
 
 
@@ -52,7 +55,7 @@ def test_missing_config_uses_hardware_defaults(tmp_path: Path) -> None:
     assert config.tts.device == "auto"
     assert config.speech_to_text.compute_type == "int8"
     assert config.speech_to_text.cpu_threads == 8
-    assert config.speech_to_text.languages == ["de", "zh-Hans"]
+    assert config.speech_to_text.languages == ["de", "zh-Hans", "en"]
     assert config.languages.pair == ["de", "zh-Hans"]
     assert config.languages.detection_min_probability == 0.7
     assert config.call_bridge.local_language == "de"
@@ -183,6 +186,7 @@ def test_default_tts_selects_sherpa_onnx_for_mandarin_and_piper_for_german() -> 
     assert config.tts.engines == {
         "de": VoiceEngineConfig("piper"),
         "zh-Hans": VoiceEngineConfig("sherpa-onnx", speaker_id=20, length_scale=1.15),
+        "en": VoiceEngineConfig("piper"),
     }
     assert config.tts.engines == AppConfig().tts.engines
 
