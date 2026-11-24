@@ -52,8 +52,11 @@ def click(widget) -> None:
 class FakeCaptureStream:
     instances: ClassVar[list[FakeCaptureStream]] = []
 
-    def __init__(self, endpoint, _config, on_utterance, on_level=None, on_error=None) -> None:
+    def __init__(
+        self, endpoint, _config, on_utterance, on_level=None, on_error=None, on_clip=None
+    ) -> None:
         self.endpoint = endpoint
+        self.on_level, self.on_clip = on_level, on_clip
         self.on_utterance = on_utterance
         self.running = False
         FakeCaptureStream.instances.append(self)
@@ -116,7 +119,6 @@ def build_call_bridge_window(
         configure(config, tmp_path)
     pipeline = build_pipeline(config, registry or BUILTIN_REGISTRY, probe=ReadinessProbe(tmp_path))
     window = main_window_module.MainWindow(config, pipeline, persist_settings=False)
-    window.call_bridge_panel.enabled_checkbox.setChecked(True)
     window.show()
     return window
 
