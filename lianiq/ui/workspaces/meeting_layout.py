@@ -86,6 +86,7 @@ class MeetingLayout:
         box = QWidget()
         column = QVBoxLayout(box)
         column.setContentsMargins(0, 0, 0, 0)
+        column.addLayout(self.language_row())  # *Your language* (``meeting_language``)
         table = QGroupBox(strings.MEETING_TABLE_GROUP)
         table_grid = QGridLayout(table)
         for row, role in enumerate((MeetingRole.TABLE_CAPTURE, MeetingRole.TABLE_RENDER)):
@@ -176,6 +177,7 @@ class MeetingLayout:
     def show_running(self, busy: bool) -> None:
         """Lock the setup while a meeting starts, runs or drains (``busy``)."""
         self.pair_combo.setEnabled(not busy and not self.host.session_locked())
+        self.lock_local_language(busy)
         for combo in self.combos.values():
             combo.setEnabled(not busy)
         self.headset_checkbox.setEnabled(not busy)
