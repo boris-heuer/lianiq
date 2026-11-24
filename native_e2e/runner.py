@@ -1,10 +1,12 @@
 """Row order of one run (CAP-0174 spec §2.2.1 step 4, §2.3; contract §5).
 
 S-01 → S-02 → S-03 → (S-04 window opens) → S-05 → C-04 → E-01 → E-11 → E-03 → E-10
-→ E-14 → E-13 → E-15 → E-27 → E-28 → E-29 → E-23 → E-20 → E-21 → E-22 → E-30 → C-05
-→ C-06 → C-09 → E-12 → C-03 → SHOT → (app left open is closed; S-04 window closes, S-04 recorded) → T-01 → T-02
-→ T-05 → T-03 → T-04 (T-05 checks the models junction before T-03 deletes the scratch
-folders' parent).
+→ E-14 → E-13 → E-15 → E-27 → E-28 → E-29 → E-23 → E-16 → E-18 → E-19 → E-20 → E-21 → E-22
+→ E-30 → C-05 → C-06 → C-09 → E-12 → C-03 → SHOT → (app left open is closed; S-04 window
+closes, S-04 recorded) → E-17 → T-01 → T-02 → T-05 → T-03 → T-04 (T-05 checks the models
+junction before T-03 deletes the scratch folders' parent). E-17 presses **Download** (a
+blocked connection attempt), so it runs after ``s04.finish`` while the block rule still
+holds (T-04 removes it); E-18 runs the E-18/E-19 scratch group and E-19 returns its row.
 
 Rules: only a passing S-01 lets any later row run (fork commit, leftover marker). Without
 an S-03 backup the app rows, UIA rows included, do not run (CAP-0168: T-01 would be
@@ -32,6 +34,10 @@ from native_e2e.rows import (
     e13,
     e14,
     e15,
+    e16,
+    e17,
+    e18,
+    e19,
     e20,
     e23,
     e27,
@@ -79,6 +85,9 @@ def _app_rows() -> tuple[tuple[str, Callable[[RunContext], Row]], ...]:
         ("E-28", e28.run),
         ("E-29", e29.run),
         ("E-23", e23.run),  # CAP-0172 session rule, limit, privacy (image models)
+        ("E-16", e16.run),  # CAP-0171 offline provisioning: scratch-model groups
+        ("E-18", e18.run),  # runs E-18 and E-19 on one scratch group
+        ("E-19", e19.run),
         ("E-20", e20.run),  # E-20..E-22: one scratch-model group, run by e20.run
         ("E-21", e20.run_e21),
         ("E-22", e20.run_e22),
@@ -113,6 +122,7 @@ def execute(ctx: RunContext) -> dict[str, Row]:
                 except Exception:  # noqa: BLE001, S110 - the T rows and S-04 still run
                     pass
                 rows["S-04"] = _guard("S-04", s04.finish, ctx)
+                rows["E-17"] = _guard("E-17", e17.run, ctx)  # outside the S-04 window
     finally:
         for row in teardown.run(ctx):
             rows[row.id] = row
