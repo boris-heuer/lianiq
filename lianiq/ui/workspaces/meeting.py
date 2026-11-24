@@ -23,6 +23,7 @@ controller's ``mark_idle``, its events and the input levels reach the GUI thread
 queued signals (the ``UiBridge`` hand-off pattern). The running view and the status strip
 are ``meeting_running`` (WI-05), device loss and the end-of-meeting dialog
 ``meeting_notices``. **Speak {language} for me** can change while the meeting runs (AC-05).
+*Your language* (``meeting_language``, CAP-0181) chooses the local language of the session.
 """
 
 from __future__ import annotations
@@ -45,6 +46,7 @@ from lianiq.ui import strings
 from lianiq.ui.shell.session_owner import SessionState
 from lianiq.ui.shell.workspaces import session_busy_message
 from lianiq.ui.workspaces.meeting_devices import CONFLICT_ROLES, MeetingDevices
+from lianiq.ui.workspaces.meeting_language import MeetingLanguage
 from lianiq.ui.workspaces.meeting_layout import MeetingLayout
 from lianiq.ui.workspaces.meeting_lifecycle import MEETING, MeetingLifecycle
 from lianiq.ui.workspaces.meeting_notices import MeetingEnd
@@ -55,7 +57,13 @@ if TYPE_CHECKING:
 
 
 class MeetingWorkspace(
-    MeetingLayout, MeetingDevices, MeetingLifecycle, MeetingRunning, MeetingEnd, QObject
+    MeetingLayout,
+    MeetingLanguage,
+    MeetingDevices,
+    MeetingLifecycle,
+    MeetingRunning,
+    MeetingEnd,
+    QObject,
 ):
     models_ready = Signal(int, bool, str)  # start generation, ready, error message
     meeting_event = Signal(object)  # MeetingEvent, from the capture and worker threads
@@ -91,23 +99,18 @@ class MeetingWorkspace(
     # The session and what it needs ---------------------------------------------------------
 
     def session(self) -> SessionPair:
-        registry = self.pipeline.registry
         return SessionPair(
-            registry.pair(*self.config.languages.pair),
-            MEETING_MODE,
-            local_language=registry.get(self.config.meeting.local_language).id,
+            self.session_language_pair(), MEETING_MODE, local_language=self.local_language_id()
         )
 
     def language_names(self) -> tuple[str, str]:
         """Registry names of the local and the table language."""
         registry = self.pipeline.registry
         try:
-            local = registry.get(self.config.meeting.local_language).id
-            pair = registry.pair(*self.config.languages.pair)
+            pair, local = self.session_language_pair(), self.local_language_id()
         except LanguageContractError:  # an invalid setting is named by the availability
             return self.config.meeting.local_language, ""
-        table = pair.other(local) if local in pair else pair.second
-        return registry.display_name(local), registry.display_name(table)
+        return registry.display_name(local), registry.display_name(pair.other(local))
 
     def availability(self) -> ModeAvailability:
         return check(self.session(), self.pipeline.catalog, self.device_readiness())
@@ -139,6 +142,7 @@ class MeetingWorkspace(
     def refresh(self) -> None:
         """Pair, labels, the speech switch and **Start meeting** from the current state."""
         self._show_pairs()
+        self.show_local_languages()
         self.name_languages()
         busy = self.active()
         try:

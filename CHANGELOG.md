@@ -21,6 +21,10 @@ All notable user-visible changes are documented here.
   (Simplified) → English (`mt-zh-hans-en`, CC BY 4.0) and the English (US) voice
   `tts-en-us-ljspeech-high` (Piper LJSpeech) — and the recognition pack now lists English.
   Existing settings gain the English defaults on load; German ↔ Mandarin is unchanged.
+- Meeting: a *Your language* selector above the table group chooses which member of the
+  session pair you speak (for example English with English ↔ Mandarin (Simplified)); the
+  other member is shown as *Table language*. The choice is saved, follows the pair control
+  and is locked while a meeting runs.
 - The **Text translation** workspace (third sidebar entry, Ctrl+3) is now enabled: type or
   paste up to 5,000 characters, choose the *Source language* and *Target language* (German ↔
   Mandarin (Simplified); **Swap languages** keeps the text) and **Translate** (Ctrl+Enter;

@@ -71,6 +71,7 @@ def meeting(monkeypatch):
         endpoints: MeetingEndpoints | None = None,
         owner: ActiveSessionOwner | None = None,
         step_ms: float = 400.0,
+        session: SessionPair | None = None,
     ) -> Meeting:
         recognizer = ScriptedRecognizer(dict(script))
         synthesizer = PcmSynthesizer()
@@ -88,7 +89,7 @@ def meeting(monkeypatch):
             streams=SyntheticStreams(),
         )
         harness.controller = MeetingController(
-            SessionPair(DE_ZH, MEETING_MODE, local_language=DE),
+            session or SessionPair(DE_ZH, MEETING_MODE, local_language=DE),
             endpoints or meeting_endpoints(),
             MeetingOptions(speak_local, mode, guard_tail_ms, max_playback_defer_ms),
             SharedEngines(recognizer, harness.translator, synthesizer),

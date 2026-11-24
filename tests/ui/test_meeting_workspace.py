@@ -82,7 +82,8 @@ def test_ac29_uia_the_entry_and_every_meeting_control_are_named(window) -> None:
     page, banner = window.workspace_pages[MEETING], window.banners[MEETING]
     controls = [*page.findChildren(QComboBox), *page.findChildren(QAbstractButton)]
     controls = [control for control in controls if not banner.isAncestorOf(control)]
-    assert len(controls) == 12  # pair, 4 devices, headset, Refresh, speech, 2 radios, Start, End
+    # pair, your language, 4 devices, headset, Refresh, speech, 2 radios, Start, End
+    assert len(controls) == 13
     for control in controls:
         name = QAccessible.queryAccessibleInterface(control).text(QAccessible.Text.Name)
         assert name.strip(), control

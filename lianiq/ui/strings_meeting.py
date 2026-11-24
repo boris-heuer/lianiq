@@ -13,6 +13,8 @@ MEETING_TABLE_GROUP = "Table speakerphone"
 MEETING_TABLE_MIC = "Table microphone"
 MEETING_TABLE_SPEAKER = "Table speaker"
 MEETING_USER_MIC = "Your microphone"
+MEETING_YOUR_LANGUAGE = "Your language"
+MEETING_TABLE_LANGUAGE = "Table language: {language}"
 MEETING_SPEAK_LOCAL = "Speak {language} for me"
 MEETING_LOCAL_OUTPUT = "Output for {language} speech"
 MEETING_LOCAL_IS_HEADSET = "This output is a headset (no sound reaches the room)"
@@ -73,10 +75,12 @@ __all__ = [
     "MEETING_START",
     "MEETING_TABLE_DURING_OUTPUT",
     "MEETING_TABLE_GROUP",
+    "MEETING_TABLE_LANGUAGE",
     "MEETING_TABLE_MIC",
     "MEETING_TABLE_MUTE",
     "MEETING_TABLE_OPEN",
     "MEETING_TABLE_SPEAKER",
     "MEETING_USER_MIC",
+    "MEETING_YOUR_LANGUAGE",
     "NAV_MEETING",
 ]
