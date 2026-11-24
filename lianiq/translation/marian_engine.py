@@ -4,6 +4,7 @@ import logging
 import threading
 from collections.abc import Iterable, Mapping
 from pathlib import Path
+from types import MappingProxyType
 
 from lianiq.hardware import resolve_compute_device
 from lianiq.languages.capabilities import DirectedEdge
@@ -33,8 +34,11 @@ class MarianTranslator:
         glossary: Glossary,
         cpu_threads: int = 8,
         device: str = "cpu",
+        target_prefixes: Mapping[DirectedEdge, str] = MappingProxyType({}),
     ) -> None:
         self.edges = dict(edges)
+        # Multi-target models need a sentence-initial ``>>id<<`` token (CAP-0181 §3.3).
+        self.target_prefixes = dict(target_prefixes)
         self.glossary = glossary
         self.cpu_threads = cpu_threads
         self.device = resolve_compute_device(device)
@@ -87,7 +91,8 @@ class MarianTranslator:
 
         with self._lock:
             tokenizer, model = self._load_locked(edge)
-            inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=256)
+            source = self._source(text, edge)
+            inputs = tokenizer(source, return_tensors="pt", truncation=True, max_length=256)
             inputs = {key: value.to(self.device) for key, value in inputs.items()}
             with torch.inference_mode():
                 tokens = model.generate(
@@ -104,4 +109,9 @@ class MarianTranslator:
         """Model input tokens of ``text`` for ``edge``, special tokens included."""
         with self._lock:
             tokenizer, _model = self._load_locked(edge)
-            return len(tokenizer(text, truncation=False)["input_ids"])
+            return len(tokenizer(self._source(text, edge), truncation=False)["input_ids"])
+
+    def _source(self, text: str, edge: DirectedEdge) -> str:
+        """The model input: ``text`` behind the edge's target prefix, if it has one."""
+        prefix = self.target_prefixes.get(edge)
+        return f"{prefix} {text}" if prefix else text
