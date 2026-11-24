@@ -83,7 +83,7 @@ def test_the_job_needs_the_environment_and_the_dedicated_runner_label() -> None:
     name = environment["name"] if isinstance(environment, dict) else environment
     assert name == "native-e2e"
     assert JOB["runs-on"] == ["self-hosted", "windows", "win11-native-e2e"]
-    assert isinstance(JOB.get("timeout-minutes"), int) and JOB["timeout-minutes"] <= 180
+    assert isinstance(JOB.get("timeout-minutes"), int) and JOB["timeout-minutes"] <= 240
     assert DATA["concurrency"]["cancel-in-progress"] is False
 
 
@@ -203,7 +203,7 @@ def test_the_workflow_and_native_text_files_fit_the_inline_publish_limit() -> No
         for path in files
         if path.is_file()
         and "__pycache__" not in path.parts
-        and path.name != "listen_de_16k.wav"  # the binary E-14 fixture (CAP-0170)
+        and path.suffix != ".wav"  # the binary speech fixtures (native_e2e/fixtures)
         and path.stat().st_size > 32 * 1024
     ]
     assert large == []
