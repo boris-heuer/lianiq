@@ -33,6 +33,11 @@ ROW_ACS: dict[str, tuple[str, ...]] = {
     "E-20": ("AC-31", "AC-32"),
     "E-21": ("AC-07", "AC-28"),
     "E-22": ("AC-05", "AC-16", "AC-22", "AC-23", "AC-25", "AC-30", "AC-38"),
+    # CAP-0171 (offline language provisioning) ACs named in its e2e plan rows E-01..E-09
+    "E-16": ("AC-01", "AC-03", "AC-04", "AC-05", "AC-06", "AC-22", "AC-29"),  # E-01, E-02, E-06
+    "E-17": ("AC-13", "AC-21", "AC-28"),  # E-07
+    "E-18": ("AC-10", "AC-11", "AC-15", "AC-16"),  # E-08, E-05
+    "E-19": ("AC-18", "AC-20", "AC-21", "AC-28"),  # E-09, E-04
     "C-05": ("AC-12",),  # C-05, C-06, C-09: code rows of the automated PO rows (spec §2.2)
     "C-06": ("AC-12",),
     "C-09": ("AC-12",),
