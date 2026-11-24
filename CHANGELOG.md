@@ -72,6 +72,18 @@ All notable user-visible changes are documented here.
   E-15 speaks one turn through the virtual cable, stops it with F9 during playback and checks
   that nothing is captured after Stop.
 
+### Changed
+
+- The **Call Bridge** setup page is rebuilt around two paths, **You → call** and **Call → you**,
+  each with its two devices (full Windows names), a level meter that says *Signal*, *No signal
+  for 5 s* with a hint, or *Too loud (clipping)*, and a *How to set up the call app* help text.
+  The *Enable explicit four-endpoint routing* checkbox is gone: a list under the paths names
+  everything still missing (a device, a model or voice, a busy session) and **Start call
+  bridge** is enabled once nothing is. **Test** plays a test phrase on that path only and then
+  asks *Did your partner hear it?* or *Did you hear it?*; **Yes** / **No** record *Test passed*
+  or *Test failed*, and a device, pair or language change resets that path to *Not tested*. An
+  experimental note links the local *Real-call checklist*.
+
 ### Fixed
 
 - The voice warm-up at the start of a session, including **Start meeting**, now synthesises
