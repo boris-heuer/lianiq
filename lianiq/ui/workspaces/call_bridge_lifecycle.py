@@ -5,13 +5,7 @@ from __future__ import annotations
 from PySide6.QtCore import Slot
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
-from lianiq.call_bridge.contracts import (
-    BridgeEvent,
-    BridgeEventKind,
-    CallBridgeLanes,
-    EndpointRole,
-    LaneId,
-)
+from lianiq.call_bridge.contracts import CallBridgeLanes, EndpointRole, LaneId
 from lianiq.call_bridge.controller import check_call_bridge
 from lianiq.languages.modes import CALL_BRIDGE_MODE, SessionPair
 from lianiq.packs.protection import ActiveUsage
@@ -104,8 +98,8 @@ class CallBridgeLifecycle:
 
     @Slot()
     def start_call_bridge(self) -> None:
-        if self.active():
-            return
+        if self.active() or self.route_test_active():
+            return  # a playing or unanswered route test blocks Start (readiness names it)
         host = self.host
         try:
             session = self.session()
@@ -130,6 +124,7 @@ class CallBridgeLifecycle:
             # Nothing was opened; the running session continues (an info notice).
             host.show_busy(CALL_BRIDGE, busy.active)
             return
+        self.reset_status(self._generation, session)  # *Starting…*; the live text clears
         conversation = host.conversation
         # Both lanes always speak: their voice options are bound now (CAP-0167 C §5, AC-18).
         self.voice_options = conversation.voice_preferences.snapshot(session.pair.members)
@@ -153,6 +148,7 @@ class CallBridgeLifecycle:
         self.panel.set_models_ready(True)
         if not ready or assignments is None or session is None:
             self.owner.mark_idle(self._generation)
+            self.stop_status()
             # Start follows the selected mode's availability
             self.host.conversation.refresh_availability()
             reason = message or "Call bridge setup was cancelled"
@@ -175,6 +171,7 @@ class CallBridgeLifecycle:
         self._pending_session = None
         if self.owner.active is WorkspaceId.CALL_BRIDGE:
             self.owner.mark_idle(self._generation)
+        self.stop_status()  # both lanes *Stopped*; the live text stays until the next Start
         self.panel.set_running(False)
         self.panel.set_models_ready(True)
         conversation = self.host.conversation
@@ -193,34 +190,6 @@ class CallBridgeLifecycle:
             session_busy_message(active) if busy and active is not None else None
         )
         self.show_route_tests()  # tests are disabled while the Call Bridge runs
-
-    @Slot(object, str)
-    def _handle_call_bridge_capture_fault(self, role: EndpointRole, message: str) -> None:
-        if self.controller is not None:
-            self.controller.endpoint_lost(role)
-        lane = LaneId.OUTBOUND if role is EndpointRole.LOCAL_MICROPHONE else LaneId.INBOUND
-        self.host.post_notice(catalog.bridge_capture_muted(message, self._lane_source(lane)))
-
-    @Slot(object)
-    def _show_call_bridge_event(self, event: BridgeEvent) -> None:
-        # The lane status lines follow ``LaneStatusBook`` in WI-03; here only notices.
-        if event.kind is BridgeEventKind.ERROR:
-            if event.category == "playback_failure" and self.controller is not None:
-                output_role = (
-                    EndpointRole.CALL_MICROPHONE_RENDER
-                    if event.lane_id is LaneId.OUTBOUND
-                    else EndpointRole.LOCAL_HEADPHONES
-                )
-                self.controller.endpoint_lost(output_role)
-            lane = event.lane_id.value if event.lane_id else None
-            self.host.diagnostics.record("call-bridge", f"{event.category}: {event.message}")
-            self.host.post_notice(
-                catalog.bridge_failed(lane, event.category, self._lane_source(event.lane_id))
-            )
-        elif event.kind is BridgeEventKind.DROPPED:
-            self.host.post_notice(
-                catalog.bridge_dropped(event.category, self._lane_source(event.lane_id))
-            )
 
     @Slot(object, float)
     def _show_call_bridge_level(self, role: EndpointRole, level: float) -> None:
