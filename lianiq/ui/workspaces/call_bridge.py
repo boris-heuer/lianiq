@@ -16,7 +16,6 @@ CAP-0168 WI-03: failures and ``BridgeEvent`` errors are notices in the Call Brid
 
 from __future__ import annotations
 
-import threading
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QObject, QTimer, Slot
@@ -24,13 +23,7 @@ from PySide6.QtCore import QObject, QTimer, Slot
 from lianiq.audio.capture_stream import EndpointCaptureStream
 from lianiq.audio.endpoints import list_audio_endpoints
 from lianiq.audio.playback_stream import EndpointPlaybackStream
-from lianiq.call_bridge.contracts import (
-    BridgeEvent,
-    BridgeEventKind,
-    CallBridgeLanes,
-    EndpointRole,
-    LaneId,
-)
+from lianiq.call_bridge.contracts import CallBridgeLanes, EndpointRole, LaneId
 from lianiq.call_bridge.controller import FullDuplexBridgeController
 from lianiq.call_bridge.inference_scheduler import InferenceScheduler
 from lianiq.call_bridge.translation_lane import TranslationLane
@@ -45,6 +38,7 @@ from lianiq.ui.shell.workspaces import WorkspaceId
 # ``call_bridge_lifecycle.py``. Stream, endpoint and controller construction stays here, so
 # the names tests and scripts patch on this module are still looked up here.
 from lianiq.ui.workspaces.call_bridge_lifecycle import CALL_BRIDGE, CallBridgeLifecycle
+from lianiq.ui.workspaces.call_bridge_setup import CallBridgeSetup
 
 if TYPE_CHECKING:
     from lianiq.ui.main_window import MainWindow
@@ -54,7 +48,7 @@ if TYPE_CHECKING:
 ROUTE_TEST_TEXT = {LanguageId("de"): "Kopfhörer-Test.", LanguageId("zh-Hans"): "通话麦克风测试。"}
 
 
-class CallBridgeWorkspace(CallBridgeLifecycle, QObject):
+class CallBridgeWorkspace(CallBridgeSetup, CallBridgeLifecycle, QObject):
     def __init__(self, host: MainWindow) -> None:
         super().__init__(host)
         self.host = host
@@ -77,13 +71,21 @@ class CallBridgeWorkspace(CallBridgeLifecycle, QObject):
         self._generation = 0  # the owner generation of this workspace's latest start
         self.owner.register(WorkspaceId.CALL_BRIDGE, self.stop_call_bridge)
         self.owner.subscribe(self._session_changed)
+        self.init_setup()  # readiness and route tests (CAP-0166 WI-02)
+
+    def route_test_phrase(self, language: LanguageId) -> str | None:
+        return ROUTE_TEST_TEXT.get(language)
+
+    def play_route_test(self, endpoint, path) -> None:
+        """Play one route-test phrase on one render endpoint (worker thread)."""
+        EndpointPlaybackStream(endpoint).play(path)
 
     def load_endpoints(self) -> None:
         try:
             inventory = list_audio_endpoints()
         except (RuntimeError, ValueError) as exc:
-            self.panel.set_endpoints([])
-            self.panel.set_state("unavailable", str(exc))
+            self.panel.set_endpoints(None)  # readiness names every endpoint as not found
+            self.host.diagnostics.record("call-bridge", f"endpoints unavailable: {exc}")
         else:
             self.panel.set_endpoints(inventory.endpoints)
 
@@ -138,6 +140,7 @@ class CallBridgeWorkspace(CallBridgeLifecycle, QObject):
                 on_error=lambda message: bridge.call_bridge_capture_fault.emit(
                     EndpointRole.LOCAL_MICROPHONE, message
                 ),
+                on_clip=lambda: self.relay.clipping.emit(EndpointRole.LOCAL_MICROPHONE),
             )
             inbound_capture = EndpointCaptureStream(
                 assignments[EndpointRole.CALL_SPEAKER_CAPTURE],
@@ -149,6 +152,7 @@ class CallBridgeWorkspace(CallBridgeLifecycle, QObject):
                 on_error=lambda message: bridge.call_bridge_capture_fault.emit(
                     EndpointRole.CALL_SPEAKER_CAPTURE, message
                 ),
+                on_clip=lambda: self.relay.clipping.emit(EndpointRole.CALL_SPEAKER_CAPTURE),
             )
             controller = FullDuplexBridgeController(
                 assignments,
@@ -205,46 +209,3 @@ class CallBridgeWorkspace(CallBridgeLifecycle, QObject):
             self.controller.reconcile_endpoints(inventory)
         except (RuntimeError, ValueError) as exc:
             self.host.post_notice(catalog.bridge_recovery_failed(str(exc), self._lane_source(None)))
-
-    @Slot(object)
-    def _run_call_bridge_route_test(self, role: EndpointRole) -> None:
-        if self.controller is not None:
-            self._error("Stop the call bridge before running an isolated route test")
-            return
-        try:
-            assignments = self.panel.assignments()
-            endpoint = assignments[role]
-            lanes = CallBridgeLanes.from_session(self.session())
-        except Exception as exc:  # noqa: BLE001 - UI validation boundary.
-            self._error(str(exc))
-            return
-        # The call microphone carries the remote language, the headphones the local one.
-        language = lanes.remote if role is EndpointRole.CALL_MICROPHONE_RENDER else lanes.local
-        text = ROUTE_TEST_TEXT.get(language)
-        if text is None:
-            name = self.pipeline.registry.display_name(language)
-            self._error(f"No route test phrase for {name}")
-            return
-        event = self.host.bridge.call_bridge_event
-
-        def run_test() -> None:
-            path = None
-            try:
-                # Constructed on demand; the voice loads on its first synthesis.
-                synthesizer = self.pipeline.voice_synthesizer()
-                path = synthesizer.synthesize(text, language)
-                EndpointPlaybackStream(endpoint).play(path)
-                event.emit(
-                    BridgeEvent(None, BridgeEventKind.ENDPOINT, "route_test_passed", role.value)
-                )
-            except Exception as exc:  # noqa: BLE001 - diagnostic boundary.
-                event.emit(
-                    BridgeEvent(
-                        None, BridgeEventKind.ERROR, type(exc).__name__, "route_test_failed"
-                    )
-                )
-            finally:
-                if path is not None:
-                    path.unlink(missing_ok=True)
-
-        threading.Thread(target=run_test, name="call-bridge-route-test", daemon=True).start()
