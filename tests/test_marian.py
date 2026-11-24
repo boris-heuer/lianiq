@@ -94,7 +94,7 @@ def fake_runtime(monkeypatch):
     return loads
 
 
-def translator(tmp_path: Path, edges, glossary_terms=None) -> MarianTranslator:
+def translator(tmp_path: Path, edges, glossary_terms=None, prefixes=None) -> MarianTranslator:
     glossary_path = tmp_path / "glossary.json"
     glossary_path.write_text(json.dumps(glossary_terms or {}, ensure_ascii=False), "utf-8")
     paths = {}
@@ -102,7 +102,9 @@ def translator(tmp_path: Path, edges, glossary_terms=None) -> MarianTranslator:
         path = tmp_path / f"mt-{edge.source}-{edge.target}"
         path.mkdir()
         paths[edge] = path
-    return MarianTranslator(paths, Glossary(glossary_path), device="cpu")
+    return MarianTranslator(
+        paths, Glossary(glossary_path), device="cpu", target_prefixes=prefixes or {}
+    )
 
 
 def test_unconfigured_edge_raises_and_the_reverse_edge_is_never_used(
@@ -226,3 +228,22 @@ def test_ac35_text_and_conversation_translations_never_overlap(
     assert not turn_thread.is_alive() and len(turns) == 40  # both complete, no deadlock
     assert len(results) == 1 and len(results[0].segments) == 40
     assert FakeModel.overlap == 1
+
+
+def test_ac05_target_prefix_is_prepended_only_on_its_edge(tmp_path, fake_runtime) -> None:
+    from lianiq.app import target_prefixes
+    from lianiq.config import AppConfig
+
+    en = LanguageId("en")
+    edges = [DirectedEdge(en, ZH), DirectedEdge(ZH, en), DE_ZH, ZH_DE]
+    prefixes = target_prefixes(AppConfig().translation)
+    assert prefixes == {DirectedEdge(en, ZH): ">>cmn_Hans<<"}
+    marian = translator(tmp_path, edges, prefixes=prefixes)
+
+    results = [marian.translate("Two words", edge) for edge in edges]
+
+    tokenizer = marian._loaded[edges[0]][0]
+    assert tokenizer.inputs == [">>cmn_Hans<< Two words", *["Two words"] * 3]
+    assert results == ["AI PC"] * 4  # the prefix never reaches the result
+    assert marian.token_count("Two words", edges[0]) == 4
+    assert marian.token_count("Two words", edges[1]) == 3
