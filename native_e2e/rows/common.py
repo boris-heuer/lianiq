@@ -36,6 +36,8 @@ ROW_ACS: dict[str, tuple[str, ...]] = {
     "E-36": ("AC-04", "AC-05", "AC-06"),
     "E-37": ("AC-07", "AC-13", "AC-17"),
     "E-38": ("AC-09", "AC-12", "AC-17"),
+    "E-39": ("AC-03", "AC-06"),  # english-mandarin-pair 9-E-01 (packs, pair choice)
+    "E-40": ("AC-14",),  # english-mandarin-pair 9-E-04 (Conversation smoke run)
     "E-30": ("AC-03", "AC-04", "AC-20", "AC-29"),
     "E-26": ("AC-10", "AC-12", "AC-13", "AC-19", "AC-21", "AC-27", "AC-32"),  # CAP-0170 ACs
     "E-24": ("AC-25",),
