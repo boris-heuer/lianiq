@@ -16,6 +16,7 @@ no reusable credential and reaches only GitHub, through an allow-list proxy on t
 | Windows host with Hyper-V | Windows 11 Pro or Enterprise, 64-bit, virtualization enabled in the firmware. Enable Hyper-V from an elevated PowerShell with `Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All` and restart. The VM needs 4 vCPUs, 8 GB RAM and up to 128 GB of disk. |
 | Windows 11 Enterprise evaluation ISO | Download the ISO yourself from the Microsoft Evaluation Center and read its evaluation terms. The evaluation runs for 90 days; the image is then rebuilt (see [The 90-day rebuild](#the-90-day-rebuild)). Prefer the English (United States) ISO; the answer file uses the built-in `Administrator` account name. For a permanent licence instead, see [Licence source `key`](#licence-source-key). |
 | VB-Cable package | Download the VB-Cable driver pack (one cable, for example `VBCABLE_Driver_Pack45.zip`) yourself from VB-Audio Software and read its licence first. See [VB-Cable licence](#vb-cable-licence). |
+| VB-Cable A+B package (optional) | Only for the Call Bridge rows E-34..E-38: the VB-Audio "VB-Cable A+B" package, obtained and licensed by you. See [Image prerequisites of the automated PO rows](#image-prerequisites-of-the-automated-po-rows), step 3. |
 | Lianiq checkout | A clone of `boris-heuer/lianiq` at the commit you want the image built from, with `scripts\setup.ps1` already run so that `.venv` holds the locked dependency set and `scripts\download_models.py` can run. |
 | Git and GitHub CLI | `git` and `gh` on `PATH`; `gh auth login` with **your own** account. Only the host uses this login: to download the runner package and to request one JIT runner configuration per run. It never enters the VM. |
 | GitHub environment | In the lianiq repository settings create the environment `native-e2e` with yourself as the required reviewer (e2e plan S-02). |
@@ -28,28 +29,6 @@ it; E-15 also plays the spoken translation into it.
 This use is private and non-commercial (PO decision of 2026-11-11). Before any commercial use
 the licence must be clarified with VB-Audio. The package is never committed to this
 repository; the image build records its SHA-256 in `image.json`.
-
-### VB-Cable A+B for the Call Bridge rows (optional)
-
-The Call Bridge rows E-34..E-38 (CAP-0166 0166-E-01..E-05, see
-[native-e2e-rows.md](native-e2e-rows.md#call-bridge-rows-e-34e-38-cap-0166)) need two more
-cables besides VB-Cable: the VB-Audio "VB-Cable A+B" package, with the endpoints
-`CABLE-A Input`/`CABLE-A Output` (the call microphone cable) and `CABLE-B Input`/`CABLE-B Output`
-(the call speaker cable). PO step, never done by an agent: obtain the package from VB-Audio
-Software, read and accept its licence (the same private, non-commercial use as VB-Cable), and
-rebuild the image with the optional input `-VbCableAbPackage <zip>`:
-
-```powershell
-.\tools\native-e2e\host\New-NativeE2eImage.ps1 -Replace `
-    -IsoPath D:\iso\Win11_Enterprise_Eval.iso `
-    -VbCablePackage D:\downloads\VBCABLE_Driver_Pack45.zip `
-    -VbCableAbPackage D:\downloads\VBCABLE_A_B_Driver_Pack.zip
-```
-
-Confirm the driver prompt in the VM console if Windows shows one. Without the four endpoints,
-E-34..E-38 are `blocked` with `cable-ab-missing` and start no app; until the image scripts
-accept `-VbCableAbPackage`, every image is in that state. The package is never committed, and
-the endpoint names are redaction secrets like `CABLE Input`/`CABLE Output`.
 
 ### MinGit licence
 
@@ -102,7 +81,7 @@ What the script does:
    [`provision.ps1`](../tools/native-e2e/guest/provision.ps1) with no network except the
    activation hosts (step 7): the Visual C++ runtime (`onnxruntime`, and with it the Piper
    test phrase, needs `MSVCP140.dll`, which a clean Windows lacks), Python 3.12 for all users, the image environment from the
-   wheels, the models (read-only), VB-Cable, the test phrase, the runner package (not a service), MinGit in `C:\ProgramData\lianiq-e2e\mingit` (on no machine `PATH`; the logon task puts its `cmd` folder on `PATH` for the runner process only), the SYSTEM admin helper, the logon task, WFP
+   wheels, the models (read-only), VB-Cable (and VB-Cable A+B with `-VbCableAbPackage`), the test phrase, the runner package (not a service), MinGit in `C:\ProgramData\lianiq-e2e\mingit` (on no machine `PATH`; the logon task puts its `cmd` folder on `PATH` for the runner process only), the SYSTEM admin helper, the logon task, WFP
    auditing, the machine-wide `https_proxy`, the non-admin auto-logon user `e2e` and
    `C:\ProgramData\lianiq-e2e\image.json`. It disables the build account, deletes the answer
    file and shuts down.
@@ -170,6 +149,61 @@ Guest folders under `C:\ProgramData\lianiq-e2e` are read-only for the test user 
 such as the S-01 run marker, and the logon log) and `venv` (the job installs the checked-out
 project there).
 
+## Image prerequisites of the automated PO rows
+
+The automated PO rows (spec `native-test-automation/automated-po-rows`, rows in
+[native-e2e-rows.md](native-e2e-rows.md#coverage-and-run-time-of-the-automated-po-rows)) need
+three things in the image. Each is a PO step, never done by an agent. Until a step is done,
+the rows it unblocks are `blocked` with the named reason (not `fail`) and start no app; the
+rest of the run is unaffected. One rebuild can do steps 1 to 3 together: run it from an
+up-to-date `main` checkout once the english-mandarin-pair packs are on `main`, with
+`-VbCableAbPackage` (the command in step 3).
+
+1. **Image built at or after lianiq#170.** The image's pack folders must hold
+   `lianiq-pack.json`. If the image is older, rebuild it from a current checkout
+   (`New-NativeE2eImage.ps1 -Replace`, see [Build the image](#build-the-image)).
+   - Unblocks: E-18..E-22, E-24, E-25, E-30 (every pack import row).
+   - Until then: `blocked` with `image-packs-without-pack-file`.
+2. **Image rebuilt after the english-mandarin-pair packs are on `main`.** The packs
+   `mt-en-zh-hans`, `mt-zh-hans-en` and `tts-en-us-ljspeech-high` reach the image only through
+   `scripts\download_models.py` of the build checkout. Rebuild with `-Replace` from a checkout
+   of `main` that holds them.
+   - Unblocks: E-39, E-40.
+   - Until then: `blocked` with `english-packs-missing`.
+3. **VB-Cable A+B through `-VbCableAbPackage`.** The Call Bridge rows (CAP-0166
+   0166-E-01..E-05, see
+   [native-e2e-rows.md](native-e2e-rows.md#call-bridge-rows-e-34e-38-cap-0166)) need two more
+   cables besides VB-Cable: the endpoints `CABLE-A Input`/`CABLE-A Output` (the call microphone
+   cable) and `CABLE-B Input`/`CABLE-B Output` (the call speaker cable). Obtain the VB-Audio
+   "VB-Cable A+B" package from VB-Audio Software, read and accept its licence (the same
+   private, non-commercial use as [VB-Cable](#vb-cable-licence)), and rebuild from an elevated
+   PowerShell in the checkout:
+
+   ```powershell
+   .\tools\native-e2e\host\New-NativeE2eImage.ps1 -Replace `
+       -IsoPath D:\iso\Win11_Enterprise_Eval.iso `
+       -VbCablePackage D:\downloads\VBCABLE_Driver_Pack45.zip `
+       -VbCableAbPackage D:\downloads\VBCABLE_A_B_Driver_Pack.zip
+   ```
+
+   Use your own paths; the two zips need different file names. The host records the package's
+   SHA-256 in `build-inputs.json` and `image.json` (`vb_cable_ab_sha256`); the guest installs
+   every signed `VBCABLE_*Setup_x64.exe` in it like VB-Cable (`-i -h`) and waits up to
+   5 minutes for the four endpoints, else the build stops in step `vb-cable-ab`. Confirm the
+   driver prompt in the VM console (Hyper-V Manager › `lianiq-native-e2e` › **Connect**) if
+   Windows shows one. Without `-VbCableAbPackage` the image is built exactly as before.
+   - Unblocks: E-34..E-38.
+   - Until then: `blocked` with `cable-ab-missing`.
+
+   The package is never committed, and the endpoint names are redaction secrets like
+   `CABLE Input`/`CABLE Output`.
+4. **No-network profile: nothing to do.** E-16..E-19 need the app offline; the S-04 firewall
+   rule already blocks the app interpreter and the egress proxy reaches GitHub only. E-17 runs
+   after S-04 finishes.
+
+After a rebuild, record the image (S-04) and check the isolation again (E-01), as for every
+rebuild.
+
 ## Check the isolation (e2e plan E-01)
 
 Once per image, before the first run, start the VM from Hyper-V Manager, let it sign in as
@@ -214,7 +248,8 @@ Python do. Pass only when the host, the LAN address, example.com and the activat
 3. **Approve** the run in GitHub (next section).
 4. **Wait.** The job runs the rows; the runner exits after its one job. The job timeout is
    240 minutes: the automated PO rows (E-16..E-40, C-05, C-06, C-09) add about 25 app rows of 1–4
-   minutes each, so a full run can exceed the former 150 minutes. The host script then
+   minutes each, so a full run can exceed the former 150 minutes. The host script waits up to
+   `-JobTimeoutMinutes` (default 250, longer than the job timeout, so no flag is needed), then
    shuts the VM down, reverts it to `clean`, stops the proxy and prints the run URL and the
    SHA-256 of `native-evidence.json`. A copy of the artifact stays under
    `C:\ProgramData\lianiq-native-e2e\runs\<run-id>`.
@@ -247,7 +282,8 @@ Rebuild runbook:
 
 1. Download a current Windows 11 Enterprise evaluation ISO (S-01).
 2. From an elevated PowerShell in an up-to-date checkout run
-   `New-NativeE2eImage.ps1 -Replace -IsoPath <iso> -VbCablePackage <zip>`. It deletes the old
+   `New-NativeE2eImage.ps1 -Replace -IsoPath <iso> -VbCablePackage <zip>`, plus
+   `-VbCableAbPackage <zip>` if the old image had VB-Cable A+B. It deletes the old
    VM and its disk, builds and activates the new image and prints the new expiry.
 3. Record the new image values (S-04) and check the isolation again (E-01).
 4. The first SHOT row after a rebuild is expected to be `pending` until you accept a
@@ -271,6 +307,9 @@ stops the build or the run instead of passing silently.
 
 - The VB-Cable installer accepts the silent flags `-i -h`; otherwise its window or a driver
   prompt appears in the VM console and the build waits for the two cable endpoints.
+- The VB-Cable A+B package holds its signed installers as `VBCABLE_*Setup_x64.exe` (in any
+  folder of the zip) with the same silent flags; otherwise the build stops in step
+  `vb-cable-ab` (no installer found) or waits for the four endpoints as above.
 - The guest trusts the Authenticode chains of the Python and VB-Cable installers offline (the
   root certificates ship with the evaluation image); otherwise provisioning stops at the
   signature check.
@@ -310,7 +349,7 @@ stops the build or the run instead of passing silently.
 | `pip download` fails | A locked wheel is missing for Windows x64 / Python 3.12, or the network failed. Rerun the build; a changed lock is fixed by pull request, never by unpinning. |
 | "The VM adapter ACLs differ" or "A NetNat covers …" | The network no longer matches the recipe. Remove the extra NAT or rebuild the image; never run with a routed or opened network. |
 | "the runner did not come online within 10 minutes" | Infrastructure fault. Check the proxy log for refusals and the guest log `C:\ProgramData\lianiq-e2e\state\runner-logon.log`. You may start the host script once more. If GitHub rejects an outdated runner version, rebuild the image. |
-| The job never starts | The run waits for your approval, or the dispatch used another commit. The host script stops after `-JobTimeoutMinutes` (default 180), removes the JIT runner and reverts the VM. |
+| The job never starts | The run waits for your approval, or the dispatch used another commit. The host script stops after `-JobTimeoutMinutes` (default 250), removes the JIT runner and reverts the VM. |
 | A refusal for a GitHub host appears in the proxy log | The allow-list misses an Actions host (spec item 6). Add it to [`egress-allowlist.txt`](../tools/native-e2e/host/egress-allowlist.txt) by pull request; never add a wildcard for a whole domain. |
 | S-01 is `fail` with `not-clean-snapshot` | The VM was not reverted. Start a normal run without `-NoRevert`. |
 | The run script exits with code 3 | A cleanup step failed (runner removal, VM stop, proxy stop or revert); the output names it. Finish it in Hyper-V Manager: turn the VM off and apply checkpoint `clean`. |
