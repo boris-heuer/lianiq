@@ -165,7 +165,7 @@ def install(monkeypatch, calls: list[str], s01_status=Status.PASS, s03_status=St
     monkeypatch.setattr(s03, "run", fake("S-03", calls, s03_status))
     for module, row_id in ((s02, "S-02"), (s05, "S-05"), (c04, "C-04")):
         monkeypatch.setattr(module, "run", fake(row_id, calls))
-    fake_e_rows(monkeypatch, fake, calls)  # E-01..E-30 except E-12
+    fake_e_rows(monkeypatch, fake, calls)  # E rows except E-12
     for name in ("c05", "c06", "c09"):
         monkeypatch.setattr(c05, name, fake(f"C-0{name[-1]}", calls))
     monkeypatch.setattr(uia_app, "close_open", lambda ctx: calls.append("app closed"))
@@ -185,9 +185,9 @@ def test_rows_run_in_the_spec_order_with_the_s04_window_around_the_app_rows(
     rows = runner.execute(context(tmp_path, repo, "a" * 40))
     assert calls == [
         "S-01", "S-02", "S-03", "S-04 begin", "S-05", "C-04", "E-01", "E-11", "E-03", "E-10",
-        "E-14", "E-13", "E-15", "E-27", "E-28", "E-29", "E-23", "E-16", "E-18", "E-19",
-        "E-20", "E-21", "E-22", "E-30", "C-05", "C-06", "C-09", "E-12", "C-03", "SHOT",
-        "app closed", "S-04", "E-17", "T-01", "T-02", "T-05", "T-03", "T-04",
+        "E-14", "E-13", "E-15", "E-27", "E-28", "E-29", "E-23", "E-26", "E-16", "E-18",
+        "E-19", "E-20", "E-21", "E-22", "E-24", "E-25", "E-30", "C-05", "C-06", "C-09",
+        "E-12", "C-03", "SHOT", "app closed", "S-04", "E-17", "T-01", "T-02", "T-05", "T-03", "T-04",
     ]  # fmt: skip
     assert set(rows) == {c for c in calls if c not in {"S-04 begin", "app closed"}}
     assert set(rows) == set(PHASE1_ROWS)  # AC-15: a full run gives every Phase 1 row a status
