@@ -6,10 +6,11 @@
 .DESCRIPTION
     Runs once as the built-in Administrator (answer file FirstLogonCommands) on the inputs
     New-NativeE2eImage.ps1 copied to C:\ProgramData\lianiq-e2e\setup; no network except
-    activation. Installs the VC++ runtime, Python, wheels, models, VB-Cable, the test phrase,
-    the runner, MinGit, the admin helper, the logon task and WFP auditing; creates the
-    non-admin auto-logon user 'e2e', activates Windows via the host's build-only proxy,
-    writes image.json, disables the build account, deletes the answer file and shuts down.
+    activation. Installs the VC++ runtime, Python, wheels, models, VB-Cable (with
+    -VbCableAbPackage also VB-Cable A+B), the test phrase, the runner, MinGit, the admin
+    helper, the logon task and WFP auditing; creates the non-admin auto-logon user 'e2e',
+    activates Windows via the host's build-only proxy (activation.ps1), writes image.json,
+    disables the build account, deletes the answer file and shuts down.
 #>
 [CmdletBinding()]
 param(
@@ -35,9 +36,8 @@ $SidAdministrators = '*S-1-5-32-544'
 $SidUsers = '*S-1-5-32-545'
 # Audit subcategory "Filtering Platform Connection" (events 5156/5157), locale independent.
 $WfpConnectionAudit = '{0CCE9226-69AE-11D9-BED3-505054503030}'
-# Windows in the Software Licensing Service.
-$WindowsAppId = '55c92734-d682-4d71-983e-d6ec3f16059f'
 $script:Step = 'start'
+. (Join-Path $PSScriptRoot 'activation.ps1')
 
 function Invoke-Step([string]$Name, [scriptblock]$Body) {
     $script:Step = $Name
@@ -65,57 +65,6 @@ function Invoke-Netsh([string[]]$Arguments) {
     $ErrorActionPreference = 'Continue'
     & netsh.exe @Arguments | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "netsh $($Arguments -join ' ') exited with code $LASTEXITCODE" }
-}
-
-function Get-WindowsLicence {
-    # Status, channel and grace period only; no part of the product key is read or logged.
-    $filter = "ApplicationID='$WindowsAppId' AND LicenseIsAddon=False AND PartialProductKey IS NOT NULL"
-    # sppsvc stops when idle; a query during the stop fails: retry.
-    for ($try = 1; ; $try++) {
-        try { $products = @(Get-CimInstance -ClassName SoftwareLicensingProduct -Filter $filter); break }
-        catch { if ($try -ge 6) { throw }; Write-Host "Licence query $try failed: $($_.Exception.Message)" }
-        Start-Sleep -Seconds 10
-    }
-    if ($products.Count -ne 1) { throw "Expected one installed Windows licence, found $($products.Count)." }
-    return $products[0]
-}
-
-function Invoke-GuestActivation([string]$Source) {
-    $isEvaluation = [string](Get-WindowsLicence).Description -like '*TIMEBASED_EVAL*'
-    if (($Source -eq 'evaluation') -ne $isEvaluation) {
-        throw "The installed edition does not match the licence source '$Source'."
-    }
-    $minutes = 10
-    if ($Source -eq 'key') {
-        $minutes = 60
-        Write-Host 'PO step: type your product key in the window that opens (VM console). It is never logged.'
-        Start-Process -FilePath 'slui.exe' -ArgumentList '3'
-    }
-    $deadline = (Get-Date).AddMinutes($minutes)
-    $lastError = 'no attempt'
-    do {
-        try {
-            $call = Invoke-CimMethod -InputObject (Get-WindowsLicence) -MethodName Activate
-            $lastError = "Activate returned $($call.ReturnValue)"
-            $product = Get-WindowsLicence
-            if ($call.ReturnValue -eq 0 -and $product.LicenseStatus -eq 1) { break }
-        } catch {
-            $lastError = $_.Exception.Message
-        }
-        Start-Sleep -Seconds 30
-    } while ((Get-Date) -lt $deadline)
-    $product = Get-WindowsLicence
-    if ($product.LicenseStatus -ne 1) {
-        throw ("Online activation failed ($lastError). First suspect: a CRL/OCSP fetch over plain " +
-            'HTTP, which the CONNECT-only proxy refuses; see activation-proxy.log on the host.')
-    }
-    $expires = $null
-    if ($Source -eq 'evaluation') {
-        $grace = [int64]$product.GracePeriodRemaining
-        if ($grace -le 0) { throw 'The evaluation licence reports no remaining time.' }
-        $expires = [DateTime]::UtcNow.AddMinutes($grace).ToString('yyyy-MM-ddTHH:mm:ssZ')
-    }
-    return [pscustomobject]@{ Result = 'activated'; Expires = $expires }
 }
 
 function Set-ExclusiveAcl([string]$Path, [string[]]$Grants) {
@@ -293,6 +242,37 @@ try {
         if (-not $found) {
             throw ("VB-Cable endpoints CABLE Input and CABLE Output are missing (active render: '" +
                 ($render -join "', '") + "'; active capture: '" + ($capture -join "', '") + "').")
+        }
+    }
+
+    if ($null -ne $inputs.vb_cable_ab) {
+        # Optional (-VbCableAbPackage): cables A and B for the Call Bridge rows E-34..E-38,
+        # installed like VB-Cable. Without the package this step does not run.
+        Invoke-Step 'vb-cable-ab' {
+            $package = Join-Path $Setup 'vbcable-ab'
+            Expand-Archive -LiteralPath (Join-Path $Setup $inputs.vb_cable_ab.file) -DestinationPath $package -Force
+            $setupExes = @(Get-ChildItem -LiteralPath $package -Recurse -File -Filter 'VBCABLE_*Setup_x64.exe')
+            if ($setupExes.Count -eq 0) { throw 'The VB-Cable A+B package holds no VBCABLE_*Setup_x64.exe.' }
+            Write-Host 'Installing VB-Cable A+B. If Windows asks to trust the driver publisher, confirm it in the VM console.'
+            foreach ($setupExe in $setupExes) {
+                Assert-Signed $setupExe.FullName
+                Start-Process -FilePath $setupExe.FullName -ArgumentList @('-i', '-h') -Wait | Out-Null
+            }
+            # The endpoint names the rows read (native_e2e.context.CABLE_AB_NAMES).
+            $deadline = (Get-Date).AddMinutes(5)
+            do {
+                $render = @(Get-ActiveEndpointName 'Render')
+                $capture = @(Get-ActiveEndpointName 'Capture')
+                $missing = @(foreach ($cable in 'A', 'B') {
+                        if ($render -cnotcontains "CABLE-$cable Input") { "CABLE-$cable Input" }
+                        if ($capture -cnotcontains "CABLE-$cable Output") { "CABLE-$cable Output" }
+                    })
+                if ($missing.Count -gt 0) { Start-Sleep -Seconds 5 }
+            } while ($missing.Count -gt 0 -and (Get-Date) -lt $deadline)
+            if ($missing.Count -gt 0) {
+                throw ("VB-Cable A+B endpoints are missing: '" + ($missing -join "', '") + "'.")
+            }
+            Remove-Item -LiteralPath $package, (Join-Path $Setup $inputs.vb_cable_ab.file) -Recurse -Force -ErrorAction SilentlyContinue
         }
     }
 
