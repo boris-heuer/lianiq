@@ -29,6 +29,28 @@ This use is private and non-commercial (PO decision of 2026-11-11). Before any c
 the licence must be clarified with VB-Audio. The package is never committed to this
 repository; the image build records its SHA-256 in `image.json`.
 
+### VB-Cable A+B for the Call Bridge rows (optional)
+
+The Call Bridge rows E-34..E-38 (CAP-0166 0166-E-01..E-05, see
+[native-e2e-rows.md](native-e2e-rows.md#call-bridge-rows-e-34e-38-cap-0166)) need two more
+cables besides VB-Cable: the VB-Audio "VB-Cable A+B" package, with the endpoints
+`CABLE-A Input`/`CABLE-A Output` (the call microphone cable) and `CABLE-B Input`/`CABLE-B Output`
+(the call speaker cable). PO step, never done by an agent: obtain the package from VB-Audio
+Software, read and accept its licence (the same private, non-commercial use as VB-Cable), and
+rebuild the image with the optional input `-VbCableAbPackage <zip>`:
+
+```powershell
+.\tools\native-e2e\host\New-NativeE2eImage.ps1 -Replace `
+    -IsoPath D:\iso\Win11_Enterprise_Eval.iso `
+    -VbCablePackage D:\downloads\VBCABLE_Driver_Pack45.zip `
+    -VbCableAbPackage D:\downloads\VBCABLE_A_B_Driver_Pack.zip
+```
+
+Confirm the driver prompt in the VM console if Windows shows one. Without the four endpoints,
+E-34..E-38 are `blocked` with `cable-ab-missing` and start no app; until the image scripts
+accept `-VbCableAbPackage`, every image is in that state. The package is never committed, and
+the endpoint names are redaction secrets like `CABLE Input`/`CABLE Output`.
+
 ### MinGit licence
 
 MinGit (Git for Windows) is GPLv2 software. Lianiq uses it only inside the test VM, so that
