@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import os
 import sys
 import threading
 import time
@@ -32,6 +33,7 @@ VOICE_DE = "tts-de-thorsten-medium"
 ALL = (STT, MT, "mt-zh-hans-de", "mt-en-zh-hans", "mt-zh-hans-en", VOICE_DE)
 ALL += ("tts-zh-hans-aishell3", "tts-en-us-ljspeech-high")
 PLENTY = 10**12
+JOB_TIMEOUT = 30.0  # a pack job plus the status rescan it triggers, on a loaded CI runner
 
 
 def wait_until(condition, timeout: float = 5.0) -> bool:
@@ -56,8 +58,30 @@ def default_paths(config: AppConfig, _root: Path) -> None:
     config.tts.engines = fresh.tts.engines
 
 
+def patient_replace(replace=os.replace, attempts: int = 100):
+    """``os.replace`` that waits out a Windows sharing violation (``PermissionError``).
+
+    An on-access scanner briefly opens each file a pack job has just written (the staged
+    files, ``journal.json``, the manifest); Windows then refuses the rename, and the job
+    fails with "files are in use" or "could not be undone". No thread of the test holds
+    these files, so a short retry keeps the job's outcome deterministic.
+    """
+
+    def patient(source, target, *args, **kwargs):
+        for _ in range(attempts - 1):
+            try:
+                return replace(source, target, *args, **kwargs)
+            except PermissionError:
+                time.sleep(0.02)
+        return replace(source, target, *args, **kwargs)
+
+    return patient
+
+
 @pytest.fixture(name="shaped")
 def packs_shaped(tmp_path, monkeypatch, network_attempts):  # noqa: F811
+    if sys.platform == "win32":
+        monkeypatch.setattr(os, "replace", patient_replace())
     catalog, payloads, contents = builtin_shaped(tmp_path / "catalog")
     monkeypatch.setattr(
         packs_module, "BUILTIN_CATALOG_PATH", tmp_path / "catalog" / "builtin-shaped.json"
@@ -86,7 +110,7 @@ def packs_window(tmp_path, spies, monkeypatch, shaped):  # noqa: F811
     yield window
     shaped[3].set()
     page.runner.cancel()
-    assert wait_until(lambda: page.runner.current is None)
+    assert wait_until(lambda: page.runner.current is None, timeout=JOB_TIMEOUT)
     window.close()
 
 
@@ -102,6 +126,19 @@ def state(page, pack_id: str) -> str:
     return page.rows[pack_id].state_text
 
 
+def await_job(page, pack_id: str, expected: str = strings.PACK_STATE_VALIDATED) -> None:
+    """Wait for the pack job itself, then for the row state its status rescan shows.
+
+    The chain spans three threads: the ``pack-job`` worker, the ``finished``/``failed``
+    event on the Qt thread and the ``pack-status`` rescan thread with its ``statuses``
+    event. Under load that takes longer than ``wait_until``'s default five seconds.
+    """
+    assert wait_until(lambda: page.runner.current is None, timeout=JOB_TIMEOUT)
+    if expected == strings.PACK_STATE_VALIDATED:
+        assert page.runner.last_error is None, page.runner.last_error
+    assert wait_until(lambda: state(page, pack_id) == expected, timeout=JOB_TIMEOUT)
+
+
 def download(page, pack_id: str, *, wait: bool = True):
     row = page.rows[pack_id]
     row.primary_button.click()
@@ -110,7 +147,7 @@ def download(page, pack_id: str, *, wait: bool = True):
     dialog.licence_box.setChecked(True)
     dialog.download_button.click()
     if wait:
-        assert wait_until(lambda: state(page, pack_id) == strings.PACK_STATE_VALIDATED)
+        await_job(page, pack_id)
     return row
 
 
