@@ -3,7 +3,7 @@
 S-01 → S-02 → S-03 → (S-04 window opens) → S-05 → C-04 → E-01 → E-11 → E-03 → E-10
 → E-14 → E-13 → E-15 → E-27 → E-28 → E-29 → E-31 → E-32 → E-23 → E-26 → E-16 → E-18 → E-19
 → E-20 → E-21 → E-22 → E-24 → E-25 → E-30 → E-33 → E-34..E-38 (Call Bridge, ``rows.cb``)
-→ C-05 → C-06 → C-09 → E-12 → C-03 → SHOT → (app left open is closed; S-04 window
+→ E-39 → E-40 → C-05 → C-06 → C-09 → E-12 → C-03 → SHOT → (app left open is closed; S-04 window
 closes, S-04 recorded) → E-17 → T-01 → T-02 → T-05 → T-03 → T-04 (T-05 checks the models
 junction before T-03 deletes the scratch folders' parent). E-17 presses **Download** (a
 blocked connection attempt), so it runs after ``s04.finish`` while the block rule still
@@ -54,6 +54,8 @@ from native_e2e.rows import (
     e34,
     e36,
     e37,
+    e39,
+    e40,
     s01,
     s02,
     s03,
@@ -113,6 +115,8 @@ def _app_rows() -> tuple[tuple[str, Callable[[RunContext], Row]], ...]:
         ("E-36", e36.e36),
         ("E-37", e37.e37),
         ("E-38", e37.e38),
+        ("E-39", e39.run),  # english-mandarin-pair: image packs, then a Conversation
+        ("E-40", e40.run),
         ("C-05", c05.c05),  # C-05, C-06, C-09: repository scripts
         ("C-06", c05.c06),
         ("C-09", c05.c09),

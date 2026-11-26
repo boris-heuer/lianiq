@@ -36,11 +36,13 @@ def fake_e_rows(monkeypatch, fake, calls: list[str]) -> None:
         e34,
         e36,
         e37,
+        e39,
+        e40,
     )
 
     singles = (
         e01, e11, e03, e10, e14, e13, e15, e16, e17, e18, e19, e27, e28, e29, e30, e23,
-        e24, e25, e26, e31, e32, e33,
+        e24, e25, e26, e31, e32, e33, e39, e40,
     )  # fmt: skip
     for module, attr, row_id in (
         *((m, "run", f"E-{m.__name__[-2:]}") for m in singles),
