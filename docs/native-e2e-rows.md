@@ -52,7 +52,7 @@ window, each with its own app on the image models. No key confirms a download, a
 removal: dialogs are only closed with Escape. A modal dialog gets its keys without the main
 window being brought to the front (`App.send`).
 
-C-05, C-06 and C-09 run after E-33 and before E-12, inside the S-04 window. C-03 already
+C-05, C-06 and C-09 run after E-38 and before E-12, inside the S-04 window. C-03 already
 runs `ui_self_test.py` and C-04 `call_bridge_self_test.py --synthetic`, so neither is run
 again. `scripts\download_models.py` never runs: it always downloads and stages into `models`
 (read-only in the VM), and a blocked download attempt counts against S-04.
@@ -71,7 +71,7 @@ scratch-model group (`e20.run` runs all three with one app; E-21 and E-22 are `b
 `translation-packs-not-ready` when E-20 imported no translation). A pack folder without
 `lianiq-pack.json` makes all three `blocked` with `image-packs-without-pack-file` before the
 junction or the settings change. No row in the S-04 window presses **Download**. E-24 and
-E-25 follow E-22, then E-30 and E-33.
+E-25 follow E-22, then E-30, E-33 and E-34..E-38.
 
 E-26 (CAP-0170 Listen & translate) runs after E-23 on the image models; E-24 and E-25 run after
 E-22 and share one app on scratch models `e24` (the junction and the settings baseline come
@@ -232,6 +232,42 @@ and both transcript panels are black rectangles. Run `python -m native_e2e verif
 | C-09 `connection-count-0` fails | The app interpreter tried a non-loopback connection during the row (`count=N`), or the admin helper gave no count (`unreadable`) |
 | T-05 `models-junction-targets-image` fails | The checkout's `models` is no junction any more (`RuntimeError`) or `image.json` is unreadable; the next run starts from the reverted checkpoint |
 | T-05 `scratch-folders-deleted` fails | A file in a scratch folder was still open (an app process left running) |
+
+## Call Bridge rows E-34..E-38 (CAP-0166)
+
+E-34..E-38 automate the CAP-0166 e2e plan rows 0166-E-01..E-05 (`native_e2e/rows/cb.py`,
+`e34.py`, `e36.py`, `e37.py`). They run after E-33 and before C-05, inside the S-04 window, and
+need the VB-Cable A+B image prerequisite ([native-e2e-setup.md](native-e2e-setup.md)):
+without the endpoints `CABLE-A …`/`CABLE-B …` every row is `blocked` with `cable-ab-missing`
+and no app starts. The three cables stand in for the PO's devices: VB-Cable is the headset
+(*Your microphone* "CABLE Output", *Your headphones* "CABLE Input"; what the headphones play
+reaches the microphone like a headset's bleed), "CABLE-A Input" is the call microphone cable
+(the rows record "CABLE-A Output", the call app's microphone) and "CABLE-B Output" the call
+speaker cable (the rows play the call partner into "CABLE-B Input"). The rows share one app:
+E-34 starts it, E-38 closes it and restores the S-03 settings. Audible checks are measured on
+the cables (speech spans above about -40 dBFS); only spans, latencies and counts are stored.
+Unplugging the headset (the rest of 0166-E-05) and the WeChat call (0166-E-06) stay PO rows.
+
+| Row | Steps | Evidence |
+|---|---|---|
+| E-34 | 0166-E-01 (AC-01, AC-02): removes the `call_bridge` block from the local settings (plan D-05), starts a fresh app, opens **Call Bridge** | No *Enable* checkbox; experimental note and *Real-call checklist* link; both path boxes; four "select a device" lines; **Start call bridge** disabled; no level signal; `render_sessions=0`; `screens/e34-defaults.png` |
+| E-35 | 0166-E-02 (AC-02, AC-03): selects "CABLE Output", "CABLE-A Input", "CABLE-A Output", "CABLE Input"; then the call speaker cable "CABLE-B Output" | "Both call cables are the same virtual cable…" and Start disabled; then an empty readiness list and Start enabled (300 s for the models); `screens/e35-same-cable.png`, `screens/e35-ready.png` |
+| E-36 | 0166-E-03 (AC-04..AC-06): records cable A and the headset; **Test · Call → you**, **Yes**; **Test · You → call**, **Yes**; *Your headphones* to "CABLE-B Input" and back | Each phrase only on its path's cable; *Test passed* twice; lanes *Stopped* throughout, a test row never shows a lane activity; after the change *Call → you* *Not tested*, *You → call* *Test passed*; `screens/e36-in.png`, `screens/e36-out.png` |
+| E-37 | 0166-E-04 (AC-07, AC-13, AC-17): **Start call bridge**; plays `conv_de_16k.wav` (G1) into *Your microphone*; plays Mandarin into "CABLE-B Input" (`conv_zh_16k.wav` from `native_e2e.synth` when present, else the Mandarin the bridge just spoke on cable A, memory only); plays the Windows "Asterisk" sound | Mandarin only on cable A (`latency_s`), German only on the headset (`latency_s`, `source`); cable A silent for 8 s after the German and 3 s after the notification sound; both lanes showed *Translating…* or *Speaking*; one live-text turn per direction; Conversation transcript empty; `screens/e37-running.png` |
+| E-38 | 0166-E-05 without the unplug (AC-09, AC-12, AC-17): the Mandarin again; Settings, **F9**; closes the app; restores the settings | *You → call* "Paused while you hear the translation" and cable A silent; both lanes *Stopped*; the four selectors enabled; `settings-reset`; `screens/e38-after-f9.png` |
+
+| Symptom | First thing to check |
+|---|---|
+| E-34..E-38 `cable-ab-missing` | The image has no VB-Cable A+B (PO step in [native-e2e-setup.md](native-e2e-setup.md)) |
+| `devices-selected-…` fails with `selected=N` | A cable endpoint is missing from a role's list, or its combo did not take the click |
+| E-35 `readiness-empty-start-enabled` times out | A Call Bridge model or voice is missing (readiness names it), or the models did not warm up in 300 s |
+| E-36 `in-test-asks` / `out-test-asks` times out | The route-test phrase did not synthesise or play; the voice of that language is missing |
+| E-36 `…-on-call-cable` / `…-in-headset` fails | The phrase reached the wrong cable, or none (Windows default device opened instead) |
+| E-37 `mandarin-on-call-cable` or `german-in-headset` times out | The lane did not recognise, translate or speak within 300 s; C-06 runs the same lanes without UI |
+| E-37 `call-cable-silent-during-inbound` or E-38 `nothing-sent-while-paused` fails | The headset bleed of the German translation was sent to the call: the echo pause did not hold |
+| E-37 `notification-not-on-call-cable` is `blocked` | The VM's default playback device is a call cable (`default-render-is-call-cable`); set "CABLE Input" as default in the image |
+| E-37/E-38 `mandarin-source` is `blocked` | No Mandarin source: E-37 heard no Mandarin on cable A and `native_e2e.synth` is absent |
+| E-38 `f9-stops-both-lanes` times out | F9 from Settings did not stop the bridge |
 
 ## Meeting operator rows (CAP-0177)
 
