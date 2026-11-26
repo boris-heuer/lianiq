@@ -44,7 +44,7 @@ def packs_missing(ctx: RunContext) -> int:
     """How many English packs lack a file in the image (all of them when unreadable)."""
     try:
         return sum(1 for pack_id in ENGLISH_PACKS if not _present(ctx, pack_id))
-    except (OSError, KeyError, ValueError):  # no image.json, or a catalog without the pack
+    except (OSError, LookupError, ValueError):  # no image.json, or the catalog lacks a pack
         return len(ENGLISH_PACKS)
 
 
