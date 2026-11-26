@@ -8,7 +8,8 @@ return until the dialog closes), ``keys``
 (SendInput to the focused window), ``choose`` (expand a combo box, click an item), ``window_nodes``
 (a top-level window of the app such as the export dialog), ``type_into``, ``processes``
 (psutil, for the E-01 model-file check), ``popup_nodes`` and ``click`` (dialogs and popup
-menus, for ``packs_import``), ``focused`` (``rows.ui.tab_walk``), ``set_value`` (a slider, E-28) and ``close``. ``launch``
+menus, for ``packs_import``), ``focused`` (``rows.ui.tab_walk``), ``set_value`` (a slider, E-28), ``send`` (keys to an
+open dialog, for ``rows.keys``) and ``close``. ``launch``
 starts with ``--no-setup-assistant`` unless ``setup_assistant=True`` (first-run rows: the
 local settings file is deleted first); ``settings_reset`` resets it to S-03's.
 E-03 keeps its app in ``ctx.state["app"]`` for E-10; ``close_open`` closes whatever is left
@@ -78,6 +79,11 @@ class App:
 
     def keys(self, text: str) -> None:
         self.window.set_focus()
+        uia.send_keys(text)
+
+    def send(self, text: str) -> None:
+        """SendInput to the focused element without focusing the main window first, so the
+        keys reach an open dialog (``rows.keys``)."""
         uia.send_keys(text)
 
     def choose(self, node: Node, item: str) -> None:

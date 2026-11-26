@@ -1,8 +1,8 @@
 """Row order of one run (CAP-0174 spec §2.2.1 step 4, §2.3; contract §5).
 
 S-01 → S-02 → S-03 → (S-04 window opens) → S-05 → C-04 → E-01 → E-11 → E-03 → E-10
-→ E-14 → E-13 → E-15 → E-27 → E-28 → E-29 → E-23 → E-26 → E-16 → E-18 → E-19 → E-20 → E-21
-→ E-22 → E-24 → E-25 → E-30 → C-05 → C-06 → C-09 → E-12 → C-03 → SHOT → (app left open is closed; S-04 window
+→ E-14 → E-13 → E-15 → E-27 → E-28 → E-29 → E-31 → E-32 → E-23 → E-26 → E-16 → E-18 → E-19
+→ E-20 → E-21 → E-22 → E-24 → E-25 → E-30 → E-33 → C-05 → C-06 → C-09 → E-12 → C-03 → SHOT → (app left open is closed; S-04 window
 closes, S-04 recorded) → E-17 → T-01 → T-02 → T-05 → T-03 → T-04 (T-05 checks the models
 junction before T-03 deletes the scratch folders' parent). E-17 presses **Download** (a
 blocked connection attempt), so it runs after ``s04.finish`` while the block rule still
@@ -47,6 +47,9 @@ from native_e2e.rows import (
     e28,
     e29,
     e30,
+    e31,
+    e32,
+    e33,
     s01,
     s02,
     s03,
@@ -87,6 +90,8 @@ def _app_rows() -> tuple[tuple[str, Callable[[RunContext], Row]], ...]:
         ("E-27", e27.run),  # E-27..E-30: voice output (CAP-0167), each with its own app
         ("E-28", e28.run),
         ("E-29", e29.run),
+        ("E-31", e31.run),  # E-31..E-33: keyboard rows, each with its own app
+        ("E-32", e32.run),
         ("E-23", e23.run),  # CAP-0172 session rule, limit, privacy (image models)
         ("E-26", e26.run),  # CAP-0170 session rule, Stop, privacy (image models)
         ("E-16", e16.run),  # CAP-0171 offline provisioning: scratch-model groups
@@ -98,6 +103,7 @@ def _app_rows() -> tuple[tuple[str, Callable[[RunContext], Row]], ...]:
         ("E-24", e24.run),  # E-24, E-25: one scratch-model group (CAP-0170 Listen)
         ("E-25", e25.run),
         ("E-30", e30.run),  # scratch models: restores the junction itself
+        ("E-33", e33.run),
         ("C-05", c05.c05),  # C-05, C-06, C-09: repository scripts
         ("C-06", c05.c06),
         ("C-09", c05.c09),
