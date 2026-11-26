@@ -256,3 +256,42 @@ def test_speech_wav_is_16k_mono_pcm_and_its_text_a_secret(tmp_path) -> None:
         frames = handle.getnframes()
     assert params == (1, 2, 16_000) and frames >= 16_000 * 2.5  # lead + 1 s + tail
     assert ZH in ctx.secrets and path.parent == ctx.temp / "speech"
+
+
+def test_e39_is_blocked_when_the_catalog_lacks_an_english_pack(monkeypatch, tmp_path) -> None:
+    from lianiq.packs.errors import UnknownPackError
+
+    ctx, _app = e39_setup(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        packs_import, "pack", lambda pack_id: (_ for _ in ()).throw(UnknownPackError(pack_id))
+    )
+    assert e39.packs_missing(ctx) == len(e39.ENGLISH_PACKS)
+    assert e39.run(ctx).status is Status.BLOCKED
+
+
+def test_e40_resets_the_settings_and_deletes_the_wavs_when_the_flow_raises(
+    monkeypatch, tmp_path
+) -> None:
+    ctx, app, made = e40_setup(monkeypatch, tmp_path)
+    resets = []
+    monkeypatch.setattr(uia_app, "settings_reset", lambda ctx: resets.append(ctx))
+    monkeypatch.setattr(e40, "_session", lambda *args: (_ for _ in ()).throw(RuntimeError()))
+    with pytest.raises(RuntimeError):
+        e40.run(ctx)
+    assert resets == [ctx] and app.closed and not any(path.exists() for path in made)
+
+
+def test_speech_wavs_leaves_no_wav_when_a_synthesis_fails(monkeypatch, tmp_path) -> None:
+    import numpy
+
+    class Engine:
+        def synthesize_pcm(self, text, language):
+            if language != "en":
+                raise OSError("no Mandarin voice")
+            return (numpy.ones(16_000, dtype="<i2"), 16_000)
+
+    ctx = make_ctx(tmp_path)
+    monkeypatch.setattr(speech_pair, "synthesizer", Engine)
+    with pytest.raises(OSError):
+        speech_pair.speech_wavs(ctx)
+    assert not (ctx.temp / "speech" / speech_pair.EN).exists()
