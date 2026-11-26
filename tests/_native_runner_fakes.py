@@ -2,7 +2,7 @@
 
 Each row's step is replaced by ``fake(row_id, calls)``, which records the call; E-12 is
 replaced in the test itself (it runs after the C rows). The E-20..E-22 group has three steps;
-E-17 runs after S-04 is recorded.
+E-34..E-38 have one function each (``e34.e35``, …); E-17 runs after S-04 is recorded.
 """
 
 from __future__ import annotations
@@ -33,6 +33,9 @@ def fake_e_rows(monkeypatch, fake, calls: list[str]) -> None:
         e31,
         e32,
         e33,
+        e34,
+        e36,
+        e37,
     )
 
     singles = (
@@ -44,5 +47,6 @@ def fake_e_rows(monkeypatch, fake, calls: list[str]) -> None:
         (e20, "run", "E-20"),
         (e20, "run_e21", "E-21"),
         (e20, "run_e22", "E-22"),
+        *((m, f"e{n}", f"E-{n}") for n, m in zip(range(34, 39), (e34, e34, e36, e37, e37))),
     ):
         monkeypatch.setattr(module, attr, fake(row_id, calls))

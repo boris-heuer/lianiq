@@ -25,10 +25,12 @@ IMAGE_ROOT = Path(r"C:\ProgramData\lianiq-e2e")
 MARKER_NAME = "run-marker.json"
 # Endpoint display names are on the privacy list (contract §7.2): never stored.
 CABLE_NAMES = ("CABLE Input", "CABLE Output")
+# VB-Cable A+B (Call Bridge rows E-34..E-38): the call microphone and call speaker cables.
+CABLE_AB_NAMES = ("CABLE-A Input", "CABLE-A Output", "CABLE-B Input", "CABLE-B Output")
 
 
 def default_secrets() -> list[str]:
-    return [PHRASE, *CABLE_NAMES]
+    return [PHRASE, *CABLE_NAMES, *CABLE_AB_NAMES]
 
 
 def default_temp() -> Path:
