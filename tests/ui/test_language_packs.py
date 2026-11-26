@@ -24,6 +24,7 @@ from tests.ui._language_packs_helpers import (  # noqa: F401 - the fixtures are 
     PLENTY,
     STT,
     VOICE_DE,
+    await_job,
     download,
     manifest,
     manifest_or_empty,
@@ -72,7 +73,7 @@ def test_ac07_ac08_licence_gate_then_download_to_validated_with_progress(window)
     assert dialog.download_button.isEnabled() and dialog.import_button.isEnabled()
     dialog.download_button.click()
 
-    assert wait_until(lambda: state(page, MT) == strings.PACK_STATE_VALIDATED)
+    await_job(page, MT)
     views = [event[1] for event in events if event[0] == "progress"]
     assert {view.phase for view in views} >= {JobPhase.TRANSFER, JobPhase.CHECK}
     transfer = next(v for v in views if v.phase is JobPhase.TRANSFER)
@@ -96,13 +97,13 @@ def test_ac09_cancel_returns_the_row_with_the_reason_and_retry(window, shaped) -
     assert row.state_text == strings.PACK_STATE_INSTALLING and row.progress.isVisible()
     row.cancel_button.click()
     gate.set()
+    await_job(page, MT, strings.PACK_STATE_DOWNLOADABLE)
     assert wait_until(lambda: row.message_label.text() == "Cancelled")
-    assert wait_until(lambda: row.state_text == strings.PACK_STATE_DOWNLOADABLE)
     assert row.retry_button.isVisible() and not row.cancel_button.isVisible()
     assert "packs" not in manifest_or_empty(window)
 
     row.retry_button.click()  # the same download, licence already accepted
-    assert wait_until(lambda: row.state_text == strings.PACK_STATE_VALIDATED)
+    await_job(page, MT)
     assert not row.message_label.isVisible()
 
 
@@ -115,8 +116,8 @@ def test_ac13_no_connection_names_the_host_with_import_and_retry(window, shaped)
     transport.unavailable = frozenset({host})
     row = download(page, MT, wait=False)
     expected = strings.PACK_DOWNLOAD_UNAVAILABLE.format(host=host)
+    await_job(page, MT, strings.PACK_STATE_DOWNLOADABLE)
     assert wait_until(lambda: row.message_label.text() == expected)
-    assert wait_until(lambda: row.state_text == strings.PACK_STATE_DOWNLOADABLE)
     assert row.import_button.isVisible() and row.retry_button.isVisible()
     assert state(page, STT) == strings.PACK_STATE_VALIDATED
     logged = [text for _, category, text in window.diagnostics.entries() if category == "packs"]
@@ -160,7 +161,7 @@ def test_remove_confirms_the_usages_and_returns_the_row_to_downloadable(
     assert asked == [
         strings.PACK_REMOVE_CONFIRM.format(pack=page.packs.get(MT).model, usages="Conversation")
     ]
-    assert wait_until(lambda: state(page, MT) == strings.PACK_STATE_DOWNLOADABLE)
+    await_job(page, MT, strings.PACK_STATE_DOWNLOADABLE)
     assert all(item["id"] != MT for item in manifest(window)["packs"])
     logged = [text for _, category, text in window.diagnostics.entries() if category == "packs"]
     assert logged[-1] == f"pack_id={MT} version=1 operation=remove state=succeeded"
@@ -180,7 +181,7 @@ def test_ac10_import_of_a_folder_makes_no_network_call(
     page.rows[VOICE_DE].primary_button.click()
     page.details.licence_box.setChecked(True)
     page.details.import_folder_action.trigger()
-    assert wait_until(lambda: state(page, VOICE_DE) == strings.PACK_STATE_VALIDATED)
+    await_job(page, VOICE_DE)
     record = next(item for item in manifest(window)["packs"] if item["id"] == VOICE_DE)
     assert record["source"] == "import"
     assert not (page.root / pack.root / "extra-notes.txt").exists()
@@ -198,7 +199,7 @@ def test_ac33_a_running_job_disables_every_other_job_action_with_pack_busy(windo
     assert not page.start(STT, "install", source, datetime.now(UTC))  # JobBusy from the runner
     assert page.rows[STT].message_label.text() == strings.PACK_BUSY
     shaped[3].set()
-    assert wait_until(lambda: state(page, MT) == strings.PACK_STATE_VALIDATED)
+    await_job(page, MT)
     assert page.rows[STT].primary_button.isEnabled()
 
 
