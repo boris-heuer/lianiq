@@ -41,6 +41,8 @@ never retried.
 | E-32 | Keyboard (CAP-0170 E-07, CAP-0172 E-07). Starts its own app; Listen & translate: German → Mandarin (Simplified), *Microphone* "CABLE Output", walks the Tab cycle, F8 starts listening, F9 stops it (nothing is played); Text translation: types D-03, Ctrl+Enter translates it, Tab leaves *Source text* and *Translation*, walks the Tab cycle; pastes D-03 30 more times with the keyboard, Tab to **Translate**, Enter starts it, the focused button is named **Cancel**, Escape cancels ("Translation cancelled. Your text is unchanged.") and the focused button is named **Translate** again; resets the settings | Walk counts as E-31; `f8-starts-listening`, `f9-stops-listening`, `ctrl-enter-translates` (result SHA-256), `tab-leaves-*`, `enter-on-focused-button`, `focused-button-named-*`, `escape-cancels-translation`. No text is stored |
 | E-30 | CAP-0167 E-05, E-06 (Diagnostics), E-07. Gets both fixtures before the junction moves; scratch models `e30` with every German–Mandarin pack but the Mandarin voice imported (`packs_import`; packs of other pairs such as english-mandarin-pair are not imported, and their folders need no pack file); Conversation; **Open Language packs** and back; cable devices; German switch on; **Start**; German then Mandarin fixture; F9; Settings › Diagnostics; closes the app (junction restored). Then the legacy settings (template plus `languages.output: "text"`) on the image models; launch; Conversation; reset the settings | Packs *Validated* (`count=N`); Mandarin switch off and disabled, "Voice missing"; Language packs opened; both turns shown, completed playbacks in German only; Diagnostics "Voice German: Ready" and "Voice Mandarin (Simplified): Voice missing"; `screens/e30-voice-missing.png`; with the legacy settings both switches on |
 | E-33 | Keyboard (CAP-0171 E-10). Starts its own app; Language packs: once no row reads "Checking…" (300 s), walks the Tab cycle; Tab to **Run setup assistant**, Space opens "Set up Lianiq", walks its first step, Escape closes it; Tab to the first **Get…**, **Update…** or **Download again**, Space opens the pack's details dialog, walks it, Escape closes it (the licence box stays unticked, so **Download** stays disabled); Tab to the first **Remove**, Space opens the confirmation, walks it, Escape cancels it; resets the settings | Walk counts as E-31; `pack-actions-shown` counts the **Update…**, **Download again**, **Remove** and *Custom path* stops the image shows; `packs-unchanged-after-escape` |
+| E-39 | english-mandarin-pair 9-E-01 on the image packs (AC-03, AC-06). Blocked with `english-packs-missing` unless every file of `mt-en-zh-hans`, `mt-zh-hans-en` and `tts-en-us-ljspeech-high` is in the image's pack folders (rebuild the image after the English packs reached `main`). Reads the image's `model-manifest.json`; starts its own app; Language packs: waits for each of the three rows to read *Validated*; Conversation: opens *Language pair* and reads its entries without choosing one; closes the app; runs `scripts\doctor.py` | Per pack `source=…`, `licence=true` and `sha256=N/N` against the catalog pins; each row's state; `items=N`; whether "English ↔ Mandarin (Simplified)" is offered and "German ↔ English" is not; doctor exit code, `logs/e39-doctor.txt` (SHA-256 and duration only); `screens/e39-language-packs.png` with the models folder line masked |
+| E-40 | english-mandarin-pair 9-E-04 (AC-14). Same gate as E-39. Synthesises E1 "We can deliver 250 units next Tuesday." (Piper `en_US-ljspeech-high`) and Z1 "我们下周不能来。" (the image's Mandarin voice) through Lianiq's TTS engine into `%TEMP%\lianiq-e2e\speech`, 16 kHz mono; starts its own app; Settings › Audio devices: "CABLE Output" as Microphone; Conversation: *Language pair* "English ↔ Mandarin (Simplified)", direction Automatic, every voice switch off; **Start** (F8); plays E1, waits for an English → Mandarin turn; plays Z1, waits for a Mandarin → English turn; F9; closes the app, restores the settings baseline and deletes both WAVs | `name_matches`; `turns=N` per direction; transcript SHA-256 (never a text); `screens/e40-conversation.png` with both panels masked. Pass: at least one translation each way |
 | C-05 | `scripts\self_test.py` with the run's Python from the checkout, timeout 600 s (CAP-0167 C-03) | Exit code; `logs/c05-self-test.txt` with the output's SHA-256 and the duration only (the script prints recognised and translated text) |
 | C-06 | `scripts\call_bridge_self_test.py` without arguments: both lanes over the image models (CAP-0167 C-03; C-04 already runs `--synthetic`) | Exit code; `logs/c06-call-bridge-self-test.txt` (SHA-256 and duration only) |
 | C-09 | `scripts\doctor.py` (CAP-0171 C-02), then the S-04 count of the app interpreter's non-loopback connections since the row started | Exit code; `logs/c09-doctor.txt` (SHA-256 and duration only); `connection-count-0` with `count=N` (a late WFP event still counts in S-04) |
@@ -52,7 +54,13 @@ window, each with its own app on the image models. No key confirms a download, a
 removal: dialogs are only closed with Escape. A modal dialog gets its keys without the main
 window being brought to the front (`App.send`).
 
-C-05, C-06 and C-09 run after E-38 and before E-12, inside the S-04 window. C-03 already
+E-39 and E-40 run after E-38 and before C-05, each with its own app on the image models. Neither
+presses **Download** or **Get…**, so no network attempt counts against S-04; the speech texts go
+to the redaction secrets and the WAVs never leave the VM. They are the only rows that check the
+English ↔ Mandarin packs: without them both are `blocked` (`english-packs-missing`), and no
+other row needs the English folders.
+
+C-05, C-06 and C-09 run after E-40 and before E-12, inside the S-04 window. C-03 already
 runs `ui_self_test.py` and C-04 `call_bridge_self_test.py --synthetic`, so neither is run
 again. `scripts\download_models.py` never runs: it always downloads and stages into `models`
 (read-only in the VM), and a blocked download attempt counts against S-04.
@@ -71,7 +79,7 @@ scratch-model group (`e20.run` runs all three with one app; E-21 and E-22 are `b
 `translation-packs-not-ready` when E-20 imported no translation). A pack folder without
 `lianiq-pack.json` makes all three `blocked` with `image-packs-without-pack-file` before the
 junction or the settings change. No row in the S-04 window presses **Download**. E-24 and
-E-25 follow E-22, then E-30, E-33 and E-34..E-38.
+E-25 follow E-22, then E-30, E-33, E-34..E-38, E-39 and E-40.
 
 E-26 (CAP-0170 Listen & translate) runs after E-23 on the image models; E-24 and E-25 run after
 E-22 and share one app on scratch models `e24` (the junction and the settings baseline come
@@ -228,6 +236,12 @@ and both transcript panels are black rectangles. Run `python -m native_e2e verif
 | E-32 `escape-cancels-translation` times out | The long translation finished before Escape, or the cancel message did not show |
 | E-33 is `blocked` with `no-details-action` | Every pack of the image is installed without an update: no row action opens the details dialog |
 | E-33 is `blocked` with `no-remove-action` | No pack of the image is installed |
+| E-39 or E-40 `blocked` with `english-packs-missing` | The image is older than the English packs: rebuild it (`New-NativeE2eImage.ps1 -Replace`, PO step) |
+| E-39 `…-source-licence-sha256` fails | The image manifest has no record of the pack, another licence, or a file digest that differs from the catalog pin (`sha256=N/M`): rebuild the image |
+| E-39 `…-validated` fails | The row shows another state (`state=…`): a file is missing or changed, or the row is out of view |
+| E-39 `english-mandarin-offered` fails | A pack of the pair is not ready (see the row states), or the combo could not be expanded (`TimeoutError`) |
+| E-40 `speech-synthesized` fails | The English or Mandarin voice could not be loaded in the runner (exception type only) |
+| E-40 `en-to-zh-hans-turn` or `zh-hans-to-en-turn` times out | The recognition pack did not detect the language of the synthetic sentence through the cable, or the turn was held (another language detected) |
 | C-05, C-06 or C-09 `exit-code-0` fails | Run the script in a source checkout of the same commit: the log keeps no output line (`timeout` after 600 s) |
 | C-09 `connection-count-0` fails | The app interpreter tried a non-loopback connection during the row (`count=N`), or the admin helper gave no count (`unreadable`) |
 | T-05 `models-junction-targets-image` fails | The checkout's `models` is no junction any more (`RuntimeError`) or `image.json` is unreadable; the next run starts from the reverted checkpoint |
