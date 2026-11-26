@@ -26,11 +26,11 @@ from tests.ui._language_packs_helpers import (  # noqa: F401 - the fixtures are 
     ALL,
     MT,
     STT,
+    await_job,
     open_page,
     packs_network,
     packs_shaped,
     packs_window,
-    state,
     wait_until,
 )
 from tests.ui._notice_helpers import action
@@ -114,7 +114,7 @@ def test_ac26_details_dialog_names_and_keyboard_download(window) -> None:
     assert dialog.download_button.isEnabled()
     QTest.keyClick(dialog, Qt.Key.Key_Return)  # Enter = the default button, Download
     assert dialog.choice == ("download", None)
-    assert wait_until(lambda: state(page, MT) == strings.PACK_STATE_VALIDATED)
+    await_job(page, MT)
     assert name(page.rows[MT]) == f"{page.rows[MT].name}, {strings.PACK_STATE_VALIDATED}"
 
 
