@@ -81,7 +81,7 @@ def licence_query_run(failures: int) -> list[str]:
     exe = shutil.which("powershell") or shutil.which("pwsh")
     if exe is None:
         pytest.skip("PowerShell is not installed")
-    source = (GUEST / "provision.ps1").read_text(encoding="utf-8")
+    source = (GUEST / "activation.ps1").read_text(encoding="utf-8")  # dot-sourced by provision
     function = source[source.index("function Get-WindowsLicence") :]
     function = function[: function.index("\n}\n") + 3]
     stopping = (

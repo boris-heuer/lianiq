@@ -61,9 +61,14 @@ def speech_wav(ctx: RunContext, name: str, engine: Any = None) -> Path:
 
 
 def speech_wavs(ctx: RunContext, names: Iterable[str] = (EN, ZH)) -> list[Path]:
-    """Every WAV of ``names`` with one synthesizer."""
-    engine = synthesizer()
-    return [speech_wav(ctx, name, engine) for name in names]
+    """Every WAV of ``names`` with one synthesizer; on an error none of them is left."""
+    names = list(names)
+    try:
+        engine = synthesizer()
+        return [speech_wav(ctx, name, engine) for name in names]
+    except BaseException:
+        discard(ctx.temp / "speech" / name for name in names)
+        raise
 
 
 def discard(paths: Iterable[Path]) -> None:

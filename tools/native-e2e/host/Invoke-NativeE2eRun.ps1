@@ -26,7 +26,7 @@ param(
     [string]$StateRoot = (Join-Path $env:ProgramData 'lianiq-native-e2e'),
     [int]$BootMinutes = 10,
     [int]$RunnerOnlineMinutes = 10,
-    [int]$JobTimeoutMinutes = 180
+    [int]$JobTimeoutMinutes = 250
 )
 
 Set-StrictMode -Version 3.0

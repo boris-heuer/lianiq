@@ -109,7 +109,7 @@ def test_the_licence_source_is_a_validated_switch_and_the_key_never_a_parameter(
         for forbidden in ("slmgr", "/ipk", "InstallProductKey", ".PartialProductKey", "Read-Host"):
             assert forbidden not in source, (path.name, forbidden)
     provision = code(GUEST / "provision.ps1")
-    assert "Start-Process -FilePath 'slui.exe' -ArgumentList '3'" in provision
+    assert "Start-Process -FilePath 'slui.exe' -ArgumentList '3'" in code(GUEST / "activation.ps1")
     assert re.search(r"licence_source\s+= \$LicenceSource$", image, re.MULTILINE)
     assert re.search(
         r"licence_source\s+= \[string\]\$inputs\.licence_source$", provision, re.MULTILINE

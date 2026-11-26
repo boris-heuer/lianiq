@@ -27,6 +27,12 @@
     types the key on the VM console when the guest opens the product key window. The key
     is never a script argument and never written to a log, image.json or a receipt.
 
+.PARAMETER VbCableAbPackage
+    Optional: the PO-supplied, licensed VB-Audio "VB-Cable A+B" zip. The guest installs it
+    like VB-Cable (signed setup, silent flags) and waits for the endpoints CABLE-A and
+    CABLE-B Input/Output, which the Call Bridge rows E-34..E-38 need. Without it the image
+    is built as before and those rows are blocked (cable-ab-missing).
+
 .EXAMPLE
     .\tools\native-e2e\host\New-NativeE2eImage.ps1 -IsoPath D:\iso\win11-eval.iso `
         -VbCablePackage D:\downloads\VBCABLE_Driver_Pack45.zip
@@ -35,6 +41,7 @@
 param(
     [Parameter(Mandatory)][string]$IsoPath,
     [Parameter(Mandatory)][string]$VbCablePackage,
+    [string]$VbCableAbPackage = '',
     [ValidateSet('evaluation', 'key')][string]$LicenceSource = 'evaluation',
     [string]$VmName = 'lianiq-native-e2e',
     [string]$StateRoot = (Join-Path $env:ProgramData 'lianiq-native-e2e'),
@@ -81,7 +88,7 @@ $GuestDir = Join-Path $RepoRoot 'tools\native-e2e\guest'
 
 function Assert-Prerequisites {
     Assert-NativeE2eAdministrator
-    foreach ($path in $IsoPath, $VbCablePackage) {
+    foreach ($path in @($IsoPath, $VbCablePackage, $VbCableAbPackage) -ne '') {
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "File not found: $path" }
     }
     if (-not (Test-Path -LiteralPath $RepoPython)) {
@@ -200,7 +207,14 @@ $runner = Get-RunnerPackage $payload
 $minGit = Get-MinGitPackage $payload
 $vbFile = Split-Path $VbCablePackage -Leaf
 Copy-Item -LiteralPath $VbCablePackage -Destination (Join-Path $payload $vbFile)
-foreach ($guestScript in 'provision.ps1', 'admin-helper.ps1', 'runner-logon.ps1') {
+$vbCableAb = $null
+if ($VbCableAbPackage) {
+    $vbAbFile = Split-Path $VbCableAbPackage -Leaf
+    if ($vbAbFile -eq $vbFile) { throw 'The VB-Cable and VB-Cable A+B packages need different file names.' }
+    Copy-Item -LiteralPath $VbCableAbPackage -Destination (Join-Path $payload $vbAbFile)
+    $vbCableAb = [ordered]@{ file = $vbAbFile; sha256 = Get-NativeE2eSha256 (Join-Path $payload $vbAbFile) }
+}
+foreach ($guestScript in 'provision.ps1', 'activation.ps1', 'admin-helper.ps1', 'runner-logon.ps1') {
     Copy-Item -LiteralPath (Join-Path $GuestDir $guestScript) -Destination $payload
 }
 Copy-Item -LiteralPath (Join-Path $RepoRoot 'native_e2e\data\make_test_phrase.py') -Destination $payload
@@ -221,6 +235,7 @@ $inputs = [ordered]@{
     runner           = $runner
     mingit           = $minGit
     vb_cable         = [ordered]@{ file = $vbFile; sha256 = Get-NativeE2eSha256 (Join-Path $payload $vbFile) }
+    vb_cable_ab      = $vbCableAb
     network          = [ordered]@{ host_address = $HostAddress; guest_address = $GuestAddress
         prefix_length = $PrefixLength; proxy_port = $ProxyPort }
     inputs           = [ordered]@{
@@ -238,6 +253,7 @@ $inputs = [ordered]@{
         models_manifest_sha256 = $modelsSha
     }
 }
+if ($null -ne $vbCableAb) { $inputs.inputs['vb_cable_ab_sha256'] = $vbCableAb.sha256 }
 Write-NativeE2eJson (Join-Path $payload 'build-inputs.json') $inputs
 
 if ($Replace -and (Get-VM -Name $VmName -ErrorAction SilentlyContinue)) {
@@ -278,7 +294,7 @@ try {
     $activationProxy = Start-NativeE2eEgressProxy $hostPython $HostAddress $ProxyPort `
         (Join-Path $PSScriptRoot 'activation-allowlist.txt') (Join-Path $logDir 'activation-proxy.log')
     Write-NativeE2eStep 'Starting the guest; it provisions itself, activates Windows and shuts down.'
-    Write-NativeE2eStep 'If VB-Cable asks to trust the driver publisher, confirm it in the VM console (Hyper-V Manager > Connect).'
+    Write-NativeE2eStep 'If VB-Cable (or VB-Cable A+B) asks to trust the driver publisher, confirm it in the VM console (Hyper-V Manager > Connect).'
     if ($LicenceSource -eq 'key') {
         Write-NativeE2eStep 'PO step: when the guest opens the product key window, type your key in the VM console (Hyper-V Manager > Connect). Never paste it anywhere else.'
     }

@@ -143,6 +143,26 @@ helpers in `native_e2e/`:
 - **Keyboard walk** (`rows.ui.tab_walk(app)`): Tab until the first focused element repeats;
   control type and "has a name" per stop, never a name.
 
+## Coverage and run time of the automated PO rows
+
+The automated PO rows replace the PO's manual checks of the served capabilities: E-16..E-40,
+C-05, C-06, C-09 and T-05 (rows above, run order in `native_e2e/runner.py`). Three groups
+depend on the image and are `blocked` with a named reason, not `fail`, until the PO step in
+[native-e2e-setup.md](native-e2e-setup.md#image-prerequisites-of-the-automated-po-rows) is done:
+
+| Rows | Image prerequisite | `blocked` reason until then |
+|---|---|---|
+| E-18..E-22, E-24, E-25, E-30 | Image built at or after lianiq#170 (`lianiq-pack.json` in the pack folders) | `image-packs-without-pack-file` |
+| E-39, E-40 | Image rebuilt after the english-mandarin-pair packs are on `main` | `english-packs-missing` |
+| E-34..E-38 | VB-Cable A+B in the image (`-VbCableAbPackage`) | `cable-ab-missing` |
+
+E-16..E-19 need no extra profile: the S-04 firewall rule keeps the app offline.
+
+**Run time (estimate, to be confirmed by the first full run):** the automated PO rows add
+about 25 app rows of 1–4 minutes each, roughly 45–90 minutes; a full run is planned for about
+2 hours (spec target 120 minutes). A blocked row takes seconds. The job timeout is 240 minutes
+and the host script waits 250 minutes by default.
+
 ## Privacy of the evidence
 
 - E-20..E-23 mask *Source text* and *Translation* in every screenshot and add D-03, D-04,
