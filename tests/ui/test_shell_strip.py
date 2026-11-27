@@ -76,6 +76,7 @@ def test_ac06_stop_in_the_strip_stops_the_session_from_settings(window, spies) -
     click(window.navigation.buttons[WorkspaceId.SETTINGS])
 
     click(window.stop_button)
+    assert wait_until(lambda: not window.conversation.stopping)  # the stop thread (WI-02)
 
     assert not window.capture.running and not window.session_controller.running
     assert window.session_owner.state is SessionState.IDLE
@@ -99,6 +100,7 @@ def test_ac06_f9_from_settings_stops_the_session(window) -> None:
     assert wait_until(lambda: QApplication.focusWidget() is field)
 
     QTest.keyClick(field, Qt.Key.Key_F9)
+    assert wait_until(lambda: not window.conversation.stopping)  # the stop thread (WI-02)
 
     assert wait_until(lambda: not window.capture.running)
     assert window.session_owner.state is SessionState.IDLE
