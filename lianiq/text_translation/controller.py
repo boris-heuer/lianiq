@@ -170,7 +170,7 @@ class TextTranslationController:
         try:
             self.playback.play(self.draft.current_result())
         except SessionBusy as busy:  # nothing synthesises (AC-27)
-            self._notify(catalog.session_busy(TEXT_TRANSLATION, busy.active))
+            self._notify(catalog.refused_start(TEXT_TRANSLATION, busy))
 
     def stop_playback(self) -> None:
         if self.playback is not None:
