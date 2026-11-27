@@ -185,7 +185,9 @@ def test_default_tts_selects_sherpa_onnx_for_mandarin_and_piper_for_german() -> 
     assert config.tts.voices["zh-Hans"] == "models/sherpa/vits-icefall-zh-aishell3"
     assert config.tts.engines == {
         "de": VoiceEngineConfig("piper"),
-        "zh-Hans": VoiceEngineConfig("sherpa-onnx", speaker_id=20, length_scale=1.15),
+        "zh-Hans": VoiceEngineConfig(
+            "sherpa-onnx", speaker_id=20, length_scale=1.15, system_voice="zh-CN"
+        ),
         "en": VoiceEngineConfig("piper"),
     }
     assert config.tts.engines == AppConfig().tts.engines
