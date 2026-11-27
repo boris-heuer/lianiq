@@ -4,8 +4,8 @@
 same UIA read and writes the PNG only after ``evidence.redaction.mask`` filled them: the
 unmasked image is never written to disk. Masked is every shown element whose name, help text
 or value contains an endpoint name or a transcript needle (device combos, the E-11 notice,
-the notice history), every device combo by its accessible name, both transcript panels
-(*Original*, *Translation*) whatever they show, and every combo, edit or document field
+the notice history), every device combo by its accessible name, the *Transcript* list of Conversation and
+Listen whatever it shows, and every combo, edit or document field
 whose text cannot be read. Each written screenshot counts in ``ctx.state["screens_masked"]``,
 the receipt's ``screens_masked``.
 
@@ -27,9 +27,9 @@ if TYPE_CHECKING:
 
 Rect = tuple[int, int, int, int]  # left, top, right, bottom in screen pixels
 _TEXT_FIELDS = ("ComboBox", "Edit", "Document")  # masked when their text cannot be read
-# The result panels of Conversation (ui/workspaces/conversation_layout.py; not in
-# strings.py): their fields show transcript text, so they are always masked (AC-11).
-TRANSCRIPT_FIELDS = ("Original", "Translation")
+# The *Transcript* list of Conversation and Listen (``TRANSCRIPT_LIST``,
+# ui/transcript/view.py): its rows show transcript text, so it is always masked (AC-11).
+TRANSCRIPT_FIELDS = ("Transcript",)
 
 
 def mask_rects(

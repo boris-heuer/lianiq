@@ -78,7 +78,7 @@ def main() -> int:
 
     def check_navigation() -> None:
         """Visit every enabled workspace, Stop from Settings, return to Conversation."""
-        transcript = window.source_text.toPlainText()
+        transcript = window.conversation.turns.rows
         pair = window.pair_combo.currentText()
         if len(window.navigation.buttons) != 7:
             print(f"FAIL navigation: {len(window.navigation.buttons)} sidebar entries", flush=True)
@@ -111,10 +111,7 @@ def main() -> int:
             return
         window.navigation.buttons[WorkspaceId.CONVERSATION].click()
         application.processEvents()
-        if (
-            window.source_text.toPlainText() != transcript
-            or window.pair_combo.currentText() != pair
-        ):
+        if window.conversation.turns.rows != transcript or window.pair_combo.currentText() != pair:
             print("FAIL navigation: transcript or pair changed", flush=True)
             application.exit(7)
             return
@@ -126,7 +123,7 @@ def main() -> int:
         outcome["code"] = 0
         QTimer.singleShot(500, application.quit)
 
-    def on_result(result: TranslationResult) -> None:
+    def on_result(result: TranslationResult, _generation: int) -> None:
         print(
             f"PASS UI pipeline: {result.total_seconds:.3f} s, translated={result.translated_text}",
             flush=True,

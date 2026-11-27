@@ -14,6 +14,7 @@ from lianiq.audio.device_state import MONITOR_INTERVAL_MS
 from lianiq.ui import notice_catalog as catalog
 from tests._fake_devices import MICROPHONE, SPEAKERS, FakeClock, mic
 from tests._spy_window import spies  # noqa: F401
+from tests.ui import _conversation_helpers as conv
 from tests.ui._language_helpers import start, submit, transcript, wait_until
 from tests.ui._notice_helpers import (
     CONVERSATION,
@@ -65,7 +66,7 @@ def test_ac19_microphone_unplugged_stops_and_reconnect_reselects_it(window, spie
     setup.monitor_tick()
 
     assert not window.capture.running and window.session_owner.state.value == "idle"
-    assert len(window.history) == 1 and "Guten Tag" in window.source_text.toPlainText()
+    assert len(window.history) == 1 and conv.originals(window) == ["German: Guten Tag"]
     title, _detail, labels = shown(window)
     assert "Microphone 'Test microphone' disconnected." in title
     assert labels == ["Reconnect", "Choose device"]
@@ -105,7 +106,7 @@ def test_ac20_speakers_unplugged_keep_capture_and_reconnect_after_stop(window, s
     reconnect = action(window, "Reconnect")
     assert not reconnect.isEnabled() and reconnect.toolTip() == "Available after Stop"
     submit(window, spies, transcript("Guten Tag", "de"))
-    assert wait_until(lambda: window.target_text.toPlainText().strip())  # still as text
+    assert wait_until(lambda: len(conv.translations(window)) == 1)  # still as text
 
     window.stop_listening()
     assert wait_until(lambda: fake.reinitialized == 1)

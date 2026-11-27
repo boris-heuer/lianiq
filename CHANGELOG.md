@@ -20,6 +20,11 @@ All notable user-visible changes are documented here.
   which side of two virtual cables goes where, the WeChat Desktop *Microphone* and *Speaker*
   settings, the readiness list, the route tests with **Yes** / **No**, the live text, the echo
   pause, Stop or F9 and device loss.
+- Conversation: each turn is one row with its original and translation in a single
+  *Transcript* list (replacing the *Original* and *Translation* panels), with the per-turn
+  copy actions, **Copy transcript** and **New conversation**, which stops the session and
+  clears the list, asking first while translated turns are not exported. A held turn resolved
+  later appears at its capture time; **Export transcript** is disabled until a turn exists.
 - Language pack documentation: the README explains the Language packs page, the setup
   assistant, offline import from a `.zip` or folder, *Custom path*, the licence gate and how
   packs carry over to a new release; `MODEL_LICENSES.md` lists the licence of every pack;

@@ -19,6 +19,7 @@ from lianiq.ui import notice_catalog as catalog
 from lianiq.ui import strings
 from tests._spy_window import spies  # noqa: F401
 from tests.languages.synthetic import QAA, QAB
+from tests.ui import _conversation_helpers as conv
 from tests.ui._language_helpers import click, start, submit, transcript, wait_until
 from tests.ui.test_voice_output import NAME, open_window, rows  # noqa: F401
 
@@ -99,7 +100,9 @@ def test_text_first_then_the_microphone_pause_then_replay_with_the_current_optio
     submit(window, spies, transcript("alpha", QAA))  # into qab: spoken
     assert wait_until(player.playing.is_set)
     assert player.order == ["result", "play"]  # the text is delivered before speech (AC-07)
-    assert wait_until(lambda: f"{NAME[QAB]}: " in window.target_text.toPlainText())
+    assert wait_until(
+        lambda: any(t.startswith(f"{NAME[QAB]}: ") for t in conv.translations(window))
+    )
     assert wait_until(lambda: window.state_label.text() == strings.VOICE_MIC_PAUSED)
     assert window.capture._muted.is_set() and window.level_bar.value() == 0  # AC-08
     for replay, stop in playback_buttons(window):

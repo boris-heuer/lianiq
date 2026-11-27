@@ -15,11 +15,11 @@ import threading
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from tests._spy_window import spies  # noqa: F401
+from tests.ui import _conversation_helpers as conv
 from tests.ui._language_helpers import (
     AUTOMATIC,
     DE,
     DE_TO_ZH,
-    blocks,
     click,
     language_window,  # noqa: F401
     start,
@@ -50,11 +50,11 @@ def test_ac22_later_turns_flow_while_held_and_stop_discards_the_unresolved_turn(
     click(window.held_turn_bar.translate_buttons[DE])
     assert wait_until(lambda: len(window.history) == 3)
 
-    # On screen T1 is appended after T3; the export orders T1, T2, T3 by capture time.
-    assert blocks(window.source_text) == [
+    # T1 is placed at its capture time, on screen and in the export (paired-transcript AC-01).
+    assert conv.originals(window) == [
+        "German: Hallo da",
         "German: Guten Tag",
         "Mandarin (Simplified): 你好",
-        "German: Hallo da",
     ]
     window.stop_listening()
     path = tmp_path / "first-run.txt"
@@ -114,7 +114,7 @@ def test_a_resolution_still_running_at_stop_leaves_no_result(window, spies) -> N
     release.set()
 
     assert wait_until(lambda: not window.held_turn_bar.resolving)
-    assert window.history == []
+    assert window.history == ()
     assert spies.translator.calls == []
     assert not window.held_turn_bar.isVisible()
 
@@ -135,7 +135,7 @@ def test_vor01_automatic_german_turn_is_labelled_and_exported_with_language_ids(
     submit(window, spies, transcript("Guten Morgen, das ist ein Test.", "de"))
     assert wait_until(lambda: len(window.history) == 1)
     assert window.latency_label.text().startswith(DE_TO_ZH + " · ")
-    assert window.target_text.toPlainText().startswith("Mandarin (Simplified): ")
+    assert conv.translations(window)[0].startswith("Mandarin (Simplified): ")
     click(window.stop_button)
 
     path = tmp_path / "transcript-E04.txt"

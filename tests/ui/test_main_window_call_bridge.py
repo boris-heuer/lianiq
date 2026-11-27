@@ -108,7 +108,7 @@ def test_ac09_click_start_runs_local_to_remote_and_remote_to_local_for_the_sessi
     view = window.call_bridge_panel.text_view
     assert wait_until(lambda: len(view.turns()) == 4)
     assert [turn.splitlines()[0] for turn in view.turns()] == ["You → call", "Call → you"] * 2
-    assert window.history == [] and window.source_text.toPlainText() == ""
+    assert window.history == () and window.conversation.turns.rows == ()
 
     click(window.call_bridge_panel.stop_button)
     assert window.call_bridge_controller is None

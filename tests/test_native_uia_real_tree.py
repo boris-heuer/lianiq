@@ -49,14 +49,14 @@ def test_history_reads_the_edit_field_not_its_group_box() -> None:
     ("bars", "expected"),
     [
         ([], 0.0),  # the text fits: nothing is scrolled
-        ([Node("", "ScrollBar", scroll=0.4567, parents=(*TOP, "Original"))], 0.457),
-        ([Node("", "ScrollBar", scroll=None, parents=(*TOP, "Original"))], None),
-        ([Node("", "ScrollBar", scroll=0.5, visible=False, parents=(*TOP, "Original"))], 0.0),
+        ([Node("", "ScrollBar", scroll=0.4567, parents=(*TOP, "Transcript"))], 0.457),
+        ([Node("", "ScrollBar", scroll=None, parents=(*TOP, "Transcript"))], None),
+        ([Node("", "ScrollBar", scroll=0.5, visible=False, parents=(*TOP, "Transcript"))], 0.0),
         ([Node("", "ScrollBar", scroll=0.5, parents=(*TOP, "Settings"))], 0.0),
     ],
 )
 def test_panel_scroll_without_a_scroll_pattern(bars, expected) -> None:
-    field = Node("Original", "Edit", value="text", parents=TOP)
+    field = Node("Transcript", "List", parents=TOP)
     assert e03._scroll([field, *bars], field) == expected
 
 

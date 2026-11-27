@@ -13,6 +13,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from lianiq.ui.shell.workspaces import WorkspaceId
 from tests._spy_window import spies  # noqa: F401
+from tests.ui import _conversation_helpers as conv
 from tests.ui._language_helpers import start, wait_until
 from tests.ui._notice_helpers import (
     CONVERSATION,
@@ -43,7 +44,7 @@ def test_ac24_playback_failure_is_speakers_lost_and_capture_continues(window, sp
     assert title.startswith("Action needed: Speakers 'Test speakers' disconnected.")
     assert "Recording continues. Spoken output stopped." in detail
     assert labels == ["Reconnect", "Choose device"]
-    assert window.capture.running and window.target_text.toPlainText().strip()
+    assert window.capture.running and conv.translations(window)
     assert window.pipeline.voice_output is False
     reconnect = action(window, "Reconnect")
     assert not reconnect.isEnabled() and reconnect.toolTip() == "Available after Stop"
@@ -64,7 +65,7 @@ def test_ac24_microphone_lost_stops_the_session_and_reconnect_restores_start(
     window.conversation.notices.microphone_lost("USB Headset")
 
     assert not window.capture.running and window.session_owner.state.value == "idle"
-    assert len(window.history) == 1 and "Guten Tag" in window.source_text.toPlainText()
+    assert len(window.history) == 1 and conv.originals(window) == ["German: Guten Tag"]
     title, detail, labels = shown(window)
     assert title == (
         "Action needed: Microphone 'USB Headset' disconnected. Recording stopped. "

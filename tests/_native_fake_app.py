@@ -35,7 +35,7 @@ ORIGINAL = "German: Guten Morgen, das ist ein Test."
 TRANSLATION = "Mandarin (Simplified): 早上好，这是一个测试。"
 WINDOW = (100, 100, 900, 700)
 NOTICE_RECT = (320, 110, 880, 150)
-PANEL_RECTS = ((320, 300, 880, 400), (320, 420, 880, 520))
+PANEL_RECTS = ((320, 300, 880, 520),)  # the *Transcript* list
 DEFAULT_MIC = "Follow Windows default (now: Microphone Array)"
 COMBO_RECT = (320, 200, 700, 230)
 
@@ -154,13 +154,10 @@ class FakeApp:
             *(Node(n, "CheckBox", selected=on, parents=top) for n, on in self.voices.items()),
             Node("Language pair", "ComboBox", value=pair, parents=top),
             Node("Conversation direction", "ComboBox", value=way, parents=top),
-            Node("Original", "Text", parents=top),
-            Node("Original", "Edit", value=self.original + (" x" if "changed" in on else ""),
-                 rect=PANEL_RECTS[0], parents=top),
-            Node("Translation", "Text", parents=top),
-            Node("Translation", "Edit", value=self.translation, rect=PANEL_RECTS[1],
-                 parents=top),
-            *real.panel_bars(top, bool(self.knobs.get("no_scroll")), "scroll" in on),
+            *real.transcript_list(
+                top, self.original + (" x" if "changed" in on else ""), self.translation,
+                PANEL_RECTS[0], bool(self.knobs.get("no_scroll")), "scroll" in on,
+            ),
         ]  # fmt: skip
 
     def _call(self, top) -> list[Node]:

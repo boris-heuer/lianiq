@@ -8,10 +8,10 @@ Settings › Audio devices: "CABLE Output" as Microphone (``name_matches`` only)
 *Language pair* "English ↔ Mandarin (Simplified)", direction Automatic, every voice switch
 off (as E-03). **Start** (F8), wait for "Conversation running" (300 s), play E1 into
 "CABLE Input" and wait for an English → Mandarin turn, then Z1 and a Mandarin → English turn,
-each recorded once two consecutive reads agree. A turn is a line pair "English: …" in
-*Original* and "Mandarin (Simplified): …" in *Translation* (or the reverse); the row stores
+each recorded once two consecutive reads agree. A turn is a *Transcript* row with source
+English and target Mandarin (Simplified) and a translation (or the reverse); the row stores
 the turn count per direction and the transcript SHA-256, never a text. One masked
-screenshot (both panels masked); F9 stops the session. In ``finally`` the app is closed,
+screenshot (the *Transcript* list masked); F9 stops the session. In ``finally`` the app is closed,
 the settings baseline restored (``settings_reset``) and the WAVs deleted.
 
 Pass: at least one translation each way. Texts go to ``ctx.secrets`` and
@@ -39,17 +39,13 @@ def display(language: str) -> str:
 
 
 def turns(texts: list[str] | None, source: str, target: str) -> int:
-    """Line pairs of *Original*/*Translation* labelled ``source`` then ``target``."""
-    if texts is None:
-        return 0
-    lines = [[line for line in text.splitlines() if line.strip()] for text in texts]
-    heads = (f"{display(source)}: ", f"{display(target)}: ")
+    """*Transcript* rows from ``source`` to ``target`` with a translation."""
+    names = (display(source), display(target))
+    rows = [e03.turn_parts(text) for text in texts or []]
     return sum(
         1
-        for original, translation in zip(*lines, strict=False)
-        if original.startswith(heads[0])
-        and translation.startswith(heads[1])
-        and translation[len(heads[1]) :].strip()
+        for parts in rows
+        if parts is not None and (parts[0], parts[2]) == names and parts[3].strip()
     )
 
 

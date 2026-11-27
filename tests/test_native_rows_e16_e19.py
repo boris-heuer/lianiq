@@ -17,6 +17,7 @@ from native_e2e.context import RunContext
 from native_e2e.evidence.model import Check, Status
 from native_e2e.rows import e16, e17, e18, e19, provisioning, s04, ui
 from native_e2e.uia import Node
+from tests import _native_real_tree as real
 from tests._native_fake_app import make_ctx
 from tests._native_png import red_png
 
@@ -76,9 +77,7 @@ class ProvisioningApp:
         elif self.page == S.NAV_SETTINGS:
             out.append(Node(S.NOTICE_MICROPHONE, "ComboBox", value=self.mic))
         elif self.page == S.NAV_CONVERSATION:
-            out += [
-                Node(t, "Edit", value=v) for t, v in zip(("Original", "Translation"), self.texts)
-            ]
+            out += real.transcript_list((), *self.texts)
         return out
 
     def window_nodes(self, title: str) -> list[Node] | None:

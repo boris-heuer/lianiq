@@ -13,20 +13,17 @@ workspace's failures into notices (``notice_catalog``) and handles their actions
 - **Reconnect** runs a full device refresh and reselects the same identity, only while no
   stream is open (``DEVICE_RECONNECT_AFTER_STOP`` otherwise); **Choose device** opens
   Settings › Audio devices with the selector of the flow focused;
-- a failed speech synthesis (CAP-0167: the text stays, later turns are spoken), and a
-  failed transcript export with **Retry**.
+- a failed speech synthesis (CAP-0167: the text stays, later turns are spoken). A failed
+  transcript export is posted by ``PairedTranscriptView`` (paired-transcript WI-02).
 
 The diagnostics log gets each turn's ID, languages and timings, never its text.
 """
 
 from __future__ import annotations
 
-import datetime as dt
-from pathlib import Path
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QComboBox, QFileDialog, QMessageBox
+from PySide6.QtWidgets import QComboBox
 
 from lianiq.call_bridge.contracts import EndpointFlow
 from lianiq.domain import TranslationResult
@@ -182,37 +179,3 @@ class ConversationNotices:
         setup = self.host.device_setup
         combo: QComboBox = setup.input_combo if flow == MICROPHONE else setup.output_combo
         combo.setFocus()
-
-    # Transcript export ----------------------------------------------------------------------
-
-    def export_transcript(self) -> None:
-        workspace = self.workspace
-        if not workspace.history:
-            QMessageBox.information(
-                self.host, "Transcript", "There is no conversation history yet."
-            )
-            workspace.export_button.setFocus(Qt.FocusReason.OtherFocusReason)  # AC-28
-            return
-        today = dt.datetime.now().astimezone().date().isoformat()
-        default = str(Path.home() / f"conversation-{today}.txt")
-        path, _ = QFileDialog.getSaveFileName(self.host, "Save transcript", default, "Text (*.txt)")
-        # Focus returns to **Export transcript** after the dialog (AC-28).
-        workspace.export_button.setFocus(Qt.FocusReason.OtherFocusReason)
-        if not path:
-            return
-        try:
-            workspace.write_transcript(Path(path))
-        except OSError as exc:
-            self.host.diagnostics.record("export", f"Transcript export to {path} failed: {exc}")
-            reason = self.host.diagnostics.redact(exc.strerror or str(exc))
-            self.post(
-                catalog.export_failed(
-                    CONVERSATION,
-                    reason,
-                    catalog.source(CONVERSATION, strings.TRANSCRIPT_EXPORT),
-                    self.export_transcript,
-                )
-            )
-            return
-        self.host.notices.resolve(catalog.export_failed_key(CONVERSATION))
-        self.host.statusBar().showMessage(f"Transcript saved: {path}", 10_000)

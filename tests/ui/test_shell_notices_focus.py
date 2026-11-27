@@ -82,24 +82,24 @@ def test_ac25_retry_after_a_model_failure_starts_when_the_models_load(window, sp
 def test_ac26_a_notice_change_updates_the_banner_name_without_moving_focus(window) -> None:
     from PySide6.QtGui import QAccessible
 
-    window.source_text.setFocus()
-    assert wait_until(lambda: focused() is window.source_text)
+    window.conversation.transcript_view.setFocus()
+    assert wait_until(lambda: focused() is window.conversation.transcript_view)
     interface = QAccessible.queryAccessibleInterface(banner(window))
 
     window.show_error("Translation failed: model crashed")
     assert interface.text(QAccessible.Text.Name) == "Warning: Translation failed: model crashed"
     assert interface.text(QAccessible.Text.Description).startswith(PAIR_SOURCE + ".")
-    assert focused() is window.source_text
+    assert focused() is window.conversation.transcript_view
 
     window.devices = [SPEAKERS]
     window.start_listening()  # a blocking notice becomes the top one
     assert accessible_name(banner(window)).startswith("Action needed: Not available")
-    assert focused() is window.source_text
+    assert focused() is window.conversation.transcript_view
 
     window.resolve_notices([n.key for n in window.notices.live()])
     assert not banner(window).isVisible()
     assert accessible_name(banner(window)) == "Notices"
-    assert focused() is window.source_text
+    assert focused() is window.conversation.transcript_view
 
 
 def test_ac26_a_resolved_notice_with_a_focused_button_parks_focus_on_the_banner(window) -> None:

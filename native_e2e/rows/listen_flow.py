@@ -297,6 +297,6 @@ def shot(ctx: Any, app: Any, relative: str, name_: str) -> tuple[Check, Artifact
     needles = ui.transcript_needles(ctx.state.get("transcripts", []))
     names = [*audio.endpoint_names(), *needles]
     combos_ = (s.LISTEN_MICROPHONE, s.NOTICE_MICROPHONE, s.NOTICE_SPEAKERS)
-    fields = (*screens.TRANSCRIPT_FIELDS, s.LISTEN_TRANSCRIPT)
+    fields = screens.TRANSCRIPT_FIELDS  # also the Listen *Transcript* list
     artifact, masked = screens.capture(ctx, app, relative, names, combos_, fields)
     return check(name_, True, f"masked={masked}"), artifact

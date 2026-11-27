@@ -33,8 +33,6 @@ CONTROL_NAMES = {
     "input_combo": "Microphone",
     "output_combo": "Speakers",
     "model_profile_field": "Model profile",
-    "source_text": "Original",
-    "target_text": "Translation",
 }
 
 
@@ -101,6 +99,7 @@ def gate_resolution(spies):  # noqa: F811
 def test_ac02_def04_controls_are_named_after_their_visible_captions(window) -> None:
     for attribute, name in CONTROL_NAMES.items():
         assert accessible_name(getattr(window, attribute)) == name
+    assert accessible_name(window.conversation.transcript_view) == "Transcript"
 
 
 def test_ac02_def04_every_tab_stop_has_an_accessible_name_stopped_and_with_a_held_turn(
@@ -115,7 +114,7 @@ def test_ac02_def04_every_tab_stop_has_an_accessible_name_stopped_and_with_a_hel
     assert wait_until(window.held_turn_bar.isVisible)
     stops = tab_stops(window)
     assert window.held_turn_bar.translate_buttons[DE] in stops
-    assert window.source_text in stops
+    assert window.conversation.transcript_view in stops
     assert unnamed(window) == []
     # The model profile is a named Tab stop on the Settings page (CAP-0168 AC-12).
     from lianiq.ui.shell.workspaces import WorkspaceId

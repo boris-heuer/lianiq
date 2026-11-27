@@ -94,8 +94,13 @@ def test_ac32_rtl_paragraphs_read_right_to_left(window) -> None:
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QTextCursor
 
+    from lianiq.ui.result_panel import ResultPanel
+
+    # Meeting's panel; Conversation lists its turns in the paired transcript now.
+    panel = ResultPanel("Translation", "")
+    panel.setFixedWidth(620)  # half the page, as the former Conversation panel
+    window.conversation.paired_view.layout().addWidget(panel)
     settle(window, 1280, 720)
-    panel = window.target_panel
     panel.append_line(f"{ARABIC}\n")
     panel.append_line("German: Guten Tag\n")
     text = panel.text

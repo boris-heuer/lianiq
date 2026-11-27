@@ -17,6 +17,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from lianiq.domain import AudioUtterance, Transcript
 from lianiq.languages import LanguageId
 from tests._spy_window import build_window, spies  # noqa: F401
+from tests.ui import _conversation_helpers as conv
 
 DE = LanguageId("de")
 ZH = LanguageId("zh-Hans")
@@ -115,10 +116,8 @@ def test_turns_show_results_and_export_v2_after_stop(window, spies, tmp_path) ->
     )
     assert window.pipeline.held_turns() == ()
     assert not window.held_turn_bar.isVisible()
-    assert window.source_text.toPlainText().strip() == "German: Guten Tag"
-    assert window.target_text.toPlainText().strip() == (
-        "Mandarin (Simplified): [de>zh-Hans] Guten Tag"
-    )
+    assert conv.originals(window) == ["German: Guten Tag"]
+    assert conv.translations(window) == ["Mandarin (Simplified): [de>zh-Hans] Guten Tag"]
     path = tmp_path / "transcript.txt"
     window.write_transcript(path)
     lines = path.read_text(encoding="utf-8").splitlines()

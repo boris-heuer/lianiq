@@ -17,6 +17,7 @@ from native_e2e import audio, packs_import, proc, screens, speech_pair, uia_app
 from native_e2e.evidence.model import Method, Status
 from native_e2e.rows import e39, e40, ui
 from native_e2e.uia import Node
+from tests import _native_real_tree as real
 from tests._native_fake_app import PANEL_RECTS, FakeApp, install, make_ctx
 from tests._native_png import red_png
 
@@ -158,10 +159,7 @@ class PairApp(FakeApp):
             Node("Language pair", "ComboBox", value=self.pair, parents=top),
             Node("Conversation direction", "ComboBox", value=f"Automatic ({a} ↔ {b})"),
             *(Node(n, "CheckBox", selected=on, parents=top) for n, on in self.voices.items()),
-            Node("Original", "Text"),
-            Node("Original", "Edit", value=self.original, rect=PANEL_RECTS[0]),
-            Node("Translation", "Text"),
-            Node("Translation", "Edit", value=self.translation, rect=PANEL_RECTS[1]),
+            *real.transcript_list(top, self.original, self.translation, PANEL_RECTS[0]),
         ]
 
     def choose(self, node: Node, item: str) -> None:

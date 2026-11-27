@@ -165,10 +165,10 @@ def test_e03_adds_the_label_stripped_transcript_to_the_scan_secrets(ctx, monkeyp
     assert "早上好，这是一个测试。" in ctx.secrets
 
 
-# E-03: transcript panels are masked in every screenshot --------------------------------------
+# E-03: the transcript list is masked in every screenshot --------------------------------------
 
 
-def test_e03_screenshots_mask_both_transcript_panels(ctx, monkeypatch) -> None:
+def test_e03_screenshots_mask_the_transcript_list(ctx, monkeypatch) -> None:
     row, _ = run_e03(ctx, monkeypatch)
     assert row.status is Status.PASS, row.checks
     for name in ("e03-running.png", "e03-after.png"):
@@ -176,13 +176,13 @@ def test_e03_screenshots_mask_both_transcript_panels(ctx, monkeypatch) -> None:
         assert black_inside(png, PANEL_RECTS, (100, 100)), name
 
 
-def test_mask_rects_mask_the_transcript_panels_whatever_their_text() -> None:
+def test_mask_rects_mask_the_transcript_list_whatever_it_shows() -> None:
     nodes = [
-        Node("Original", "Edit", value="", rect=(0, 0, 5, 5)),
-        Node("Translation", "Document", value="Hallo", rect=(0, 10, 5, 15)),
-        Node("Original", "Text", rect=(0, 20, 5, 25)),  # the heading label
+        Node("Transcript", "List", rect=(0, 0, 5, 5)),
+        Node("Transcript", "Text", rect=(0, 20, 5, 25)),  # a label of the same name
+        Node("Copy transcript", "Button", rect=(0, 30, 5, 35)),
     ]
-    assert screens.mask_rects(nodes, NAMES) == [(0, 0, 5, 5), (0, 10, 5, 15)]
+    assert screens.mask_rects(nodes, NAMES) == [(0, 0, 5, 5)]
 
 
 def test_a_screenshot_masks_every_element_showing_transcript_text(ctx, monkeypatch) -> None:
@@ -194,7 +194,7 @@ def test_a_screenshot_masks_every_element_showing_transcript_text(ctx, monkeypat
     check, artifact = ui.screenshot(ctx, app, "screens/t.png", "screenshot-masked")
     png = (ctx.out / artifact.path).read_bytes()
     assert black_inside(png, [tip.rect, *PANEL_RECTS], (100, 100))
-    assert check.detail == "masked=3"
+    assert check.detail == "masked=2"  # the tip and the *Transcript* list
 
 
 # E-10: only the notice elements count, not the notice history ---------------------------------

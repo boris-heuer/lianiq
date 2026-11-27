@@ -1,4 +1,4 @@
-"""Start, Stop and transcript of ``ConversationWorkspace`` (CAP-0168 file-size split)."""
+"""Start and Stop of ``ConversationWorkspace`` (CAP-0168 file-size split)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ from lianiq.audio.wav import read_pcm16_mono
 from lianiq.call_bridge.contracts import EndpointFlow
 from lianiq.languages.errors import ModeUnavailableError
 from lianiq.languages.modes import SessionPair
-from lianiq.languages.session import format_transcript_v2
 from lianiq.packs.protection import ActiveUsage
 from lianiq.ui import strings
 from lianiq.ui.shell.session_owner import SessionBusy, SessionState
@@ -18,7 +17,7 @@ from lianiq.ui.shell.workspaces import WorkspaceId, session_busy_message
 
 
 class ConversationFlow:
-    """``ConversationWorkspace`` base: Start and Stop of the session and the transcript."""
+    """``ConversationWorkspace`` base: Start and Stop of the session."""
 
     def _submit_diagnostic_wav(self, path: Path) -> None:
         try:
@@ -136,14 +135,6 @@ class ConversationFlow:
             self.start_button.setToolTip(session_busy_message(active))
         else:
             self.start_button.setToolTip("")
-
-    def write_transcript(self, path: Path) -> None:
-        """Write the in-memory history as transcript v2 (UTF-8), ordered by capture time."""
-        session = self.session_controller.session
-        pair = session.pair if session is not None else self.current_pair()
-        if pair is None:
-            pair = self.pipeline.registry.pair(*self.config.languages.pair)
-        Path(path).write_text(format_transcript_v2(pair, self.history), encoding="utf-8")
 
     def save_routing(self) -> None:
         """Keep the selected routing in the settings when the window closes."""

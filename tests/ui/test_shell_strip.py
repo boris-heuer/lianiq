@@ -17,6 +17,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from lianiq.ui.shell.session_owner import SessionBusy, SessionState
 from lianiq.ui.shell.workspaces import WorkspaceId
 from tests._spy_window import build_window, spies  # noqa: F401
+from tests.ui import _conversation_helpers as conv
 from tests.ui._call_bridge_window import (
     FakeCaptureStream,
     assign,
@@ -80,7 +81,7 @@ def test_ac06_stop_in_the_strip_stops_the_session_from_settings(window, spies) -
     assert window.session_owner.state is SessionState.IDLE
     assert not window.session_strip.isVisible()
     assert window.current_workspace() is WorkspaceId.SETTINGS  # Stop never navigates
-    assert window.source_text.toPlainText().strip() == "German: Guten Tag"  # transcript kept
+    assert conv.originals(window) == ["German: Guten Tag"]  # transcript kept
     assert not window.navigation.buttons[WorkspaceId.CONVERSATION].text().endswith("●")
 
 

@@ -145,10 +145,12 @@ class VoiceApp(SpeakingApp):
                 self.write("Microphone capture started (48000 Hz)")
             return
         mandarin = "zh" in path.name
-        self.original += (
-            "\n你好，这是一个测试。" if mandarin else "\nGuten Morgen, das ist ein Test."
-        )
-        self.translation += "\nGuten Morgen, das ist ein Test." if mandarin else "\n你好。"
+        names = ("Mandarin (Simplified)", "German")
+        source, target = names if mandarin else names[::-1]
+        said = "你好，这是一个测试。" if mandarin else "Guten Morgen, das ist ein Test."
+        heard = "Guten Morgen, das ist ein Test." if mandarin else "你好。"
+        self.original += f"\n{source}: {said}"  # one more *Transcript* row
+        self.translation += f"\n{target}: {heard}"
         target = "de" if mandarin else "zh-Hans"
         if target == "zh-Hans" and (self.zh_missing or self.knobs.get("zh_silent")):
             return

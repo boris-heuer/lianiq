@@ -16,6 +16,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from lianiq.ui.shell.navigation import RAIL_WIDTH, WIDE_WIDTH
 from lianiq.ui.shell.workspaces import DEFAULT_ENTRIES, WorkspaceId
 from tests._spy_window import spies  # noqa: F401
+from tests.ui import _conversation_helpers as conv
 from tests.ui._language_helpers import start
 from tests.ui._navigation_helpers import (
     ENABLED,
@@ -87,20 +88,15 @@ def test_ac08_navigating_away_and_back_keeps_turns_scroll_selection_and_pair(
     spies,  # noqa: F811
     monkeypatch,
 ) -> None:
-    from PySide6.QtGui import QTextCursor
-
     window.mode_combo.setCurrentText("German → Mandarin (Simplified)")
     resize(window, 1280, 720)
     start(window)
     fill(window, spies, 12)
-    source = window.source_text
-    bar = source.verticalScrollBar()
+    view = window.conversation.paired_view
+    bar = view.list.verticalScrollBar()
     assert bar.maximum() > 0
     bar.setValue(bar.maximum() // 2)
-    cursor = source.textCursor()
-    cursor.setPosition(3)
-    cursor.setPosition(12, QTextCursor.MoveMode.KeepAnchor)
-    source.setTextCursor(cursor)
+    view.select_row(3)
     calls = []
     spoken = settled_synthesis(window, spies, 12)  # the 12 turns, spoken after their text
     assert spoken == (12 if spies.synthesizer else 0)
@@ -108,11 +104,10 @@ def test_ac08_navigating_away_and_back_keeps_turns_scroll_selection_and_pair(
     monkeypatch.setattr(capture, "start", lambda: calls.append("start"))
     monkeypatch.setattr(capture, "stop", lambda: calls.append("stop"))
     before = (
-        window.source_text.toPlainText(),
-        window.target_text.toPlainText(),
+        conv.originals(window),
+        conv.translations(window),
         bar.value(),
-        window.target_text.verticalScrollBar().value(),
-        (source.textCursor().anchor(), source.textCursor().position()),
+        view.current_turn(),
         window.pair_combo.currentText(),
         window.mode_combo.currentText(),
         len(window.history),
@@ -124,11 +119,10 @@ def test_ac08_navigating_away_and_back_keeps_turns_scroll_selection_and_pair(
         assert window.current_workspace() is workspace
 
     after = (
-        window.source_text.toPlainText(),
-        window.target_text.toPlainText(),
+        conv.originals(window),
+        conv.translations(window),
         bar.value(),
-        window.target_text.verticalScrollBar().value(),
-        (source.textCursor().anchor(), source.textCursor().position()),
+        view.current_turn(),
         window.pair_combo.currentText(),
         window.mode_combo.currentText(),
         len(window.history),
