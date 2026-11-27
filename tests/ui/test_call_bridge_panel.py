@@ -201,7 +201,9 @@ def test_ac15_the_meter_caption_shows_signal_no_signal_and_clipping(panel_for) -
     assert outbound.level_caption.accessibleName() == "Microphone level: Signal"
     panel.set_clipping(CALL_SPEAKER)
     panel.set_level(CALL_SPEAKER, 0.9)  # the clipping caption is held for a moment
-    assert inbound.level_caption.text() == "Too loud (clipping)"
+    assert inbound.level_caption.text() == (
+        "Too loud (clipping) — lower the call app's speaker volume"
+    )
 
     panel.set_running(False)
     assert not outbound.no_signal_timer.isActive()
