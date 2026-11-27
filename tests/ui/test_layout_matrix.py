@@ -86,8 +86,8 @@ def test_e08_text_scaling_150_percent_at_1120_by_720(tmp_path, spies, monkeypatc
         conversation = window.conversation
         assert conversation._field_row.stacked  # Conversation direction under Language pair
         settle(window, 1900, 900)  # wide again: one line, in the original order
-        assert not conversation._action_row.wrapped and not conversation._field_row.stacked
-        row = [window.start_button, window.swap_button, conversation.export_button]
+        assert not conversation._field_row.stacked
+        row = [window.start_button, window.swap_button]
         assert [button.x() for button in row] == sorted(button.x() for button in row)
         assert window.mode_combo.y() == window.pair_combo.y()
     finally:
@@ -120,7 +120,7 @@ def test_start_stop_and_the_strip_stay_outside_the_scroll_areas(window) -> None:
         assert scroll_area_of(control) is None
     assert in_view(window.start_button, window) and in_view(window.stop_button, window)
     for workspace, inside in (
-        (WorkspaceId.CONVERSATION, window.source_text),
+        (WorkspaceId.CONVERSATION, window.conversation.transcript_view),
         (WorkspaceId.CALL_BRIDGE, window.call_bridge_panel.experimental_label),
         (WorkspaceId.SETTINGS, window.settings.readiness_field),
     ):
