@@ -31,7 +31,7 @@ def test_requests_bind_revision_edge_and_text() -> None:
     assert "Hallo" not in repr(first) and "Hallo" not in repr(result_for(first, "Hallo"))
 
 
-@pytest.mark.parametrize("text", ["", "   ", "x" * 5_001])
+@pytest.mark.parametrize("text", ["", "   ", "x" * 50_001])
 def test_ac11_ac12_no_request_unless_the_source_is_ok(text: str) -> None:
     draft = DraftState(DE, ZH, text)
     with pytest.raises(ValueError):
