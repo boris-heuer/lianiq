@@ -125,7 +125,7 @@ def test_build_synthesizer_routes_each_language_to_its_configured_engine(tmp_pat
 
     assert isinstance(router.engines[DE], PiperEngine)
     assert router.engines[DE].voices == {DE: tmp_path / "de.onnx"}
-    sherpa = router.engines[ZH]
+    sherpa = router.engines[ZH].fallback  # behind the Windows voice (lianiq#81)
     assert isinstance(sherpa, SherpaOnnxEngine)
     assert sherpa.voices == {ZH: tmp_path / "zh"}
     assert (sherpa.settings[ZH].speaker_id, sherpa.settings[ZH].length_scale) == (20, 1.15)
