@@ -58,7 +58,7 @@ class ConversationAvailability:
 
     def _show_pair(self, title: str, placeholder: str) -> None:
         self.host.setWindowTitle(title)
-        self.source_text.setPlaceholderText(placeholder)
+        self.paired_view.set_placeholder(placeholder)  # the empty-list line (spec §2.3)
 
     def refresh_availability(self) -> None:
         """Drive the routing entries, the voice rows and **Start** from ``check()``."""
