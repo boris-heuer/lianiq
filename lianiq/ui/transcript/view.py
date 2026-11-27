@@ -6,7 +6,8 @@ needed), the per-turn row (**Copy original**, **Copy translation**, **Copy pair*
 clear action). **Replay** and **Stop playback** stay hidden until ``set_replay_visible``.
 With large text the button rows wrap; every control has an accessible name equal to its
 label. ``sync(changed)`` follows the log: a new row scrolls into view only when the list was
-at its end; otherwise the position stays and *New turns below* shows.
+at its end; otherwise the position stays and *New turns below* shows. A list at its end
+stays there when a later layout pass grows its range (rows re-wrapped, the viewport resized).
 """
 
 from __future__ import annotations
@@ -58,6 +59,7 @@ class PairedTranscriptView(TranscriptActions, QWidget):
         super().__init__(parent)
         self.log, self.registry, self.host = log, registry, host
         self._replay_visible = False
+        self._following = True  # at the end: a grown range keeps the latest row in view
         self._wraps: list[WrapWhenNarrow] = []
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -118,8 +120,13 @@ class PairedTranscriptView(TranscriptActions, QWidget):
         self._show_new_below(False)
 
     def _scrolled(self, _value: int) -> None:
-        if self.at_end():
+        self._following = self.at_end()
+        if self._following:
             self._show_new_below(False)
+
+    def _keep_following(self, _minimum: int, maximum: int) -> None:
+        if self._following:
+            self.list.verticalScrollBar().setValue(maximum)
 
     def sync(self, changed: tuple[int | None, ...] = ()) -> None:
         """Refresh after a log change; ``changed`` names the changed row indexes."""
