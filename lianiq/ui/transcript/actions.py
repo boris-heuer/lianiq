@@ -38,6 +38,7 @@ class TranscriptActions:
         self.clear_button.clicked.connect(self.request_clear)
         self.jump_button.clicked.connect(self.jump_to_latest)
         self.list.verticalScrollBar().valueChanged.connect(self._scrolled)
+        self.list.verticalScrollBar().rangeChanged.connect(self._keep_following)
         self.list.selectionModel().selectionChanged.connect(lambda *_: self.refresh())
         self.model.modelReset.connect(self.list.delegate.forget)
         self.model.modelReset.connect(self.refresh)
