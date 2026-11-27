@@ -128,6 +128,11 @@ All notable user-visible changes are documented here.
 
 ### Fixed
 
+- F8 now starts the session of the page you are on (Conversation, Listen & translate,
+  Meeting or Call Bridge) and shows a hint on the other pages instead of starting
+  Conversation. F9 while nothing runs no longer reports *Ready* or *Capture stopped* or
+  clears an error. A second Stop while stopping does nothing, a failed stop ends the session
+  with a notice, and a new Start does not close unread lost-turn warnings any more.
 - The voice warm-up at the start of a session, including **Start meeting**, now synthesises
   in memory and no longer writes a temporary WAV file.
 - A Bluetooth headset whose PortAudio name carries a suffix that Windows does not store, such
