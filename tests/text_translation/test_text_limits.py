@@ -1,4 +1,4 @@
-"""CAP-0172 contract §2: the 5,000 code point source rule (AC-11, AC-12 unit halves)."""
+"""CAP-0172 contract §2: the 50,000 code point source rule (AC-11, AC-12 unit halves; rev 1.1)."""
 
 from __future__ import annotations
 
@@ -34,11 +34,11 @@ def test_ac11_empty_or_whitespace_source_is_empty(text: str) -> None:
         "x\n",  # a pasted CRLF reaches the counter as one "\n"
     ],
 )
-def test_ac12_5000_code_points_pass_and_5001_are_too_long(unit: str) -> None:
+def test_ac12_the_limit_passes_and_one_more_is_too_long(unit: str) -> None:
     text = (unit * MAX_SOURCE_CODE_POINTS)[:MAX_SOURCE_CODE_POINTS]
     if not text.strip():
         text = "a" + text[1:]
-    assert source_length(text) == 5_000
+    assert source_length(text) == MAX_SOURCE_CODE_POINTS == 50_000
     assert check_source(text) is SourceCheck.OK
     assert check_source(text + "a") is SourceCheck.TOO_LONG
 
