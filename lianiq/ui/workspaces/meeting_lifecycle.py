@@ -22,6 +22,7 @@ from lianiq.ui import notice_catalog as catalog
 from lianiq.ui import strings
 from lianiq.ui.shell.session_owner import ActiveSessionOwner, SessionBusy
 from lianiq.ui.shell.workspaces import WorkspaceId
+from lianiq.ui.transcript.replay import end_playback
 from lianiq.ui.workspaces.meeting_notices import keys_resolved_by_meeting_start
 
 MEETING = WorkspaceId.MEETING
@@ -80,6 +81,7 @@ class MeetingLifecycle:
             )
             self.refresh()
             return
+        end_playback(self.host, MEETING)  # a transcript replay ends first
         try:
             self._generation = self.owner.request_start(MEETING)
         except SessionBusy as refused:
