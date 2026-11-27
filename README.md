@@ -208,6 +208,20 @@ selected.
   profile, compute device, the readiness of the selected pair, and the notice history with
   **Copy** and **Export…**).
 
+### F8, F9 and the Stop states
+
+- **F8** starts the mode of the page you are on: Conversation, Listen & translate, Meeting or
+  Call Bridge, through the same checks as the page's Start button. On Text translation, Language
+  packs and Settings it starts nothing and the status bar shows a hint.
+- **F9** stops the active session from any workspace. While nothing runs it does nothing; a
+  second F9 while stopping does nothing either.
+- After Stop the page reads *Stopping…* at once (the window stays responsive) while queued turns
+  finish, then *Stopped · {n} turns kept*; *Ready* only appears before the first session. A stop
+  that runs out of time reads *Stopped — {n} not finished* with a notice, and every Start shows
+  "still finishing" until the unfinished turn has ended. A failure reads *Error — see notice*
+  until its notice is closed. Listen & translate reads *Stopped — microphone lost* while the
+  microphone-lost notice is open.
+
 ### Conversation
 
 - `F8`: **Start**; `F9`: **Stop** the active session from any workspace.
