@@ -21,6 +21,7 @@ from tests.ui._call_bridge_window import (
     FakeCaptureStream,
     assign,
     bridge_notice,
+    bridge_stopped,
     call_bridge_window,  # noqa: F401
     click,
     wait_until,
@@ -62,6 +63,7 @@ def test_ac07_each_path_shows_its_own_lane_activity(window) -> None:
     status = window.call_bridge_panel.paths[IN].status_label
     assert status.accessibleName() == "Lane status: Muted — recognition_failure"
     click(window.call_bridge_panel.stop_button)
+    assert bridge_stopped(window)
     assert statuses(window) == ("Stopped", "Stopped")
 
 
@@ -71,6 +73,7 @@ def test_ac08_a_stale_generation_event_after_a_restart_changes_nothing(window) -
     start(window)
     old = window.call_bridge.lane_status.generation
     click(window.call_bridge_panel.stop_button)
+    assert bridge_stopped(window)
     start(window)
     assert window.call_bridge_controller.generation == window.session_owner.generation != old
     emit(window, IN, ACTIVITY, "speaking", generation=old)
@@ -123,6 +126,7 @@ def test_ac09_ac10_running_locks_the_controls_and_f9_unlocks_them_anywhere(windo
     window.show_workspace(WorkspaceId.CONVERSATION)
 
     QTest.keyClick(window, Qt.Key.Key_F9)
+    assert bridge_stopped(window)
 
     assert window.call_bridge_controller is None
     assert not controller.outbound_lane.running and not controller.inbound_lane.running
@@ -189,6 +193,7 @@ def test_ac14_the_live_text_stays_after_stop_and_clears_at_start(window, spies) 
     view = window.call_bridge_panel.text_view
     assert wait_until(lambda: len(view.turns()) == 1)
     click(window.call_bridge_panel.stop_button)
+    assert bridge_stopped(window)
     assert len(view.turns()) == 1
     start(window)
     assert view.turns() == [] and view.empty_label.text() == "Nothing translated yet."
