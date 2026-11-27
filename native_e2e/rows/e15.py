@@ -5,7 +5,7 @@ starts. Settings › Audio devices: "CABLE Output" as Microphone and "CABLE Inpu
 (compared with the cable's WASAPI names; only ``name_matches`` is stored); Conversation:
 every voice switch ("Speak {language}") is on, so a missing or invalid voice fails the row.
 Then **Start** (F8), wait for "Conversation running" (300 s), play the WAV into "CABLE
-Input" and wait until the turn is in *Original* and *Translation*, the state reads
+Input" and wait until the turn is in the *Transcript* list, the state reads
 "Microphone paused while the translation is spoken" and the app log has a completed
 synthesis since the WAV was played (the next state is playback). F9 is pressed at once.
 
