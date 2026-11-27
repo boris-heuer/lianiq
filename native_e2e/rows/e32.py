@@ -29,7 +29,7 @@ from native_e2e.evidence.model import Check, Method, Row
 from native_e2e.rows import e03, e13, e14, keys, ui
 from native_e2e.rows.common import check, make_row
 
-COPIES = 30  # pasted copies of D-03: about 3,100 characters, below the 5,000 limit
+COPIES = 30  # pasted copies of D-03: about 3,100 characters, well below the limit
 LONG = e13.FIXTURE + ("\n" + e13.FIXTURE) * COPIES
 
 
