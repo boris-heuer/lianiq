@@ -91,6 +91,7 @@ from lianiq.ui.notice_catalog_session import (
 from lianiq.ui.notices import Notice, NoticeAction, Severity
 from lianiq.ui.shell.session_owner import SessionBusy, SessionStillFinishing
 from lianiq.ui.shell.workspaces import WorkspaceId, label
+from lianiq.ui.strings_session import DETAIL_TURNS_DROPPED
 
 # Session start and model preparation -------------------------------------------------------
 
@@ -226,7 +227,7 @@ def turns_dropped(count: int, where: str, generation: int | None = None) -> Noti
         TURNS_DROPPED,
         Severity.WARNING,
         strings.NOTICE_TURNS_DROPPED.format(count=count),
-        strings.DETAIL_NONE,
+        DETAIL_TURNS_DROPPED,  # say it again: no audio is kept (session-status-truthfulness)
         where,
         strings.CONTINUES_STOPPED,
         CONVERSATION,
