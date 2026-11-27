@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import threading
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -42,15 +43,18 @@ def running(window):
     return window.meeting
 
 
+def emit(meeting, event: MeetingEvent) -> None:
+    """``event`` as the page's current controller publishes it (its generation)."""
+    meeting.meeting_event.emit(replace(event, generation=meeting._generation))
+
+
 def pending(meeting, contribution_id) -> None:
-    meeting.meeting_event.emit(MeetingEvent(Kind.PENDING, TABLE, contribution_id=contribution_id))
+    emit(meeting, MeetingEvent(Kind.PENDING, TABLE, contribution_id=contribution_id))
 
 
 def line(meeting, contribution_id, role, text: str, seconds: float) -> None:
     item = MeetingLine(contribution_id, role, text, T0 + timedelta(seconds=seconds))
-    meeting.meeting_event.emit(
-        MeetingEvent(Kind.LINE, role, contribution_id=contribution_id, line=item)
-    )
+    emit(meeting, MeetingEvent(Kind.LINE, role, contribution_id=contribution_id, line=item))
 
 
 def test_ac20_placeholders_stay_below_the_lines_in_arrival_order(window) -> None:
@@ -87,8 +91,8 @@ def test_events_after_the_meeting_ended_are_ignored(window) -> None:
     shown = view_lines(window)
     line(meeting, uuid4(), TABLE, "Zu spät", 2)
     pending(meeting, uuid4())
-    meeting.meeting_event.emit(MeetingEvent(Kind.IGNORED, TABLE, count=3))
-    meeting.meeting_event.emit(MeetingEvent(Kind.LISTENING, TABLE))
+    emit(meeting, MeetingEvent(Kind.IGNORED, TABLE, count=3))
+    emit(meeting, MeetingEvent(Kind.LISTENING, TABLE))
     assert view_lines(window) == shown == ["You: Guten Tag"]
     assert meeting.ignored_labels[TABLE].isHidden()
     assert meeting.input_states[TABLE].text() == ""
