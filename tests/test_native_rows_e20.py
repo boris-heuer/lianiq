@@ -109,4 +109,4 @@ def test_e23_fails_when_a_log_holds_the_sentinel(ctx, monkeypatch, tmp_path) -> 
 
 def test_d06_is_one_code_point_over_the_limit() -> None:
     text = text_flow.over_limit()
-    assert len(text) == text_flow.limit() + 1 == 5001 and text == "Ab. " * 1250 + "x"
+    assert len(text) == text_flow.limit() + 1 == 50_001 and text == "Ab. " * 12_500 + "x"
