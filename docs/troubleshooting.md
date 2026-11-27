@@ -38,7 +38,7 @@ in the operator setup.
 | **Translate** is disabled with `Not available: missing <translation>` and **Open Language packs** | The translation pack of the chosen direction is not installed | Press **Open Language packs**, then **Get…** on that pack. A missing speech recognition pack, voice or microphone never blocks translation |
 | `Text translation needs a translation pack. Install one in Language packs.` | No translation pack is installed at all | As above, or run **Run setup assistant** on the Language packs page and tick **Text translation** |
 | `Translation from <source> to <target> is not supported.` | No pack exists for that direction | Choose another language pair |
-| `Too long to translate: <count> characters. …` | The text is above the 5,000-character limit | Shorten the text; Lianiq never cuts it for you |
+| `Too long to translate: <count> characters. …` | The text is above the 50,000-character limit | Shorten the text; Lianiq never cuts it for you |
 | `Play translation needs the <language> voice.` with **Open Language packs** | The target language's voice is not installed | Get the voice on the Language packs page; the translation stays shown |
 | `Play translation needs speakers. …` with **Open audio settings** | No usable Conversation output device | Choose the speakers in Settings › Audio devices |
 | A notice `Stop the Conversation session first` after **Play translation** | Another session runs (one session at a time) | Press **Stop (F9)**, then **Play translation** again. **Translate** works during a session |
