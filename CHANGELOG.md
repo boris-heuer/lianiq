@@ -6,6 +6,11 @@ All notable user-visible changes are documented here.
 
 ### Added
 
+- Clearer Mandarin voice: when the Windows Chinese (Simplified) speech voice is installed
+  (Microsoft Huihui, Yaoyao or Kangkang; offline, 16 kHz), Lianiq speaks Mandarin with it
+  instead of the bundled 8 kHz aishell3 voice, which stays the fallback. Rate, volume and the
+  voice choice apply. Lianiq ships no file of the Windows voice (lianiq#81).
+
 - Call Bridge operator setup (`docs/call-bridge-operator-setup.md`) for the two-path page:
   which side of two virtual cables goes where, the WeChat Desktop *Microphone* and *Speaker*
   settings, the readiness list, the route tests with **Yes** / **No**, the live text, the echo
