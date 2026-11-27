@@ -50,6 +50,7 @@ class ContributionProcessing:
                     return  # drained: the captures are stopped and nothing is queued
                 continue
             self._check_backlog()
+            self._current = item
             try:
                 self._process(item)
             except Exception as exc:  # noqa: BLE001 - worker failure boundary.
@@ -60,6 +61,8 @@ class ContributionProcessing:
                     category,
                 )
                 self._withdraw(item)
+            finally:
+                self._current = None
 
     def _check_backlog(self) -> None:
         with self._lock:
@@ -210,11 +213,26 @@ class ContributionProcessing:
                 )
             )
 
+    def _not_finished(self, item: Contribution) -> None:
+        """The stop bound passed: the placeholder stays as not translated (§2.2.4)."""
+        if item.role is MeetingRole.TABLE_CAPTURE:
+            self._publish(
+                MeetingEvent(
+                    MeetingEventKind.NOT_FINISHED, item.role, contribution_id=item.contribution_id
+                )
+            )
+
     def _abandon_queue(self) -> None:
-        """The drain timeout passed: the remaining contributions are withdrawn and counted."""
+        """The drain timeout passed: the remaining contributions are withdrawn and counted.
+
+        Called by the aborted worker and by ``stop`` when the worker hangs; ``take`` hands
+        each contribution to one of them only.
+        """
         abandoned = 0
         while (item := self._queue.take(timeout=0)) is not None:
             abandoned += 1
-            self._withdraw(item)
+            self._not_finished(item)
         if abandoned:
+            with self._lock:
+                self._abandoned += abandoned
             LOGGER.error("Meeting stop timed out: abandoned=%d", abandoned)
