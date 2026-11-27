@@ -17,6 +17,7 @@ from lianiq.audio.segmenter import UtteranceSegmenter
 from lianiq.meeting import MeetingRole
 from lianiq.meeting.capture import MeetingCapture
 from lianiq.meeting.controller import MeetingEventKind as Kind
+from lianiq.meeting.events import MeetingStopResult
 from lianiq.ui.shell.session_owner import ActiveSessionOwner, SessionBusy, SessionState
 from lianiq.ui.shell.workspaces import WorkspaceId
 from tests.meeting.conftest import meeting_endpoints
@@ -212,9 +213,9 @@ def test_stop_drains_queued_contributions_before_stopped(meeting) -> None:
     for role, tag in ((TABLE, 10), (USER, 20), (TABLE, 10)):
         say(controller, role, tag)
     threading.Timer(0.2, hold.set).start()
-    assert controller.stop(timeout=10.0) is True
+    assert controller.stop(timeout=10.0) == MeetingStopResult(0, False)
     assert len(controller.results) == 3
-    assert harness.events.items[-1].kind is Kind.STOPPED
+    assert harness.events.items[-1].stop == MeetingStopResult(0, False)
 
 
 def test_stop_never_blocks_forever_on_a_hung_contribution(meeting) -> None:
@@ -224,7 +225,7 @@ def test_stop_never_blocks_forever_on_a_hung_contribution(meeting) -> None:
     harness.controller.start()
     say(harness.controller, TABLE, 10)
     say(harness.controller, USER, 20)
-    assert harness.controller.stop(timeout=0.2) is False
+    assert not harness.controller.stop(timeout=0.2, grace=0.1)  # timed out
     assert harness.events.items[-1].kind is Kind.STOPPED
     assert harness.owner.state is SessionState.IDLE
     hold.set()
