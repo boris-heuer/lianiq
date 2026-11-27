@@ -343,7 +343,8 @@ in the selected pair, without a microphone or a running session.
   sentence by sentence; the status line shows "Translating… part 12 of 480 (2 %)" with a
   progress bar. **Cancel** or **Escape** stops a running translation at the next sentence and
   keeps the previous result. Any edit or language change marks the result
-  out of date until you translate again. **Copy source** and **Copy translation** copy the texts.
+  out of date until you translate again. **Copy source** and **Copy translation** copy the texts;
+  **Export translation…** saves the current translation as a UTF-8 text file where you choose.
 - **Play translation** speaks the result with the target language's voice on the Conversation
   speakers (Settings › Audio devices); **Stop** or **F9** (from any workspace) ends it, and the
   button then reads **Replay**. Playback is a session like Conversation: only one runs at a time.

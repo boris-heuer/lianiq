@@ -6,6 +6,9 @@ All notable user-visible changes are documented here.
 
 ### Added
 
+- Text translation: **Export translation…** saves the current translation as a UTF-8 `.txt` file
+  in a folder you choose (default name `translation-<source>-<target>-<date>.txt`); a failed
+  save shows a notice with **Retry** and keeps the text (lianiq#35).
 - Text translation takes long texts: up to 50,000 characters (was 5,000), translated sentence
   by sentence with "Translating… part N of M" and a progress bar; **Cancel** or **Escape**
   stops at the next sentence and keeps the previous result (lianiq#35).

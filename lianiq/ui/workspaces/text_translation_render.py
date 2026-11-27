@@ -72,7 +72,9 @@ class TextTranslationRender:
                 if text
             )
         )
-        self.copy_translation_button.setEnabled(snapshot.result_state is ResultState.CURRENT)
+        current = snapshot.result_state is ResultState.CURRENT
+        self.copy_translation_button.setEnabled(current)
+        self.export_button.setEnabled(current)
 
     def _render_progress(self, snapshot: TextSnapshot) -> None:
         """Indeterminate until the segment count is known, then done of total segments."""

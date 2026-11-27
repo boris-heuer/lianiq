@@ -4,15 +4,19 @@ Sidebar entry *Text translation*, third (Ctrl+3). Nothing is translated while ty
 **Translate**, Ctrl+Return or Ctrl+keypad-Enter starts one request through
 ``TextTranslationController``. The page never writes the source editor after the user
 types, so caret and selection survive every status update, and it reads the clipboard
-never: Copy only writes it. Worker callbacks reach the GUI thread through a queued signal.
+never: Copy only writes it. **Export translation…** writes the current result as UTF-8 text
+only to a file the user picks in the save dialog (CAP-0172 rev 1.1). Worker callbacks reach the GUI thread through a queued signal.
 """
 
 from __future__ import annotations
 
+import datetime as dt
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QGuiApplication, QKeySequence, QShortcut
+from PySide6.QtWidgets import QFileDialog
 
 from lianiq.call_bridge.contracts import EndpointFlow
 from lianiq.config_voice import VoicePreferences
@@ -21,6 +25,7 @@ from lianiq.languages.registry import Availability
 from lianiq.text_translation.controller import TextTranslationController
 from lianiq.text_translation.jobs import TranslationJobs
 from lianiq.text_translation.playback import DevicePlayer, TextPlayback
+from lianiq.ui import notice_catalog as catalog
 from lianiq.ui import strings
 from lianiq.ui.shell.workspaces import WorkspaceId
 from lianiq.ui.transcript.replay import end_playback
@@ -108,6 +113,7 @@ class TextTranslationWorkspace(TextTranslationRender, TextTranslationLayout, QOb
             lambda: self._copy(self.copy_source_button, self.source_edit.toPlainText())
         )
         self.copy_translation_button.clicked.connect(self._copy_translation)
+        self.export_button.clicked.connect(self.export_translation)
         self.render(self.controller.snapshot())
         return page
 
@@ -186,6 +192,37 @@ class TextTranslationWorkspace(TextTranslationRender, TextTranslationLayout, QOb
         text = self.controller.current_translation()
         if text is not None:
             self._copy(self.copy_translation_button, text)
+
+    def export_translation(self) -> None:
+        """Save the current result where the user chooses; cancel writes nothing."""
+        text = self.controller.current_translation()
+        if text is None:
+            return
+        draft, window = self.controller.draft, self.host
+        today = dt.datetime.now().astimezone().date().isoformat()
+        folder = Path.home() / "Documents"
+        name = f"translation-{draft.source}-{draft.target}-{today}.txt"
+        default = str((folder if folder.is_dir() else Path.home()) / name)
+        path, _ = QFileDialog.getSaveFileName(
+            window, strings.TEXT_EXPORT_TITLE, default, strings.TEXT_EXPORT_FILTER
+        )
+        self.export_button.setFocus()
+        if not path:
+            return
+        workspace = WorkspaceId.TEXT_TRANSLATION
+        try:
+            Path(path).write_text(text, encoding="utf-8")
+        except OSError as exc:  # the notice and Diagnostics name the error, never the text
+            diagnostics = window.diagnostics
+            diagnostics.record("export", diagnostics.redact(f"Translation export failed: {exc}"))
+            reason = diagnostics.redact(exc.strerror or type(exc).__name__)
+            where = catalog.source(workspace, strings.TEXT_EXPORT_TITLE)
+            window.post_notice(
+                catalog.export_failed(workspace, reason, where, self.export_translation)
+            )
+            return
+        window.resolve_notices((catalog.export_failed_key(workspace),))
+        window.statusBar().showMessage(strings.TEXT_SAVED.format(path=path), 10_000)
 
     def shutdown(self) -> None:
         self.controller.shutdown()
