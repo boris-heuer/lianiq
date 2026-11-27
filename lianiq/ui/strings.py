@@ -2,10 +2,8 @@
 
 Lianiq has no localisation layer; these constants are the English defaults. The
 missing-requirement texts are shared with ``lianiq.languages.requirements.describe``.
-This module is Qt-free: the shell's Qt-free modules read their labels from it. The Meeting
-strings (CAP-0177 contract.md §7) live in ``strings_meeting`` and the language-pack strings
-(CAP-0171 contract.md §11) in ``strings_packs`` and the voice output strings (CAP-0167
-contract.md §9) in ``strings_voice``; all are re-exported here.
+This module is Qt-free. The ``strings_*`` modules (Meeting, language packs, voice output,
+Listen, Text translation, paired transcript) are re-exported here.
 """
 
 from __future__ import annotations
@@ -17,11 +15,19 @@ from lianiq.languages.requirements import (
     MISSING_VOICE,
 )
 from lianiq.languages.session import LOCKED_MESSAGE
-from lianiq.ui import strings_listen, strings_meeting, strings_packs, strings_text, strings_voice
+from lianiq.ui import (
+    strings_listen,
+    strings_meeting,
+    strings_packs,
+    strings_text,
+    strings_transcript,
+    strings_voice,
+)
 from lianiq.ui.strings_listen import *
 from lianiq.ui.strings_meeting import *
 from lianiq.ui.strings_packs import *
 from lianiq.ui.strings_text import *
+from lianiq.ui.strings_transcript import *
 from lianiq.ui.strings_voice import *
 
 PAIR_LABEL = "Language pair"
@@ -317,4 +323,5 @@ __all__ += strings_meeting.__all__  # the Meeting strings (CAP-0177 contract.md 
 __all__ += strings_text.__all__  # the Text translation strings (CAP-0172 contract.md §10)
 __all__ += strings_packs.__all__  # the language-pack strings (CAP-0171 contract.md §11)
 __all__ += strings_listen.__all__  # CAP-0170 contract.md §9
+__all__ += strings_transcript.__all__  # paired-transcript spec §2.4
 __all__ += strings_voice.__all__  # the voice output strings (CAP-0167 contract.md §9)
