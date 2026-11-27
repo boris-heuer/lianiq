@@ -23,6 +23,7 @@ that no action is needed. Keys are stable: a repeat of the same failure updates 
 | no signal / devices changed | ``device.no-signal`` / ``device.changed`` | warning / info | Choose device / none |
 | export failed | ``<workspace>.export-failed`` | warning | Retry |
 | Call Bridge ``BridgeEvent`` error / drop | ``call-bridge.<lane>-failed`` / ``call-bridge.dropped`` | warning / info | none (Stop) |
+| stop timed out / stopper raised / start while finishing | ``session.stop-timeout`` / ``.stop-failed`` / ``.still-finishing`` | info / warning / info | none |
 """
 
 from __future__ import annotations
@@ -79,7 +80,16 @@ from lianiq.ui.notice_catalog_devices import (
     no_signal,  # noqa: F401 - re-export
     speakers_lost,  # noqa: F401 - re-export
 )
+from lianiq.ui.notice_catalog_session import (
+    STILL_FINISHING_KEY,
+    STOP_FAILED_KEY,  # noqa: F401 - re-export
+    STOP_TIMEOUT_KEY,  # noqa: F401 - re-export
+    still_finishing,
+    stop_failed,  # noqa: F401 - re-export
+    stop_timeout,  # noqa: F401 - re-export
+)
 from lianiq.ui.notices import Notice, NoticeAction, Severity
+from lianiq.ui.shell.session_owner import SessionBusy, SessionStillFinishing
 from lianiq.ui.shell.workspaces import WorkspaceId, label
 
 # Session start and model preparation -------------------------------------------------------
@@ -161,6 +171,13 @@ def session_busy(mode: WorkspaceId, active: WorkspaceId) -> Notice:
         strings.CONTINUES_SESSION.format(mode=label(active)),
         mode,
     )
+
+
+def refused_start(mode: WorkspaceId, refusal: SessionBusy) -> Notice:
+    """A refused start of ``mode``: still finishing a timed-out stop, or another session."""
+    if isinstance(refusal, SessionStillFinishing):
+        return still_finishing(mode, refusal.active)
+    return session_busy(mode, refusal.active)
 
 
 def error(workspace: WorkspaceId, message: str, where: str | None = None) -> Notice:
@@ -262,15 +279,16 @@ def no_pair_ready(where: str, on_open: Callable[[], None]) -> Notice:
 
 
 def keys_resolved_by_start(mode: WorkspaceId) -> Sequence[str]:
-    """The notices a running session of ``mode`` resolves: their condition is gone."""
+    """The notices a session of ``mode`` resolves once it is *running*: the start-failure group.
+
+    Lost-turn warnings (turns dropped, queue overflow, held turns discarded, synthesis
+    failed) stay open until the user closes them (session-status-truthfulness §2.2.3).
+    """
     keys = [unavailable_key(mode), model_failed_key(mode), start_failed_key(mode), busy_key(mode)]
+    keys.append(STILL_FINISHING_KEY)
     if mode is CONVERSATION:
         keys += [
             DIRECTION_UNAVAILABLE,
-            HELD_DISCARDED,
-            QUEUE_OVERFLOW,
-            TURNS_DROPPED,
-            SYNTHESIS_FAILED_KEY,
             MICROPHONE_LOST,
             device_unavailable_key(strings.NOTICE_MICROPHONE),
         ]
