@@ -167,8 +167,19 @@ class MainWindowServices:
         self.post_notice(catalog.mode_unavailable(mode, title, self.notice_source(mode), retry))
 
     def show_busy(self, mode: WorkspaceId, active: WorkspaceId) -> None:
-        """A refused start of ``mode`` while ``active`` holds the session: an info notice."""
-        self.post_notice(catalog.session_busy(mode, active))
+        """A refused start of ``mode`` while ``active`` holds the session: an info notice.
+
+        While the owner is idle the refusal was ``SessionStillFinishing``: ``active``'s
+        timed-out worker is still alive (session-status-truthfulness AC-05).
+        """
+        if self.session_owner.state is SessionState.IDLE:
+            self.post_notice(catalog.still_finishing(mode, active))
+        else:
+            self.post_notice(catalog.session_busy(mode, active))
+
+    def _stop_failed(self, mode: WorkspaceId) -> None:
+        """``mode``'s stopper raised; the owner is idle again (AC-04)."""
+        self.post_notice(catalog.stop_failed(mode))
 
     def notice_source(self, mode: WorkspaceId) -> str:
         """The ``source`` of a mode's notices: "<Mode> · <languages>"."""

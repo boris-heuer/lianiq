@@ -2,6 +2,8 @@
 
 Qt-free unit tests: AC-03 (registry order), AC-04/AC-05 (entry states) and the Unit half of
 AC-07 (one session across modes, ``SessionBusy`` in both directions, stale generations).
+session-status-truthfulness WI-01: the Unit halves of AC-04 (repeated stop, raising stopper)
+and AC-05 (lingering worker guard).
 """
 
 from __future__ import annotations
@@ -12,7 +14,12 @@ import sys
 import pytest
 
 from lianiq.ui import strings
-from lianiq.ui.shell.session_owner import ActiveSessionOwner, SessionBusy, SessionState
+from lianiq.ui.shell.session_owner import (
+    ActiveSessionOwner,
+    SessionBusy,
+    SessionState,
+    SessionStillFinishing,
+)
 from lianiq.ui.shell.workspaces import (
     DEFAULT_ENTRIES,
     EntryState,
@@ -206,3 +213,61 @@ def test_stale_generations_change_nothing() -> None:
     assert recorder.changes == []
     owner.mark_running(second)
     assert owner.state is SessionState.RUNNING
+
+
+def test_ac04_stop_while_stopping_is_a_no_op() -> None:
+    owner, calls = ActiveSessionOwner(), []
+    owner.register(CONVERSATION, lambda: calls.append("stop"), asynchronous=True)
+    owner.mark_running(owner.request_start(CONVERSATION))
+    recorder = Recorder(owner)
+
+    owner.stop()
+    owner.stop()
+
+    assert calls == ["stop"]
+    assert recorder.changes == [(SessionState.STOPPING, CONVERSATION)]
+
+
+def test_ac04_a_raising_stopper_goes_idle_and_reports_the_mode() -> None:
+    owner, failed = ActiveSessionOwner(), []
+
+    def broken() -> None:
+        raise RuntimeError("stuck")
+
+    owner.register(CALL_BRIDGE, broken, asynchronous=True)
+    owner.on_stop_failed(failed.append)
+    owner.mark_running(owner.request_start(CALL_BRIDGE))
+
+    owner.stop()
+
+    assert (owner.state, owner.active, failed) == (SessionState.IDLE, None, [CALL_BRIDGE])
+    owner.request_start(CONVERSATION)  # a new Start is possible
+
+
+def test_ac05_a_lingering_probe_refuses_every_start_until_it_reports_dead() -> None:
+    owner, alive = ActiveSessionOwner(), [True]
+    owner.linger(CONVERSATION, lambda: alive[0])
+    recorder = Recorder(owner)
+
+    for mode in (CONVERSATION, CALL_BRIDGE, WorkspaceId.MEETING, WorkspaceId.LISTEN):
+        with pytest.raises(SessionStillFinishing) as refused:
+            owner.request_start(mode)
+        assert isinstance(refused.value, SessionBusy)  # every ``except SessionBusy`` holds
+        assert refused.value.active is CONVERSATION
+        assert "still finishing the stopped Conversation session" in str(refused.value)
+    assert owner.lingering() is CONVERSATION
+    assert recorder.changes == [] and owner.generation == 0
+
+    alive[0] = False  # the worker exited; checked lazily on the next start
+    assert owner.request_start(CALL_BRIDGE) == 1
+    assert owner.lingering() is None
+
+
+def test_a_raising_linger_probe_does_not_block_starts() -> None:
+    owner = ActiveSessionOwner()
+
+    def broken() -> bool:
+        raise RuntimeError("probe")
+
+    owner.linger(CONVERSATION, broken)
+    assert owner.request_start(CONVERSATION) == 1

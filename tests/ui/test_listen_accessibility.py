@@ -66,7 +66,7 @@ def test_ac30_every_control_is_named_after_its_caption(window) -> None:
 
 
 def test_ac30_rows_expose_the_section_2_3_text(window, spies) -> None:
-    window.start_listening()
+    window.start_current_page()  # F8 on the Listen page
     assert phase_is(window, ListenPhase.LISTENING)
     speak(window, spies, "Guten Morgen.")
     assert wait_until(lambda: states(window) == [SegmentState.DONE])

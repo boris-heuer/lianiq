@@ -69,6 +69,7 @@ class MainWindowLayout:
         self.navigation.workspace_selected.connect(self.show_workspace)
         self.navigation.select(WorkspaceId.CONVERSATION, notify=False)
         self.session_owner.subscribe(self._session_changed)
+        self.session_owner.on_stop_failed(self._stop_failed)
         self.diagnostics.record(
             "models", f"Speech recognition model: {self.config.speech_to_text.model_path}"
         )

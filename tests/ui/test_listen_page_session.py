@@ -132,7 +132,7 @@ def test_ac17_failed_segments_show_their_reason_and_listening_continues(window, 
 
 def test_ac18_a_model_load_failure_shows_model_error_and_opens_nothing(window, spies) -> None:
     spies.failing_warm_up_calls.add(1)
-    window.start_listening()
+    window.start_current_page()  # F8 on the Listen page
     assert wait_until(lambda: "listen-and-translate.model-failed" in keys(window))
     assert window.listen.state_label.text() == strings.LISTEN_STATE_MODEL_ERROR
     assert window.session_owner.state is SessionState.IDLE

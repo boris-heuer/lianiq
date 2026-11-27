@@ -34,7 +34,7 @@ def phase_is(window, phase: ListenPhase) -> bool:
 
 
 def start(window) -> None:
-    window.start_listening()  # F8 on the Listen page
+    window.start_current_page()  # F8 on the Listen page
     assert phase_is(window, ListenPhase.LISTENING)
 
 
