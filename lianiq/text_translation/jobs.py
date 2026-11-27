@@ -1,8 +1,9 @@
 """Translation worker: one daemon thread, one job at a time (contract.md §6).
 
 Each segment is translated with ``context=()``; a cancelled job stops at its next segment
-boundary. Partial output is never delivered. Logs carry the exception class name, request
-id, revision, edge key, segment count and durations, never text or exception messages.
+boundary. After each segment ``progress(request_id, done, total)`` is posted, so a long text
+shows how far it is (CAP-0172 rev 1.1). Partial output is never delivered. Logs carry
+the exception class name, request id, revision, edge key, segment count and durations, never text or exception messages.
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ class _Job:
     done: Callable[[TextResult], None]
     failed: Callable[[int, FailureReason], None]
     cancelled: Callable[[int], None]
+    progress: Callable[[int, int, int], None] | None = None
     stop: threading.Event = field(default_factory=threading.Event)
 
 
@@ -55,9 +57,10 @@ class TranslationJobs:
         done: Callable[[TextResult], None],
         failed: Callable[[int, FailureReason], None],
         cancelled: Callable[[int], None],
+        progress: Callable[[int, int, int], None] | None = None,
     ) -> None:
         """Queue ``request``; a running or queued job is cancelled first."""
-        job = _Job(request, done, failed, cancelled)
+        job = _Job(request, done, failed, cancelled, progress)
         with self._lock:
             if self._closed:
                 raise RuntimeError("Text translation jobs are shut down")
@@ -124,12 +127,16 @@ class TranslationJobs:
             split = split_source(request.text, measure)
             segments = sum(len(line) for line in split)
             translated: list[list[str]] = []
+            finished = 0
+            self._progress(job, 0, segments)
             for line in split:
                 out: list[str] = []
                 for segment in line:
                     if job.stop.is_set():
                         raise _Cancelled
                     out.append(translator.translate(segment.text, request.edge, context=()))
+                    finished += 1
+                    self._progress(job, finished, segments)
                 translated.append(out)
             if job.stop.is_set():
                 raise _Cancelled
@@ -152,6 +159,12 @@ class TranslationJobs:
         else:
             self._log("done", request, segments, started)
             self._post(lambda: job.done(result))
+
+    def _progress(self, job: _Job, finished: int, total: int) -> None:
+        report = job.progress
+        if report is not None and not job.stop.is_set():
+            request_id = job.request.request_id
+            self._post(lambda: report(request_id, finished, total))
 
     @staticmethod
     def _log(outcome: str, request: TranslationRequest, segments: int, started: float) -> None:
