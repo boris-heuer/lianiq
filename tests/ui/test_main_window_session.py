@@ -87,6 +87,7 @@ def test_routing_is_bound_at_start_and_released_by_stop(window, spies) -> None: 
     assert not window.swap_button.isEnabled()
 
     click(window.stop_button)
+    assert wait_until(lambda: not window.conversation.stopping)  # the stop thread (WI-02)
 
     assert not window.session_controller.running
     assert window.mode_combo.isEnabled() and window.swap_button.isEnabled()
@@ -109,6 +110,7 @@ def test_turns_show_results_and_export_v2_after_stop(window, spies, tmp_path) ->
     assert len(window.history) == 1  # a held turn is never translated
 
     click(window.stop_button)
+    assert wait_until(lambda: not window.conversation.stopping)  # the stop thread (WI-02)
 
     assert window.statusBar().currentMessage() == "Capture stopped"
     assert window.conversation_notice().title == (
