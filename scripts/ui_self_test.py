@@ -64,7 +64,9 @@ def main() -> int:
                 source_wav.unlink(missing_ok=True)
             window.runner.submit(utterance)
         except Exception as exc:  # noqa: BLE001 - diagnostic boundary reports all failures.
-            window.bridge.error.emit(f"UI self-test setup failed: {exc}")
+            window.bridge.error.emit(
+                f"UI self-test setup failed: {exc}", window.conversation.live_generation
+            )
 
     def on_session_ready(_generation: int, ready: bool, message: str) -> None:
         if not ready:
