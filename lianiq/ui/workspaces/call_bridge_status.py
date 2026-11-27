@@ -7,6 +7,10 @@ ignored. Route-test results arrive on their own signal and never reach the book.
 endpoint names its device (``controller.lost_roles`` and the assignments); only that lane
 changes. Completed turns arrive on ``call_bridge_result`` and go to the live text view only,
 never to the Conversation transcript.
+
+session-status-truthfulness WI-05 (§2.2.4, AC-19): a lane whose stop timed out reads
+``LANE_DID_NOT_STOP`` instead of *Stopped* until the next Start; a result is stamped with its
+start generation and dropped unless that start is still live (a late result is not shown).
 """
 
 from __future__ import annotations
@@ -26,6 +30,7 @@ from lianiq.domain import TranslationResult
 from lianiq.languages.modes import SessionPair
 from lianiq.ui import notice_catalog as catalog
 from lianiq.ui import strings_call_bridge as s
+from lianiq.ui.strings_session import LANE_DID_NOT_STOP
 
 _TEXTS = {
     LaneActivity.STOPPED: s.CB_LANE_STOPPED,
@@ -58,6 +63,8 @@ class CallBridgeStatus:
         """A new Start: both lanes *Starting…*, only ``generation`` counts, text cleared."""
         self.lane_status.reset(generation)
         self._text_lanes = CallBridgeLanes.from_session(session)
+        self._results_generation = generation
+        self._lanes_not_stopped = frozenset()
         self.panel.text_view.clear()
         self.show_lane_statuses()
 
@@ -67,7 +74,10 @@ class CallBridgeStatus:
 
     def show_lane_statuses(self) -> None:
         for lane, status in self.lane_status.statuses.items():
-            self.panel.paths[lane].set_lane_status(lane_status_text(status))
+            text = lane_status_text(status)
+            if lane in self._lanes_not_stopped and status.activity is LaneActivity.STOPPED:
+                text = LANE_DID_NOT_STOP  # never *Stopped* while its worker may still run
+            self.panel.paths[lane].set_lane_status(text)
 
     def _lost_device(self, lane: LaneId) -> str:
         """The display name of the lane's lost endpoint (capture first), else ``""``."""
@@ -78,10 +88,10 @@ class CallBridgeStatus:
         role = next((role for role in PATH_ROLES[lane] if role in lost), None)
         return "" if role is None else controller.assignments[role].display_name
 
-    @Slot(object)
-    def _show_call_bridge_result(self, result: TranslationResult) -> None:
+    @Slot(int, object)
+    def _show_call_bridge_result(self, generation: int, result: TranslationResult) -> None:
         lanes = self._text_lanes
-        if lanes is None:
+        if lanes is None or generation != self._results_generation:
             return
         outbound = result.source_language == lanes.outbound.source
         self.panel.text_view.add_turn(LaneId.OUTBOUND if outbound else LaneId.INBOUND, result)

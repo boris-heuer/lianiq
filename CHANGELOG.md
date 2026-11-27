@@ -155,6 +155,11 @@ All notable user-visible changes are documented here.
   At the drain bound the unfinished table rows stay as *Not translated — stopped before it
   was finished*, a notice counts them, and Start waits until the old worker has exited; late
   events of an ended meeting no longer reach the next one.
+- Call Bridge: **Stop call bridge** and F9 no longer freeze the window. Both lanes stop at
+  the same time in the background while the strip reads *Call Bridge stopping…*. A lane
+  that does not stop within 10 s reads *Did not stop in time* instead of *Stopped*, a notice
+  says so, and Start waits until that lane has ended. A translation that finishes after the
+  bridge stopped is no longer shown.
 - The voice warm-up at the start of a session, including **Start meeting**, now synthesises
   in memory and no longer writes a temporary WAV file.
 - A Bluetooth headset whose PortAudio name carries a suffix that Windows does not store, such

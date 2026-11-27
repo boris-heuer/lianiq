@@ -22,6 +22,7 @@ from tests.ui._call_bridge_window import (
     FakeCaptureStream,
     FakePlaybackStream,
     assign,
+    bridge_stopped,
     build_call_bridge_window,
     call_bridge_window,  # noqa: F401
     click,
@@ -167,6 +168,7 @@ def test_ac02_tests_and_start_are_disabled_while_sessions_run(window) -> None:
         assert not row(window, path).test_button.isEnabled()
         assert row(window, path).test_button.toolTip() == "Stop the call bridge to test a path"
     window.stop_call_bridge()
+    assert bridge_stopped(window)
     assert row(window, OUT).test_button.isEnabled()
 
 

@@ -76,7 +76,12 @@ class CallBridgeWorkspace(CallBridgeSetup, CallBridgeStatus, CallBridgeLifecycle
         self._endpoint_monitor.timeout.connect(self._reconcile_call_bridge_endpoints)
         self.owner = host.session_owner
         self._generation = 0  # the owner generation of this workspace's latest start
-        self.owner.register(WorkspaceId.CALL_BRIDGE, self.stop_call_bridge)
+        self.lane_stop_timeout = 10.0  # per lane, both in parallel (spec §2.2.2)
+        self._lanes_not_stopped: frozenset[LaneId] = frozenset()
+        self._results_generation: int | None = None  # results of this start are shown
+        self._stopping_controller: FullDuplexBridgeController | None = None
+        self.owner.register(WorkspaceId.CALL_BRIDGE, self._stop_session, asynchronous=True)
+        bridge.call_bridge_stopped.connect(self._call_bridge_stopped)
         self.owner.subscribe(self._session_changed)
         self.init_setup()  # readiness and route tests (CAP-0166 WI-02)
         self.init_status()  # lane status lines and live call text (CAP-0166 WI-03)
@@ -126,7 +131,8 @@ class CallBridgeWorkspace(CallBridgeSetup, CallBridgeStatus, CallBridgeLifecycle
                     playback.play,
                     scheduler,
                     max_pending_age_ms=self.config.call_bridge.max_pending_age_ms,
-                    on_result=bridge.call_bridge_result.emit,  # never the Conversation
+                    # never the Conversation; stamped, so a late result is dropped
+                    on_result=partial(bridge.call_bridge_result.emit, self._generation),
                     on_event=bridge.call_bridge_event.emit,
                     echo_guard=guard,
                 )

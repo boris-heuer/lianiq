@@ -20,7 +20,8 @@ class UiBridge(QObject):
     session_ready = Signal(int, bool, str)  # start generation, ready, error message
     call_bridge_ready = Signal(int, bool, str)
     call_bridge_event = Signal(object)
-    call_bridge_result = Signal(object)
+    call_bridge_result = Signal(int, object)  # start generation, TranslationResult
+    call_bridge_stopped = Signal(int, object)  # start generation, LaneStopResult
     call_bridge_level = Signal(object, float)
     call_bridge_capture_fault = Signal(object, str)
     pipeline_event = Signal(object, int)  # PipelineEvent, session generation

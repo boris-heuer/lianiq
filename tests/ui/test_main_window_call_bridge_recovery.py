@@ -22,6 +22,7 @@ from tests.ui._call_bridge_window import (
     FakeCaptureStream,
     assign,
     bridge_notice,
+    bridge_stopped,
     build_call_bridge_window,
     call_bridge_window,  # noqa: F401
     click,
@@ -192,6 +193,7 @@ def test_stopping_the_call_bridge_restores_start_from_the_current_availability(
     shutil.rmtree(window.config.speech_to_text.model_path)
 
     click(window.call_bridge_panel.stop_button)
+    assert bridge_stopped(window)
 
     assert window.call_bridge_controller is None
     assert not window.start_button.isEnabled()  # not blindly re-enabled

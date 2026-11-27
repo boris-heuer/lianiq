@@ -22,7 +22,11 @@ from lianiq.ui.shell.workspaces import WorkspaceId, label
 from lianiq.ui.workspaces import language_packs as packs_module
 from tests._spy_window import spies  # noqa: F401
 from tests.packs.conftest import network_attempts  # noqa: F401
-from tests.ui._call_bridge_window import assign, build_call_bridge_window
+from tests.ui._call_bridge_window import (
+    assign,
+    bridge_stopped,
+    build_call_bridge_window,
+)
 from tests.ui._language_packs_helpers import (  # noqa: F401 - the fixtures are imported
     MT,
     STT,
@@ -236,6 +240,7 @@ def test_ac16_a_call_bridge_session_protects_its_packs(
         assert refused(page, MT_BACK, "remove") == in_use(WorkspaceId.CALL_BRIDGE)
         assert refused(page, STT, "update") == in_use(WorkspaceId.CALL_BRIDGE)
         window.stop_call_bridge()
+        assert bridge_stopped(window)
         assert window.usage_tracker.current is None
     finally:
         window.stop_call_bridge()

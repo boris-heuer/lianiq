@@ -20,7 +20,11 @@ from lianiq.ui.notices import Severity
 from lianiq.ui.shell.session_owner import SessionState
 from lianiq.ui.shell.workspaces import WorkspaceId
 from tests._spy_window import spies  # noqa: F401
-from tests.ui._call_bridge_window import assign, build_call_bridge_window
+from tests.ui._call_bridge_window import (
+    assign,
+    bridge_stopped,
+    build_call_bridge_window,
+)
 from tests.ui._language_helpers import wait_until
 from tests.ui.test_main_window_session import click
 
@@ -121,6 +125,7 @@ def test_ac25_retry_is_refused_while_the_call_bridge_holds_the_session(window, s
     assert window.session_owner.generation == bridge_generation
 
     window.stop_call_bridge()
+    assert bridge_stopped(window)
     assert window.notices.get(catalog.busy_key(CONVERSATION)) is None
     click(retry)  # now the gate passes: a new owner generation, running
 
