@@ -110,14 +110,14 @@ def test_ac26_a_validated_pack_enables_start_without_restart(window) -> None:
     page = show_listen(window)
     assert wait_until(page.start_button.isEnabled)
     assert page.readiness_label.text() == ""
-    window.start_listening()
+    window.start_current_page()  # F8 on the Listen page
     assert wait_until(lambda: page.controller.phase is ListenPhase.LISTENING)
 
 
 def test_ac26_the_session_packs_cannot_be_updated_or_removed(window) -> None:
     install(window, STT, MT)
     page = show_listen(window)
-    window.start_listening()
+    window.start_current_page()  # F8 on the Listen page
     assert wait_until(lambda: page.controller.phase is ListenPhase.LISTENING)
     packs = window.language_packs
     in_use = strings.PACK_IN_USE.format(mode=label(LISTEN))
