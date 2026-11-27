@@ -26,6 +26,7 @@ from lianiq.languages import (
 )
 from lianiq.ui import strings
 from tests._spy_window import spies  # noqa: F401
+from tests.ui import _conversation_helpers as conv
 from tests.ui._language_helpers import (
     AUTOMATIC,
     DE,
@@ -36,7 +37,6 @@ from tests.ui._language_helpers import (
     ZH,
     ZH_TO_DE,
     assert_no_language_codes,
-    blocks,
     click,
     item_enabled,
     items,
@@ -98,11 +98,11 @@ def test_routing_entries_and_result_labels_use_registry_names(window, spies) -> 
     submit(window, spies, transcript("你好", "zh-Hans"))
     assert wait_until(lambda: len(window.history) == 2)
 
-    assert blocks(window.source_text) == [
+    assert conv.originals(window) == [
         "German: Guten Tag",
         "Mandarin (Simplified): 你好",
     ]
-    assert blocks(window.target_text) == [
+    assert conv.translations(window) == [
         "Mandarin (Simplified): [de>zh-Hans] Guten Tag",
         "German: [zh-Hans>de] 你好",
     ]
