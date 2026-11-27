@@ -86,7 +86,7 @@ def _conversation_empty(app, checks: list[Check]) -> None:
     shown = ui.select(app, s.NAV_CONVERSATION, s.NAV_REGION)
     texts = e03.view(app.nodes(), s)["texts"] if shown else None
     detail = None if texts is not None else "not-found"
-    checks.append(check("conversation-transcript-empty", texts == ["", ""], detail))
+    checks.append(check("conversation-transcript-empty", texts == [], detail))
 
 
 def _session(ctx, app, names, wav, checks: list[Check], artifacts: list) -> None:
