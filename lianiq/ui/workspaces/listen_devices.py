@@ -6,7 +6,8 @@ stream PortAudio stopped, is lost and the controller stops by its stop policy (a
 ``on_error`` reaches the controller directly). The blocking ``listen.microphone-lost`` notice
 offers **Reconnect** (a full refresh; resolved only when the same identity is back) and
 **Choose device** (focus *Microphone*). Another microphone is never chosen; capture restarts
-only on Start, which also resolves the notice.
+only on Start; the notice is resolved once that session is listening, and while it is open
+the idle state reads *Stopped — microphone lost* (session-status-truthfulness AC-13).
 """
 
 from __future__ import annotations
