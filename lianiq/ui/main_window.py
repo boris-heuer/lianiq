@@ -52,7 +52,7 @@ MINIMUM_SIZE = (850, 560)
 
 
 class UiBridge(QObject):
-    result = Signal(object)
+    result = Signal(object, int)  # TranslationResult, owner generation at emit
     held = Signal(object)
     held_resolved = Signal()
     error = Signal(str)
@@ -88,14 +88,10 @@ class MainWindow(MainWindowLayout, MainWindowServices, QMainWindow):
     mode_combo = _forward("conversation", "mode_combo")
     voice_rows = _forward("conversation", "voice_rows")
     start_button = _forward("conversation", "start_button")
-    source_panel = _forward("conversation", "source_panel")
-    target_panel = _forward("conversation", "target_panel")
     # Session strip: **Stop (F9)** stops the active session from every workspace.
     stop_button = _forward("session_strip", "stop_button")
     swap_button = _forward("conversation", "swap_button")
     held_turn_bar = _forward("conversation", "held_turn_bar")
-    source_text = _forward("conversation", "source_text")
-    target_text = _forward("conversation", "target_text")
     level_bar = _forward("conversation", "level_bar")
     state_label = _forward("conversation", "state_label")
     latency_label = _forward("conversation", "latency_label")
