@@ -74,6 +74,7 @@ def test_stop_order_capture_first_then_flush_reset_and_discard(tmp_path) -> None
 
     report = harness.controller.stop()
 
+    assert not report.timed_out and report.not_finished == 0 and not report.alive()
     assert harness.events == [
         "capture.start",
         "capture.stop",
@@ -142,6 +143,8 @@ def test_stop_is_bounded_and_a_late_turn_never_feeds_the_next_context(tmp_path) 
 
     assert elapsed < 1.0  # the running turn does not hold up stop
     assert report.dropped == 1
+    # session-status-truthfulness WI-02: the timeout and the lingering worker are reported.
+    assert report.timed_out and report.not_finished == 2 and report.alive()
     message = (
         "1 queued speech segment(s) were not translated before the session stopped and "
         "were dropped."
@@ -149,6 +152,7 @@ def test_stop_is_bounded_and_a_late_turn_never_feeds_the_next_context(tmp_path) 
     assert harness.errors == [message]
     gate.set()
     harness.runner._thread.join(timeout=2.0)
+    assert not report.alive()  # the lingering guard lets the next Start through
     # The turn that was running completes with its pair, but its context is not kept.
     assert [(r.source_language, r.source_text) for r in harness.results] == [(DE, "Guten Tag")]
     assert harness.context_is_empty()
