@@ -16,7 +16,10 @@ name. ``running_event`` takes each ``MeetingEvent`` on the GUI thread (the queue
 
 A placeholder has no ``ended_at`` yet; placeholders stay below every line, in arrival order,
 and a line takes its place by speech end once it arrives. Lines stay visible after the meeting
-until the next start; they live in memory only.
+until the next start; they live in memory only. A placeholder the stop bound withdrew
+(``NOT_FINISHED``) stays as *Not translated — stopped before it was finished*. Once the
+meeting stops its captures, no input reads *Listening* or *Muted* any more (only *Device
+lost* stays).
 """
 
 from __future__ import annotations
@@ -31,6 +34,7 @@ from lianiq.meeting.contracts import CAPTURE_ROLES, MeetingRole
 from lianiq.meeting.events import MeetingEvent, MeetingEventKind
 from lianiq.ui import strings
 from lianiq.ui.result_panel import ResultPanel
+from lianiq.ui.strings_session import NOT_TRANSLATED_STOPPED
 
 TABLE, USER = MeetingRole.TABLE_CAPTURE, MeetingRole.USER_CAPTURE
 INPUT_NAMES = {TABLE: strings.MEETING_TABLE_MIC, USER: strings.MEETING_USER_MIC}
@@ -112,11 +116,21 @@ class MeetingRunning:
             role in self.level_bars
             and role not in self._lost_inputs
             and self.controller is not None
+            and not self.stopping
         ):
             self.level_bars[role].setValue(round(max(0.0, min(level, 1.0)) * 100))
 
+    def captures_closed(self) -> None:
+        """The stop closed both inputs: clear their levels and states, except *Device lost*."""
+        for role in CAPTURE_ROLES:
+            self.level_bars[role].setValue(0)
+            if role not in self._lost_inputs:
+                self._set_state(role, "")
+
     def running_event(self, event: MeetingEvent) -> None:
         kind, role = event.kind, event.role
+        if self.stopping and kind in (Kind.LISTENING, Kind.UNMUTED, Kind.MUTED):
+            return  # the captures are closed (session-status-truthfulness §2.3)
         if kind in (Kind.LISTENING, Kind.UNMUTED) and role not in self._lost_inputs:
             self._set_state(role, strings.MEETING_LISTENING)
         elif kind is Kind.MUTED and role not in self._lost_inputs:
@@ -138,6 +152,11 @@ class MeetingRunning:
                 line.role, line.text, line.ended_at, next(self._sequence)
             )
             self._show_lines()
+        elif kind is Kind.NOT_FINISHED:
+            entry = self._entries.get(event.contribution_id)
+            if entry is not None and entry.text is None:
+                entry.text = NOT_TRANSLATED_STOPPED
+                self._show_lines()
         elif kind is Kind.WITHDRAWN:
             if self._entries.pop(event.contribution_id, None) is not None:
                 self._show_lines()
