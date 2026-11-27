@@ -79,6 +79,7 @@ class CallPathBox(QGroupBox):
         outbound = path is LaneId.OUTBOUND
         self._level_name = s.CB_LEVEL_MIC if outbound else s.CB_LEVEL_CALL
         self._hint = s.CB_HINT_MIC if outbound else s.CB_HINT_CALL
+        self._clip_hint = s.CB_CLIP_HINT_MIC if outbound else s.CB_CLIP_HINT_CALL
         grid = QGridLayout(self)
         for row, role in enumerate((self.capture_role, self.render_role)):
             label = QLabel(s.CB_ROLE_LABELS[role])
@@ -229,7 +230,7 @@ class CallPathBox(QGroupBox):
         if self._stream_open:
             self._clip_until = time.monotonic() + CLIP_HOLD_S
             self.no_signal_timer.start()
-            self._set_caption(s.CB_LEVEL_CLIPPING)
+            self._set_caption(s.CB_LEVEL_CLIPPING_HINT.format(hint=self._clip_hint))
 
     def _no_signal(self) -> None:
         if self._stream_open:
