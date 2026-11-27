@@ -2,6 +2,8 @@
 
 Rows are posted before their item reaches the worker; callbacks carry the generation and stale
 ones are dropped. Notices are ``ListenAlert`` values the page maps to ``listen.*`` notices.
+``end_replay`` ends a transcript replay (``host.pipeline.spoken``) before a Start, a Stop
+and a clear; while a playback runs a listening capture is muted (``playback_changed``).
 """
 
 from __future__ import annotations
@@ -66,11 +68,13 @@ class ListenController(ListenCallbacks):
         *,
         flush_seconds: float = LISTEN_STOP_FLUSH_SECONDS,
         grace_seconds: float = LISTEN_INFERENCE_GRACE_SECONDS,
+        end_replay: Callable[[], None] = lambda: None,
     ) -> None:
         self._owner, self._tracker, self._pipeline = owner, tracker, pipeline
         self._capture_factory, self._microphone = capture_factory, microphone
         self._post, self._render, self._notify = post, render, notify
-        self._readiness = readiness
+        self._readiness, self._end_replay = readiness, end_replay
+        self._paused = False  # a playback runs (paired-transcript §3.3)
         self._flush, self._grace = flush_seconds, grace_seconds
         self._transcript = ListenTranscript()
         self._phase = ListenPhase.IDLE
@@ -104,6 +108,7 @@ class ListenController(ListenCallbacks):
         if self._readiness(session).block is not StartBlock.NONE:
             self.render()
             return
+        self._end_replay()  # a replay never overlaps a session
         generation = self._owner.request_start(LISTEN)  # SessionBusy propagates
         self._generation, self._phase, self._lost = generation, ListenPhase.LOADING, None
         if self._tracker is not None:
@@ -141,6 +146,8 @@ class ListenController(ListenCallbacks):
             self._notify(ListenAlert(AlertKind.START_FAILED, generation, failure))
             return
         self._phase = ListenPhase.LISTENING
+        if self._paused and self._capture is not None:
+            self._capture.set_muted(True)  # a replay of this page is still playing
         self._owner.mark_running(generation)
         self.render()
 
@@ -190,6 +197,7 @@ class ListenController(ListenCallbacks):
             self._owner.stop()
 
     def _begin_stop(self) -> None:
+        self._end_replay()
         if self._phase not in (ListenPhase.LOADING, ListenPhase.LISTENING):
             return
         loading = self._phase is ListenPhase.LOADING
@@ -235,7 +243,8 @@ class ListenController(ListenCallbacks):
             self.microphone_lost(self._microphone().label)
 
     def clear(self) -> None:
-        """**Clear transcript**: stop when not idle, empty the log, render (spec §3.4)."""
+        """**Clear transcript**: end a playback, stop when not idle, empty the log, render."""
+        self._end_replay()
         if self._phase is not ListenPhase.IDLE:
             self.stop()
         self._transcript.clear()
@@ -258,4 +267,5 @@ class ListenController(ListenCallbacks):
         selection = self._selection
         readiness = NOT_READY if selection is None else self._readiness(selection)
         can_export = any(row.state is SegmentState.DONE for row in self._transcript.rows)
-        self._render(ListenSnapshot(self._phase, readiness, self._busy, rows, can_export))
+        paused = self._paused and self._phase is ListenPhase.LISTENING
+        self._render(ListenSnapshot(self._phase, readiness, self._busy, rows, can_export, paused))
