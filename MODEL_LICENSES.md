@@ -24,6 +24,14 @@ records no acceptance time).
 | `tts-en-us-ljspeech-high` | `rhasspy/piper-voices` `en_US-ljspeech-high` @ `e534943` | MIT (repository); public domain (LJ Speech dataset, see the model card) | Keep the model card with the voice files. |
 | `tts-zh-hans-aishell3` | sherpa-onnx `vits-icefall-zh-aishell3` (archive SHA-256 `ab468db3`) | Apache-2.0 (icefall VITS recipe; AISHELL-3 dataset) | The archive contains no licence file; the provenance of the lexicon and the text-normalisation rules is still open (lianiq#81). |
 
+## Mandarin text-to-speech: installed Windows voice (preferred)
+
+When Windows has a Chinese (Simplified, `zh-CN`) speech voice installed, Lianiq speaks Mandarin
+with it through the Windows speech API (`Windows.Media.SpeechSynthesis`, PO decision 2026-11-27,
+lianiq#81). The voice is part of Windows and is installed by the user from Windows Settings; Lianiq
+neither downloads, bundles nor redistributes any of its files, so no model or dataset licence of
+that voice applies to Lianiq's distribution. Without it the bundled voice below is used.
+
 ## Mandarin text-to-speech: sherpa-onnx `vits-icefall-zh-aishell3`
 
 The Mandarin (`zh-Hans`) voice is the sherpa-onnx VITS model `vits-icefall-zh-aishell3`
