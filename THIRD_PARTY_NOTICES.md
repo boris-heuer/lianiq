@@ -13,6 +13,7 @@ license texts for every bundled dependency and model.
 | MarianMT English to Chinese | `408d9bc410a388e1d9aef112a2daba955b945255` | Apache-2.0 | <https://huggingface.co/Helsinki-NLP/opus-mt-en-zh> |
 | MarianMT Chinese to English | `cf109095479db38d6df799875e34039d4938aaa6` | CC BY 4.0 (attribution below) | <https://huggingface.co/Helsinki-NLP/opus-mt-zh-en> |
 | sherpa-onnx | `sherpa-onnx==2.0.1` | Apache-2.0 | <https://github.com/k2-fsa/sherpa-onnx> |
+| PyWinRT (`winrt-runtime`, `winrt-Windows.*` projections; Windows voice access) | `winrt-runtime==4.2.1` | MIT | <https://github.com/pywinrt/pywinrt> |
 | sherpa-onnx-core (native runtime of sherpa-onnx) | `sherpa-onnx-core==2.0.1` | Apache-2.0 | <https://github.com/k2-fsa/sherpa-onnx> |
 | ONNX Runtime bundled in sherpa-onnx-core | 1.28.2 | MIT | <https://github.com/microsoft/onnxruntime> |
 | sherpa-onnx Mandarin voice `vits-icefall-zh-aishell3` | release archive SHA-256 `ab468db3a3308cdd861495e0db2f25d79418a0c00639f74944c7cdf5dd8c6ec1` | Model: k2-fsa icefall VITS recipe, Apache-2.0; dataset: AISHELL-3 (OpenSLR SLR93), Apache-2.0. The archive contains no licence file (see `MODEL_LICENSES.md`, #81) | <https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-icefall-zh-aishell3.tar.bz2> |
