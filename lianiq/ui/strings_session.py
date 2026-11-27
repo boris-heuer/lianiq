@@ -24,6 +24,7 @@ F8_NO_SESSION_PAGE = (
 )
 NOT_TRANSLATED_STOPPED = "Not translated — stopped before it was finished."
 MEETING_ENDED = "Meeting ended · {n} contributions"
+MEETING_STOPPING = "Stopping — finishing {n} contributions…"  # spec §2.2.4
 MEETING_START_FAILED_STATE = "Could not start — see notice"
 LISTEN_STOPPED_MIC_LOST = "Stopped — microphone lost"
 LANE_DID_NOT_STOP = "Did not stop in time"
@@ -50,6 +51,7 @@ __all__ = [
     "LISTEN_STOPPED_MIC_LOST",
     "MEETING_ENDED",
     "MEETING_START_FAILED_STATE",
+    "MEETING_STOPPING",
     "NOT_TRANSLATED_STOPPED",
     "SESSION_STILL_FINISHING",
     "SESSION_STOP_FAILED",
