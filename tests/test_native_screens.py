@@ -30,11 +30,11 @@ def test_mask_rects_cover_every_shown_element_naming_an_endpoint_and_device_comb
              "Virtual Cable) y", rect=(1, 60, 50, 70)),
         Node("Tip", "Text", description=NAMES[0], rect=(1, 80, 50, 90)),
         Node("Language pair", "ComboBox", value="German ↔ Mandarin", rect=(1, 100, 50, 110)),
-        Node("Original", "Edit", value="Guten Morgen", rect=(1, 120, 50, 130)),
+        Node("Transcript", "List", rect=(1, 120, 50, 130)),
         Node(NAMES[1], "Text", visible=False, rect=(1, 140, 50, 150)),
     ]  # fmt: skip
     rects = screens.mask_rects(nodes, NAMES, device_combos=("Microphone", "Speakers"))
-    # The transcript panel "Original" is masked too (AC-11: no transcript text in evidence).
+    # The *Transcript* list is masked too (AC-11: no transcript text in evidence).
     assert rects == [(1, 1, 50, 10), (1, 20, 50, 30), (1, 40, 50, 50), (1, 60, 50, 70),
                      (1, 80, 50, 90), (1, 120, 50, 130)]  # fmt: skip
 
@@ -43,7 +43,7 @@ def test_a_field_whose_text_cannot_be_read_is_masked() -> None:
     nodes = [
         Node("Call microphone", "ComboBox", value=None, rect=(0, 0, 5, 5)),
         Node("Notice history", "Edit", value=None, rect=(0, 10, 5, 15)),
-        Node("Original", "Document", value=None, rect=(0, 20, 5, 25)),
+        Node("Source text", "Document", value=None, rect=(0, 20, 5, 25)),
         Node("Settings", "Text", value=None, rect=(0, 30, 5, 35)),
     ]
     assert screens.mask_rects(nodes, NAMES) == [(0, 0, 5, 5), (0, 10, 5, 15), (0, 20, 5, 25)]
