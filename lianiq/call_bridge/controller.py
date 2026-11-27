@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass
 from typing import Protocol
 
 from lianiq.audio.endpoints import EndpointInventory
@@ -62,6 +64,23 @@ class RecoverablePort(Protocol):
     def rebind(self, endpoint: AudioEndpointRef) -> None: ...
 
 
+@dataclass(frozen=True, slots=True)
+class LaneStopResult:
+    """Which lanes ended within their bound (session-status-truthfulness §2.2.4)."""
+
+    outbound_stopped: bool
+    inbound_stopped: bool
+
+    @property
+    def stopped(self) -> bool:
+        return self.outbound_stopped and self.inbound_stopped
+
+    @property
+    def timed_out(self) -> tuple[LaneId, ...]:
+        flags = ((LaneId.OUTBOUND, self.outbound_stopped), (LaneId.INBOUND, self.inbound_stopped))
+        return tuple(lane for lane, stopped in flags if not stopped)
+
+
 class FullDuplexBridgeController:
     def __init__(
         self,
@@ -95,6 +114,7 @@ class FullDuplexBridgeController:
         self._lost_roles: set[EndpointRole] = set()
         self.state = BridgeState.STOPPED
         self.generation = 0  # the current start generation, stamped on every event
+        self._stop_threads: list[threading.Thread] = []
 
     @property
     def lost_roles(self) -> frozenset[EndpointRole]:
@@ -142,16 +162,54 @@ class FullDuplexBridgeController:
         self._set_state(BridgeState.RUNNING)
 
     def stop(self, timeout: float = 10.0) -> bool:
+        """Stop both captures, then both lanes in parallel; ``True`` if both lanes ended."""
         if self.state is BridgeState.STOPPED:
             return True
+        self.stop_captures()
+        return self.stop_lanes(timeout).stopped
+
+    def stop_captures(self) -> None:
+        """*Stopping*: close both captures (GUI thread, fast); the lanes still run."""
+        if self.state is BridgeState.STOPPED:
+            return
         self._set_state(BridgeState.STOPPING)
         self.outbound_capture.stop()
         self.inbound_capture.stop()
-        outbound_stopped = self.outbound_lane.stop(timeout=timeout)
-        inbound_stopped = self.inbound_lane.stop(timeout=timeout)
-        stopped = outbound_stopped and inbound_stopped
-        self._set_state(BridgeState.STOPPED if stopped else BridgeState.DEGRADED)
-        return stopped
+
+    def stop_lanes(self, timeout: float = 10.0) -> LaneStopResult:
+        """Stop both lanes in parallel, each bounded by ``timeout`` (call off the GUI thread).
+
+        A lane whose ``stop`` does not return within the bound counts as not stopped;
+        ``alive()`` stays true while its worker or its stop call still runs.
+        """
+        results: dict[LaneId, bool] = {}
+
+        def stop_one(lane_id: LaneId, lane: LanePort) -> None:
+            results[lane_id] = bool(lane.stop(timeout=timeout))
+
+        lanes = ((LaneId.OUTBOUND, self.outbound_lane), (LaneId.INBOUND, self.inbound_lane))
+        self._stop_threads = [
+            threading.Thread(
+                target=stop_one, args=pair, name=f"call-bridge-stop-{pair[0].value}", daemon=True
+            )
+            for pair in lanes
+        ]
+        for thread in self._stop_threads:
+            thread.start()
+        for thread in self._stop_threads:
+            thread.join(timeout=timeout + 0.5)  # also bounds a stop call that never returns
+        result = LaneStopResult(
+            results.get(LaneId.OUTBOUND, False), results.get(LaneId.INBOUND, False)
+        )
+        self._set_state(BridgeState.STOPPED if result.stopped else BridgeState.DEGRADED)
+        return result
+
+    def alive(self) -> bool:
+        """A lane worker or a lane stop call of this controller still runs (linger probe)."""
+        if any(thread.is_alive() for thread in self._stop_threads):
+            return True
+        lanes = (self.outbound_lane, self.inbound_lane)
+        return any(getattr(lane, "running", False) for lane in lanes)
 
     def endpoint_lost(self, role: EndpointRole) -> None:
         self._lost_roles.add(role)
