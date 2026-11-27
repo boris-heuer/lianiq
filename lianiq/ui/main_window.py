@@ -18,15 +18,17 @@ notice change is recorded in the local ``DiagnosticsLog`` (Settings › Diagnost
 
 WI-05 presentation (spec §2.3.7): ``theme.py`` styles the window; workspace content scrolls
 with Start/Stop and the strip outside it; Tab runs sidebar → workspace → strip.
+
+session-status-truthfulness WI-01: F8 starts the shown page's mode and F9 only stops the
+active session (``shell/start_dispatch.py``, which also binds the shortcuts).
 """
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QTimer, Signal, Slot
-from PySide6.QtGui import QCloseEvent, QKeySequence, QResizeEvent, QShortcut
+from PySide6.QtCore import Slot
+from PySide6.QtGui import QCloseEvent, QResizeEvent
 from PySide6.QtWidgets import QMainWindow
 
 from lianiq.config import AppConfig
@@ -39,8 +41,10 @@ from lianiq.ui.device_setup import DeviceSetup
 from lianiq.ui.main_window_layout import MainWindowLayout
 from lianiq.ui.main_window_services import MainWindowServices
 from lianiq.ui.notices import NoticeCenter
-from lianiq.ui.shell.session_owner import ActiveSessionOwner, SessionState
-from lianiq.ui.shell.workspaces import DEFAULT_ENTRIES, WorkspaceId
+from lianiq.ui.shell import start_dispatch
+from lianiq.ui.shell.session_owner import ActiveSessionOwner
+from lianiq.ui.shell.workspaces import WorkspaceId
+from lianiq.ui.ui_bridge import UiBridge
 from lianiq.ui.workspaces.call_bridge import CallBridgeWorkspace
 from lianiq.ui.workspaces.conversation import ConversationWorkspace
 from lianiq.ui.workspaces.language_packs import LanguagePacksWorkspace
@@ -49,24 +53,6 @@ from lianiq.ui.workspaces.settings import SettingsWorkspace
 
 DEFAULT_SIZE = (1280, 720)
 MINIMUM_SIZE = (850, 560)
-
-
-class UiBridge(QObject):
-    result = Signal(object, int)  # TranslationResult, owner generation at emit
-    held = Signal(object)
-    held_resolved = Signal()
-    error = Signal(str)
-    busy = Signal(bool)
-    level = Signal(float)
-    session_ready = Signal(int, bool, str)  # start generation, ready, error message
-    call_bridge_ready = Signal(int, bool, str)
-    call_bridge_event = Signal(object)
-    call_bridge_result = Signal(object)
-    call_bridge_level = Signal(object, float)
-    call_bridge_capture_fault = Signal(object, str)
-    pipeline_event = Signal(object, int)  # PipelineEvent, session generation
-    packs_event = Signal(object)  # CAP-0171 pack jobs
-    playback_state = Signal(str)  # CAP-0167 ``PlaybackState`` value of spoken output
 
 
 def _forward(workspace: str, name: str) -> property:
@@ -146,27 +132,7 @@ class MainWindow(MainWindowLayout, MainWindowServices, QMainWindow):
         self.call_bridge_panel.set_models_ready(True)
         self.conversation.connect_selection()
         self.meeting.connect_selection()
-        if "--diagnostic-wav" in sys.argv:
-            argument_index = sys.argv.index("--diagnostic-wav") + 1
-            if argument_index >= len(sys.argv):
-                QTimer.singleShot(
-                    0, lambda: self.show_error("--diagnostic-wav requires a WAV file path")
-                )
-            else:
-                self.conversation.diagnostic_wav = Path(sys.argv[argument_index])
-                QTimer.singleShot(0, self.start_listening)
-        elif "--diagnostic-auto-start" in sys.argv:
-            QTimer.singleShot(0, self.start_listening)
-
-        QShortcut(QKeySequence("F8"), self, activated=self.start_listening)
-        # F9 always targets the active session, whichever workspace is shown.
-        QShortcut(QKeySequence("F9"), self, activated=self.stop_active_session)
-        for index in range(len(DEFAULT_ENTRIES)):
-            QShortcut(
-                QKeySequence(f"Ctrl+{index + 1}"),
-                self,
-                activated=lambda index=index: self.navigation.select_index(index),
-            )
+        start_dispatch.install_shortcuts(self)  # F8, F9, Ctrl+1…7; diagnostic starts
 
     # The shell.
 
@@ -193,11 +159,13 @@ class MainWindow(MainWindowLayout, MainWindowServices, QMainWindow):
 
     @Slot()
     def stop_active_session(self) -> None:
-        """**Stop (F9)**: stop whichever mode holds the session; idle, stop the conversation."""
-        if self.session_owner.state is SessionState.IDLE:
-            self.stop_listening()  # as before the shell: F9 also clears a stopped conversation
-        else:
-            self.session_owner.stop()
+        """**Stop (F9)**: stop whichever mode holds the session; while idle nothing happens."""
+        start_dispatch.stop_active_session(self)
+
+    @Slot()
+    def start_current_page(self) -> None:
+        """**F8**: start the shown page's mode (``start_dispatch``)."""
+        start_dispatch.start_current_page(self)
 
     @Slot()
     def show_diagnostics(self) -> None:
@@ -221,8 +189,7 @@ class MainWindow(MainWindowLayout, MainWindowServices, QMainWindow):
 
     @Slot()
     def start_listening(self) -> None:
-        if self.current_workspace() is WorkspaceId.LISTEN:  # F8 on the Listen page
-            return self.listen.start()
+        """Start Conversation (scripts, ``--diagnostic-auto-start`` and tests)."""
         self.conversation.start_listening()
 
     @Slot()
