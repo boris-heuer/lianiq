@@ -64,7 +64,7 @@ def test_ac11_vor03_unclear_turn_is_held_until_translate_as_german_is_clicked(
     ]
     assert [button.accessibleName() for button in buttons] == [b.text() for b in buttons]
     assert spies.translator.calls == []  # nothing translated before the click
-    assert window.history == []
+    assert window.history == ()
 
     held = bar.turn
     spies.recognizer.results.append(transcript("Guten Morgen, das ist ein Test.", "de"))
