@@ -133,6 +133,9 @@ All notable user-visible changes are documented here.
 
 ### Fixed
 
+- Call Bridge: the packaged build ships the operator checklist, so the *Real-call checklist*
+  link shows there too; a clipping meter now names the volume to lower (lianiq#25).
+
 - F8 now starts the session of the page you are on (Conversation, Listen & translate,
   Meeting or Call Bridge) and shows a hint on the other pages instead of starting
   Conversation. F9 while nothing runs no longer reports *Ready* or *Capture stopped* or
