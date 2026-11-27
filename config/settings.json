@@ -68,7 +68,8 @@
         "engine": "sherpa-onnx",
         "speaker_id": 20,
         "length_scale": 1.15,
-        "num_threads": 4
+        "num_threads": 4,
+        "system_voice": "zh-CN"
       },
       "en": {
         "engine": "piper"

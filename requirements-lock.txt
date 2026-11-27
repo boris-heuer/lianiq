@@ -258,7 +258,6 @@ huggingface-hub==1.33.0 \
     --hash=sha256:04e434b06e100eddbce9a6e817d72693a7884b10a79bd67ab48080d5c07eb899 \
     --hash=sha256:367be21a201db9523eddf8aeac7048f2602c1b308691c97640d5e72ed188007e
     # via
-    #   lianiq (pyproject.toml)
     #   faster-whisper
     #   tokenizers
     #   transformers
@@ -1188,7 +1187,63 @@ typing-extensions==4.16.0 \
     #   anyio
     #   huggingface-hub
     #   torch
+    #   winrt-runtime
 wheel==0.48.0 \
     --hash=sha256:3217dcc807155e45db462d7ef2431f5ddda0d7273b700d05a67b271ceb1287ab \
     --hash=sha256:94800765601e9171bf5d58d066e640662842bcedcbab982b2c90787a2c987322
     # via lianiq (pyproject.toml)
+winrt-runtime==4.2.1 \
+    --hash=sha256:1537eb3fcc6b806e763dccba799c5a02766385db6e19aa2a8dec60be0675ff6c \
+    --hash=sha256:250f1ce8627f218fd7a450f04426d9c4ab2972237e0b47cf552fdce483b8d505 \
+    --hash=sha256:27d0b45adbcddeb3949b5f19ac3b1533664a5b3748dd4a8ca2fd5cebebf5830f \
+    --hash=sha256:2fb89c1378b11a1e7688f3cab6b89b4a6dae3084a3201e799c74c15563875c1b \
+    --hash=sha256:47fbf015d6582e78c60ca2017d53c12d4bff2beb70c59b75c55ed51d72155048 \
+    --hash=sha256:5bd607fe329d4823fe3278105eedc4194efd60bd1eaba18103a93b3b2c90fe4d \
+    --hash=sha256:63c1105fd84c96e5db9757364333645d4f5cfe56907d40538a1bb3b19394c32c \
+    --hash=sha256:7d513c7d6913640204dfb722a48333c0270f4d662baa3d548ce7f1f7714c3bbf \
+    --hash=sha256:7f1032ed4563a954520cda22510d5ad2c5be0e4223be1cff0f658010435106b6 \
+    --hash=sha256:8125fbc026783f8aa251e1bbeba54999b6a23e69dc4cedda2e97a9c43541b803 \
+    --hash=sha256:85ba6203ac77d553af16d2f1b49291c68455d0f82368398062773dc32dcebceb \
+    --hash=sha256:8f85ca1f370477581c0084239d8a0d62c3ce36015a05a40c0c125846141f0124 \
+    --hash=sha256:9fc72129a9f2000fefe3aeaa03432c60631a7a5a766fb53a4ba1f3bf1b8179ac \
+    --hash=sha256:a098bbf9aa226427213cb65c2271a7973ea6e630acba191cbda5ade48be74caa \
+    --hash=sha256:a74e160e7d6dce4f526fd8f8e9b1caef89c4bbd85635c86380900f09c604a701 \
+    --hash=sha256:b190496cde441d80b238878f760d958f7f65a21173a4faafc589b199f7b6b088 \
+    --hash=sha256:b3d19ff89d585088b28835302e32fff4d41c8f05a3aedb393ca119a1caf5f0d2 \
+    --hash=sha256:c2546d082c071cbf5d8eac6faf2189a4124b84b8d03efe5b2355aeb0eeaa5fca \
+    --hash=sha256:c4c82b8aace86435f833059d583679e5dfb55260328609ddb8a8ba26bd79036c \
+    --hash=sha256:c538be372db10a2864775acc5becb8e00c296d27a7e164ae6c3f2c11cd546697 \
+    --hash=sha256:da9b2e9629fda87d85fe6182329e9198237f40c6f355bc830072db853c27ee15 \
+    --hash=sha256:ea34b6b9a19409225b0f798e16201a08c1eb48b132a18fb80b0b952ac4c0548e
+    # via
+    #   lianiq (pyproject.toml)
+    #   winrt-windows-foundation
+    #   winrt-windows-foundation-collections
+    #   winrt-windows-media-speechsynthesis
+    #   winrt-windows-storage-streams
+winrt-windows-foundation==4!10.0.28000.2957 \
+    --hash=sha256:0669de7ce480806a0f9a46d005837799e37f1738911b54c4bc04788b37974e69 \
+    --hash=sha256:6f7d8e932e283991cd931741f84dc7c2e8bc595b4df09de73d16c1d580fc678a
+    # via
+    #   lianiq (pyproject.toml)
+    #   winrt-windows-foundation-collections
+    #   winrt-windows-media-speechsynthesis
+    #   winrt-windows-storage-streams
+winrt-windows-foundation-collections==4!10.0.28000.2957 \
+    --hash=sha256:0401c1b6ed512d1fdad8ba1571698e9000ebee6a69781db9a01994ffcc54a503 \
+    --hash=sha256:38989873bbdace2346d24168ceb66359800b7429128ea2ef1a36da55b255af1e
+    # via
+    #   lianiq (pyproject.toml)
+    #   winrt-windows-foundation
+    #   winrt-windows-media-speechsynthesis
+    #   winrt-windows-storage-streams
+winrt-windows-media-speechsynthesis==4!10.0.28000.2957 \
+    --hash=sha256:adccd39556641999f29d0125081831246bb31f6b01ce461d6a3106fc21bd17e0 \
+    --hash=sha256:d000f37b812745fa579adc3cfa07872bb004b2c49a67735cad09090c58dd797a
+    # via lianiq (pyproject.toml)
+winrt-windows-storage-streams==4!10.0.28000.2957 \
+    --hash=sha256:6284341b4b01ab872007def0b8d29bf30d84d46f6922f6e42be1d738d6bf2ff7 \
+    --hash=sha256:e113832320f2e7f8b09cedfb400cb7eaf0ac769ad1f2038ddbe88801497916c4
+    # via
+    #   lianiq (pyproject.toml)
+    #   winrt-windows-media-speechsynthesis

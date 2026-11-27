@@ -1,4 +1,4 @@
-"""Only Piper and sherpa-onnx synthesize speech (CAP-0167 AC-21, static half).
+"""Only Piper, sherpa-onnx and the installed Windows voice synthesize speech (CAP-0167 AC-21, static half).
 
 Every import in ``lianiq/`` (module level or inside a function) is read with ``ast``. A
 third-party package outside ``THIRD_PARTY`` fails, so a new engine or cloud SDK cannot slip
@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TTS_MODULES = {
     "piper": "lianiq/tts/piper_engine.py",
     "sherpa_onnx": "lianiq/tts/sherpa_onnx_engine.py",
+    "winrt": "lianiq/tts/system_voice.py",  # installed Windows voice (lianiq#81)
 }
 # Every third-party package lianiq imports, by role. Speech synthesis: only TTS_MODULES.
 THIRD_PARTY = {

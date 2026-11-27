@@ -29,13 +29,15 @@ class VoiceEngineConfig:
     """Engine of one language's voice; a language without an entry uses Piper.
 
     ``speaker_id``, ``length_scale`` and ``num_threads`` apply to sherpa-onnx voices only;
-    Piper voices use ``tts.length_scale``.
+    Piper voices use ``tts.length_scale``. ``system_voice`` is a Windows voice language tag
+    (for example ``zh-CN``) spoken in place of this voice when installed; empty: never.
     """
 
     engine: str = "piper"
     speaker_id: int = 0
     length_scale: float = 1.0
     num_threads: int = 4
+    system_voice: str = ""
 
     def __post_init__(self) -> None:
         if self.engine not in VOICE_ENGINES:
@@ -46,6 +48,8 @@ class VoiceEngineConfig:
             raise ValueError("tts length_scale must be positive")
         if self.num_threads <= 0:
             raise ValueError("tts num_threads must be positive")
+        if not isinstance(self.system_voice, str):
+            raise ValueError("tts system_voice must be a language tag or empty")  # noqa: TRY004
 
 
 @dataclass(slots=True)

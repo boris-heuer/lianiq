@@ -154,7 +154,12 @@ can also get each model from inside the app, by download or offline import (see
 [Language packs](#language-packs)). Existing downloads are reused
 from the Hugging Face cache. Spoken output is off by default (`languages.output` is `text`). The
 Mandarin voice is the sherpa-onnx model in `models/sherpa/vits-icefall-zh-aishell3/`
-(`tts.engines["zh-Hans"]`; see [MODEL_LICENSES.md](MODEL_LICENSES.md)); German and English use Piper. To
+(`tts.engines["zh-Hans"]`; see [MODEL_LICENSES.md](MODEL_LICENSES.md)); German and English use Piper.
+For a clearer Mandarin voice, install the Windows speech voice once: **Settings → Time & language →
+Language & region → Add a language → Chinese (Simplified, China)** with *Text-to-speech* (or
+**Speech → Add voices**). Lianiq then speaks Mandarin with that installed Windows voice
+(`tts.engines["zh-Hans"].system_voice` = `zh-CN`, offline, 16 kHz) and falls back to the bundled
+8 kHz voice when it is missing; set `system_voice` to `""` to always use the bundled voice. To
 validate an existing installation without requesting models:
 
 ```powershell
@@ -571,7 +576,8 @@ installed. Close Lianiq before replacing the version it runs from.
 - German voice: `rhasspy/piper-voices`, `de_DE-thorsten-medium`
 - English voice: `rhasspy/piper-voices`, `en_US-ljspeech-high` (LJ Speech, public domain)
 - Mandarin voice: sherpa-onnx `vits-icefall-zh-aishell3` (pinned release archive; licences and
-  open provenance questions in [MODEL_LICENSES.md](MODEL_LICENSES.md))
+  open provenance questions in [MODEL_LICENSES.md](MODEL_LICENSES.md)); an installed Windows
+  Chinese (Simplified) voice is used in front of it (provided by Windows, not shipped by Lianiq)
 
 The licence of each pack, as the pack details show it, is listed in
 [MODEL_LICENSES.md](MODEL_LICENSES.md#language-pack-licences).

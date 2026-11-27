@@ -32,6 +32,11 @@ dependencies = [
   "sounddevice>=0.5,<1",
   "torch>=2.5,<3",
   "transformers>=5.10.1,<6",
+  "winrt-runtime>=3,<5; sys_platform == 'win32'",
+  "winrt-Windows.Foundation>=3; sys_platform == 'win32'",
+  "winrt-Windows.Foundation.Collections>=3; sys_platform == 'win32'",
+  "winrt-Windows.Media.SpeechSynthesis>=3; sys_platform == 'win32'",
+  "winrt-Windows.Storage.Streams>=3; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
