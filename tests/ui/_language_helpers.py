@@ -61,6 +61,8 @@ def press(widget, key) -> None:
 
 
 def start(window) -> None:
+    # A previous Stop drains on its own thread (session-status-truthfulness WI-02).
+    assert wait_until(lambda: not window.conversation.stopping)
     click(window.start_button)
     assert wait_until(lambda: window.capture.running)
 

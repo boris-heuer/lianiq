@@ -105,7 +105,6 @@ class MainWindow(MainWindowLayout, MainWindowServices, QMainWindow):
         self.persist_settings = persist_settings
         self.meeting_factory = meeting_factory  # builds the MeetingController at Start
         self.bridge = UiBridge()
-        self.bridge.error.connect(self.show_error)
         self.notices = NoticeCenter()
         self.diagnostics = DiagnosticsLog()
         self.notices.subscribe(self._notice_changed)
@@ -181,10 +180,14 @@ class MainWindow(MainWindowLayout, MainWindowServices, QMainWindow):
 
     @Slot(str)
     def show_error(self, message: str, workspace: WorkspaceId = WorkspaceId.CONVERSATION) -> None:
-        """Any other failure: a warning notice in ``workspace`` (no longer the status bar)."""
-        self.post_notice(catalog.error(workspace, message, self.notice_source(workspace)))
+        """Any other failure: a warning notice in ``workspace`` (no longer the status bar).
+
+        Conversation shows the sticky *Error — see notice* itself while a session is active.
+        """
+        notice = catalog.error(workspace, message, self.notice_source(workspace))
+        self.post_notice(notice)
         if workspace is WorkspaceId.CONVERSATION:
-            self.state_label.setText("Error")
+            self.conversation.show_failure(notice.key)
 
     # Established entry points, used by the shortcuts, scripts and tests.
 
@@ -195,7 +198,9 @@ class MainWindow(MainWindowLayout, MainWindowServices, QMainWindow):
 
     @Slot()
     def stop_listening(self) -> None:
+        """Stop Conversation and wait for its stop thread (scripts and tests; F9 never waits)."""
         self.conversation.stop_listening()
+        self.conversation.wait_stopped()
 
     @Slot()
     def start_call_bridge(self) -> None:
@@ -233,7 +238,7 @@ class MainWindow(MainWindowLayout, MainWindowServices, QMainWindow):
         self.text_translation.shutdown()
         self.listen.shutdown()
         self.stop_call_bridge()
-        self.stop_listening()
+        self.conversation.stop_listening()  # the drain runs on its own thread
         if self.persist_settings:
             self.call_bridge_panel.apply_to_config()
             self.conversation.save_routing()

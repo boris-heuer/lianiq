@@ -1,4 +1,7 @@
-"""Start and Stop of ``ConversationWorkspace`` (CAP-0168 file-size split)."""
+"""Start of ``ConversationWorkspace`` (CAP-0168 file-size split).
+
+The asynchronous Stop and the state line moved to ``conversation_status`` (WI-02).
+"""
 
 from __future__ import annotations
 
@@ -11,6 +14,7 @@ from lianiq.call_bridge.contracts import EndpointFlow
 from lianiq.languages.errors import ModeUnavailableError
 from lianiq.languages.modes import SessionPair
 from lianiq.packs.protection import ActiveUsage
+from lianiq.ui import notice_catalog as catalog
 from lianiq.ui import strings
 from lianiq.ui.shell.session_owner import SessionBusy, SessionState
 from lianiq.ui.shell.workspaces import WorkspaceId, session_busy_message
@@ -25,7 +29,7 @@ class ConversationFlow:
             utterance = read_pcm16_mono(path, self.config.audio.sample_rate)
             self.runner.submit(utterance)
         except Exception as exc:  # noqa: BLE001 - diagnostic boundary reports all failures.
-            self.host.bridge.error.emit(f"Diagnostic WAV failed: {exc}")
+            self.host.bridge.error.emit(f"Diagnostic WAV failed: {exc}", self.live_generation)
 
     @Slot()
     def start_listening(self) -> None:
@@ -69,7 +73,7 @@ class ConversationFlow:
         self._pending_session = session
         self.set_session_controls_enabled(False)
         self.start_button.setEnabled(False)
-        self.state_label.setText("Loading models …")
+        self.show_activity()  # *Loading models …*
         self.host.statusBar().showMessage("Loading the models the selected mode requires …")
         self.host.prepare_in_background(session, self.host.bridge.session_ready, plan)
 
@@ -84,50 +88,32 @@ class ConversationFlow:
             spoken = self.pipeline.spoken
             if spoken is not None:  # the languages ``prepare`` bound for this session
                 spoken.open(self.pipeline.spoken_languages, self.pipeline.output_device)
+            self.live_generation = self._generation  # stamped on the worker's signals
             self.session_controller.start(session)
         except ModeUnavailableError as exc:
+            self.live_generation = 0
             self.owner.mark_idle(self._generation)
             self.start_button.setEnabled(True)
             self.set_session_controls_enabled(True)
             self.host.show_unavailable(exc.missing)
             return
         except Exception as exc:  # noqa: BLE001 - GUI boundary reports dependency/device failures.
+            self.live_generation = 0
             self.owner.mark_idle(self._generation)
             self.start_button.setEnabled(True)
             self.set_session_controls_enabled(True)
             self.notices.start_failed(str(exc))
+            self._sticky.add(catalog.start_failed_key(WorkspaceId.CONVERSATION))
+            self.show_activity()  # *Error — see notice* while that notice is open
             return
         self.host.device_setup.session_started()
         self.owner.mark_running(self._generation)
         self.notices.running()
         self.start_button.setEnabled(False)
         self.set_devices_enabled(False)
-        self.state_label.setText("Listening …")
+        self.show_activity()  # *Listening …*
         self.host.statusBar().showMessage("Offline capture is active")
         self.refresh_playback()  # nothing to replay yet (AC-12)
-
-    @Slot()
-    def stop_listening(self) -> None:
-        self.starting = False
-        self._pending_session = None
-        self.diagnostic_wav = None
-        # Nothing is spoken after Stop; queued turns finish as text with their bound pair
-        # and unresolved held turns are discarded.
-        if self.pipeline.spoken is not None:
-            self.pipeline.spoken.close()
-        report = self.session_controller.stop()
-        self.held_turn_bar.clear()
-        if self.owner.active is WorkspaceId.CONVERSATION:
-            self.owner.mark_idle(self._generation)
-        call_bridge = self.host.call_bridge
-        self.start_button.setEnabled(not call_bridge.active())
-        self.set_devices_enabled(True)
-        self.set_session_controls_enabled(call_bridge.controller is None)
-        self.level_bar.setValue(0)
-        self.state_label.setText("Ready")
-        self.host.statusBar().showMessage("Capture stopped")
-        self.refresh_playback()  # ``close`` cleared the last spoken translation (AC-12)
-        self.notices.stopped(len(report.discarded))
 
     def _session_changed(self, state: SessionState, active: WorkspaceId | None) -> None:
         """While another mode holds the session, **Start** says why it is disabled."""

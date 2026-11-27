@@ -4,7 +4,8 @@
 session whose requirements are unmet (``ModeUnavailableError``), ``change`` while running
 raises ``PairLockedError``, and ``stop`` stops capture, finishes the already-queued turns
 with the pair they were captured under, clears the translation context, discards every
-unresolved held turn and only then unlocks.
+unresolved held turn and only then unlocks. Its ``StopReport`` says whether the worker
+timed out and probes whether it is still alive (session-status-truthfulness §3.1).
 """
 
 from __future__ import annotations
@@ -35,12 +36,23 @@ class CaptureControl(Protocol):
     def stop(self) -> None: ...
 
 
+def _ended() -> bool:
+    return False
+
+
 @dataclass(frozen=True, slots=True)
 class StopReport:
     """What ``SessionController.stop`` could not keep."""
 
     dropped: int  # queued turns not finished within the flush timeout
     discarded: tuple[HeldTurn, ...]  # unresolved held turns, by capture time
+    timed_out: bool = False  # the worker was still processing a turn at the flush bound
+    alive: Callable[[], bool] = _ended  # the lingering-worker probe (``owner.linger``)
+
+    @property
+    def not_finished(self) -> int:
+        """ "{n} not finished": the dropped turns plus the in-flight one of a timeout."""
+        return self.dropped + (1 if self.timed_out else 0)
 
 
 class SessionController:
@@ -110,18 +122,19 @@ class SessionController:
         The reset, the discard of held turns (releasing their audio) and the unlock run
         even if stopping capture or the worker fails; that error is re-raised afterwards.
         """
-        dropped = 0
+        dropped, timed_out = 0, False
         try:
             try:
                 if self.capture is not None:
                     self.capture.stop()
             finally:
                 dropped = self.runner.stop(timeout=self.flush_timeout)
+                timed_out = self.runner.alive()
         finally:
             self.pipeline.reset_context()
             discarded = self.pipeline.discard_held()
             self._running = False
-        return StopReport(dropped=dropped, discarded=discarded)
+        return StopReport(dropped, discarded, timed_out, self.runner.alive)
 
     def _select(self, session: SessionPair) -> None:
         if session != self._session:

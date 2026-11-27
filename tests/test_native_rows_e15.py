@@ -29,6 +29,7 @@ class SpeakingApp(FakeApp):
         super().__init__(**knobs)
         self.voices = dict.fromkeys(self.voices, False)  # E-03 left both switches off
         self.speakers, self.speaking = "Follow Windows default", False
+        self.stopped = False  # a session was stopped: the state reads *Stopped* (WI-02)
 
     def write(self, line: str) -> None:
         path = e15.log_path(self.ctx)
@@ -43,7 +44,8 @@ class SpeakingApp(FakeApp):
             else n
             for n in super()._conversation(top)
         ]
-        state = PAUSED if self.speaking else ("Listening …" if self.running else "Ready")
+        idle = "Stopped · 2 turns kept" if self.stopped else "Ready"  # Ready: first launch only
+        state = PAUSED if self.speaking else ("Listening …" if self.running else idle)
         return [
             *nodes,
             dataclasses.replace(nodes[0], name=state, control_type="Text"),
@@ -67,6 +69,7 @@ class SpeakingApp(FakeApp):
         if text == "{F8}" and self.running:
             self.write("Microphone capture started (48000 Hz)")
         elif text == "{F9}" and was_running and not self.running:
+            self.stopped = True
             self.write("Microphone capture stopped")
             if self.speaking and not self.knobs.get("played_through"):
                 self.write("Audio playback stopped: language=zh-Hans")

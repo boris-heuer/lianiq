@@ -175,6 +175,7 @@ def test_replay_is_disabled_while_another_usage_holds_the_session_or_without_spe
     start(window)
     two_turns(window, spies, player)
     window.stop_active_session()
+    assert wait_until(lambda: not window.conversation.stopping)  # the stop thread (WI-02)
     view = conv.view(window)
     owner = window.session_owner
     generation = owner.request_start(WorkspaceId.MEETING)

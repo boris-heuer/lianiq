@@ -219,16 +219,16 @@ class ConversationVoice:
             return  # the pause of another page ended
         self.voice_paused = paused
         self.capture.set_muted(paused)
-        self.host.bridge.playback_state.emit(state.value)
+        self.host.bridge.playback_state.emit(state.value, self.spoken_generation())
 
-    @Slot(str)
-    def _show_playback_state(self, value: str) -> None:
+    @Slot(str, int)
+    def _show_playback_state(self, value: str, generation: int) -> None:
+        if not self.current(generation):
+            return  # the playback of an ended session
         self.playback_state = PlaybackState(value)
-        if self.playback_state is PlaybackState.IDLE:
-            self.state_label.setText(self.activity_text())
-        else:
+        if self.playback_state is not PlaybackState.IDLE:
             self.level_bar.setValue(0)
-            self.state_label.setText(strings.VOICE_MIC_PAUSED)
+        self.show_activity()  # ``VOICE_MIC_PAUSED`` while paused; a sticky error stays
         self.refresh_playback()
 
     def can_replay(self) -> bool:

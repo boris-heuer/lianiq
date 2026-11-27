@@ -210,6 +210,7 @@ def test_ac13_pair_routing_switch_and_voice_output_are_locked_while_running(wind
         window.session_controller.change(other)
 
     click(window.stop_button)
+    assert wait_until(lambda: not window.conversation.stopping)  # the stop thread (WI-02)
 
     for control in session_controls:
         assert control.isEnabled()

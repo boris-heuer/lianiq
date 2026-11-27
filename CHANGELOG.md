@@ -138,6 +138,12 @@ All notable user-visible changes are documented here.
   Conversation. F9 while nothing runs no longer reports *Ready* or *Capture stopped* or
   clears an error. A second Stop while stopping does nothing, a failed stop ends the session
   with a notice, and a new Start does not close unread lost-turn warnings any more.
+- Conversation Stop no longer freezes the window: it shows *Stopping…* at once and finishes
+  the queued turns in the background, then reads *Stopped · {n} turns kept* (*Ready* only
+  on first launch). A stop that runs out of time reads *Stopped — {n} not finished* with a
+  notice, and Start waits until the unfinished turn has ended. A failed turn keeps
+  *Error — see notice* until its notice is closed, and late results of a stopped session
+  are never shown.
 - The voice warm-up at the start of a session, including **Start meeting**, now synthesises
   in memory and no longer writes a temporary WAV file.
 - A Bluetooth headset whose PortAudio name carries a suffix that Windows does not store, such

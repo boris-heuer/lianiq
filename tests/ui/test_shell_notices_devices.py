@@ -63,6 +63,7 @@ def test_ac24_microphone_lost_stops_the_session_and_reconnect_restores_start(
     one_turn(window, spies)
     plug(monkeypatch, SPEAKERS)  # the headset is unplugged
     window.conversation.notices.microphone_lost("USB Headset")
+    assert wait_until(lambda: not window.conversation.stopping)  # the stop thread (WI-02)
 
     assert not window.capture.running and window.session_owner.state.value == "idle"
     assert len(window.history) == 1 and conv.originals(window) == ["German: Guten Tag"]

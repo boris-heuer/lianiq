@@ -29,6 +29,14 @@ from tests.ui._language_helpers import (
 )
 from tests.ui.test_voice_output_playback import StoppablePlayer, gate_synthesis
 
+
+def stopped_text(window) -> str:
+    """After a session: *Stopped · {n} turns kept*, not *Ready* (session-status-truthfulness)."""
+    from lianiq.ui import strings_session
+
+    return strings_session.counted(strings_session.STATE_STOPPED, len(window.history))
+
+
 # AC-22 ------------------------------------------------------------------------------------
 
 
@@ -76,6 +84,7 @@ def test_ac22_later_turns_flow_while_held_and_stop_discards_the_unresolved_turn(
     assert wait_until(window.held_turn_bar.isVisible)
 
     click(window.stop_button)
+    assert wait_until(lambda: not window.conversation.stopping)  # the stop thread (WI-02)
 
     assert not window.held_turn_bar.isVisible()
     assert window.pipeline.held_turns() == ()  # its retained audio is released
@@ -110,6 +119,7 @@ def test_a_resolution_still_running_at_stop_leaves_no_result(window, spies) -> N
     assert entered.wait(timeout=2.0)
 
     click(window.stop_button)
+    assert wait_until(lambda: not window.conversation.stopping)  # the stop thread (WI-02)
     assert not window.held_turn_bar.isVisible()
     release.set()
 
@@ -178,11 +188,12 @@ def test_stop_during_playback_ends_it_and_clears_replay(window, spies, monkeypat
     assert wait_until(player.playing.is_set)
 
     click(window.stop_button)  # AC-10
+    assert wait_until(lambda: not window.conversation.stopping)  # the stop thread (WI-02)
 
     assert player.released.is_set() and not window.capture.running
     assert window.pipeline.spoken.last_spoken is None
     assert wait_until(lambda: window.conversation.playback_state.value == "idle")
-    assert window.state_label.text() == "Ready" and window.level_bar.value() == 0
+    assert window.state_label.text() == stopped_text(window) and window.level_bar.value() == 0
     replay = window.voice_rows.replay_button
     assert not replay.isEnabled() and replay.toolTip() == strings.VOICE_REPLAY_EMPTY
     assert not window.voice_rows.stop_playback_button.isEnabled()
@@ -197,7 +208,8 @@ def test_stop_during_synthesis_never_plays_it(window, spies, monkeypatch) -> Non
     threading.Timer(0.2, release.set).start()  # the synthesis ends while Stop waits for it
 
     click(window.stop_button)  # AC-10
+    assert wait_until(lambda: not window.conversation.stopping)  # the stop thread (WI-02)
 
     assert wait_until(lambda: window.conversation.playback_state.value == "idle")
-    assert player.played == [] and window.state_label.text() == "Ready"
+    assert player.played == [] and window.state_label.text() == stopped_text(window)
     assert not window.capture.running

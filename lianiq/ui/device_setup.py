@@ -119,7 +119,7 @@ class DeviceSetup(DeviceRefresh, DeviceWatch, DeviceTests, QObject):
         try:
             self.state.load()
         except (OSError, RuntimeError, ValueError) as exc:
-            self.host.bridge.error.emit(str(exc))
+            self.host.show_error(str(exc))
             return False
         inventory, audio = self.state.inventory, self.config.audio
         for flow in (CAPTURE, RENDER):

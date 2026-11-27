@@ -190,6 +190,11 @@ class PipelineRunner:
         self._thread = None
         return 0
 
+    def alive(self) -> bool:
+        """The worker thread still runs (a stop that timed out leaves it finishing a turn)."""
+        thread = self._thread
+        return thread is not None and thread.is_alive()
+
     def wait_idle(self, timeout: float) -> bool:
         """Join the worker; True when it has ended (at once if it already had)."""
         thread = self._thread
