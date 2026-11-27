@@ -22,6 +22,7 @@ from tests.ui._call_bridge_window import (
     FakePlaybackStream,
     assign,
     bridge_notice,
+    bridge_stopped,
     build_call_bridge_window,
     call_bridge_window,  # noqa: F401
     click,
@@ -111,6 +112,7 @@ def test_ac09_click_start_runs_local_to_remote_and_remote_to_local_for_the_sessi
     assert window.history == () and window.conversation.turns.rows == ()
 
     click(window.call_bridge_panel.stop_button)
+    assert bridge_stopped(window)
     assert window.call_bridge_controller is None
     assert not controller.outbound_lane.running and not controller.inbound_lane.running
 
@@ -231,6 +233,7 @@ def test_ac17_ac18_switches_off_both_lanes_speak_with_the_options_bound_at_start
     assert spoken_rates(window, spies, window.call_bridge_controller) == [(ZH, 1.25), (DE, 1.0)]
 
     click(window.call_bridge_panel.stop_button)
+    assert bridge_stopped(window)
     assert conversation.voice_rows.options_button(ZH).isEnabled()
     assert conversation.voice_rows.options_button(ZH).toolTip() == ""
     click(window.call_bridge_panel.start_button)
