@@ -36,7 +36,7 @@ class FakeCapture:
     def __init__(self, on_utterance, on_error) -> None:
         self.on_utterance, self.on_error = on_utterance, on_error
         self.device: int | None = None
-        self.running = False
+        self.running = self.muted = False
 
     def start(self) -> None:
         self.running = True
@@ -44,8 +44,13 @@ class FakeCapture:
     def stop(self) -> None:
         self.running = False
 
+    def set_muted(self, muted: bool) -> None:
+        self.muted = muted
+
     def speak(self) -> None:
-        """One segment from the audio callback thread."""
+        """One segment from the audio callback thread; a muted capture delivers none."""
+        if self.muted:
+            return
         thread = threading.Thread(target=self.on_utterance, args=(utterance(),))
         thread.start()
         thread.join()
