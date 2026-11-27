@@ -1,7 +1,7 @@
 """The Conversation turns and the ``TranscriptHost`` of its paired view (paired-transcript §3.4).
 
 ``ConversationWorkspace`` base (file-size split). Completed turns go into ``turns``
-(``TurnLog``, in memory only) at their capture time, with the owner generation the runner
+(``TurnLog``, in memory only) at their capture time, with the session generation the runner
 bound when it emitted the result. A normal **Stop** does not finish the session in the log,
 so queued turns that complete after it still appear. Only **New conversation** finishes it:
 it ends a playback and stops a running or starting session first, then clears the log, so
@@ -31,6 +31,8 @@ class ConversationTranscript(ReplayHost):
 
     @Slot(object, int)
     def _show_result(self, result: TranslationResult, generation: int) -> None:
+        if not self.current(generation):
+            return  # a late result of an ended session (session-status-truthfulness AC-09)
         name = self.pipeline.registry.display_name
         source, target = name(result.source_language), name(result.target_language)
         self.paired_view.sync((self.turns.add_result(result, generation),))
