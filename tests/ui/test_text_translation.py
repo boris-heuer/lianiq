@@ -98,12 +98,12 @@ def test_ac11_ac12_empty_and_over_limit_block_translate(window, spies) -> None: 
     workspace = page(window)
     assert not workspace.translate_button.isEnabled()
     assert workspace.readiness_label.text() == strings.TEXT_EMPTY_REASON
-    type_text(workspace, "x" * 5_001)
+    type_text(workspace, "x" * 50_001)
     assert not workspace.translate_button.isEnabled()
-    assert workspace.readiness_label.text().startswith("Too long to translate: 5001")
+    assert workspace.readiness_label.text().startswith("Too long to translate: 50001")
     ctrl_return(workspace)
     assert spies.translator is None
-    assert len(workspace.source_edit.toPlainText()) == 5_001  # never cut
+    assert len(workspace.source_edit.toPlainText()) == 50_001  # never cut
 
 
 def test_ac22_copy_writes_exactly_the_texts(window) -> None:
