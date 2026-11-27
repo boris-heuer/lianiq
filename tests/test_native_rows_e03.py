@@ -66,7 +66,7 @@ def test_e03_passes_and_stores_the_transcript_as_sha256_only(ctx, monkeypatch) -
     ]
     text = json.dumps(row.to_dict(), ensure_ascii=False)
     assert "Guten Morgen" not in text and "早上好" not in text
-    digest = hashlib.sha256(f"{ORIGINAL}\n{TRANSLATION}".encode()).hexdigest()
+    digest = hashlib.sha256(f"12:00:00, {ORIGINAL}. {TRANSLATION}".encode()).hexdigest()
     assert {c.name: c.detail for c in row.checks}["transcript-sha256-unchanged"] == (
         f"sha256={digest}"
     )
@@ -91,7 +91,7 @@ def test_e03_checks_the_phrase_before_any_app_starts(tmp_path, monkeypatch) -> N
     ("knobs", "check"),
     [
         ({"no_turn": True}, "turn-in-original-and-translation"),
-        ({"missing": {"Translation"}}, "turn-in-original-and-translation"),
+        ({"missing": {"Transcript"}}, "turn-in-original-and-translation"),
         ({"missing": {"Conversation running", "Active session"}}, "session-running"),
         ({"bridge_start_enabled": True}, "call-bridge-start-disabled-busy"),
         ({"missing": {"Start call bridge"}}, "call-bridge-start-disabled-busy"),
