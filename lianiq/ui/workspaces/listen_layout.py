@@ -2,7 +2,8 @@
 
 ``ListenWorkspace`` base (file-size split): the setup row (source, swap, target,
 microphone), the readiness line with its link, the action row (Start, state, level) and the
-transcript list, then *New segments below* with **Jump to latest** and the transcript actions.
+``PairedTranscriptView`` (list, *New turns below* with **Jump to latest**, per-turn copy and
+the transcript actions with **Clear transcript**).
 Stock widgets styled by ``theme.py``; every control has an accessible name
 equal to its label; Tab follows creation order: setup row → Start → transcript → actions.
 """
@@ -13,7 +14,6 @@ from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
     QLabel,
-    QListView,
     QProgressBar,
     QPushButton,
     QVBoxLayout,
@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from lianiq.ui import strings
+from lianiq.ui.transcript.view import PairedTranscriptView
 from lianiq.ui.workspaces.text_translation_layout import fill_languages
 
 
@@ -89,28 +90,16 @@ class ListenLayout:
         actions.addStretch(1)
         layout.addLayout(actions)
 
-        self.empty_label = QLabel(strings.LISTEN_EMPTY)
-        self.empty_label.setObjectName("listenEmpty")
-        self.empty_label.setWordWrap(True)
-        self.transcript_view = QListView()
-        self.transcript_view.setAccessibleName(strings.LISTEN_TRANSCRIPT)
-        self.transcript_view.setWordWrap(True)
-        self.transcript_view.setUniformItemSizes(False)
-        self.transcript_view.setSpacing(4)
-        layout.addWidget(self.empty_label)
-        layout.addWidget(self.transcript_view, 1)
-
-        bottom = QHBoxLayout()
-        self.new_below_label = QLabel(strings.LISTEN_NEW_BELOW)
-        self.new_below_label.setObjectName("listenNewBelow")
-        self.jump_button = _button(strings.LISTEN_JUMP)
-        self.copy_button = _button(strings.LISTEN_COPY)
-        self.export_button = _button(strings.LISTEN_EXPORT)
-        for widget in (self.new_below_label, self.jump_button):
-            bottom.addWidget(widget)
-        bottom.addStretch(1)
-        bottom.addWidget(self.copy_button)
-        bottom.addWidget(self.export_button)
-        layout.addLayout(bottom)
+        # The paired transcript view (paired-transcript spec §3.4): list, Jump, per-turn
+        # copy actions and Copy, Export and Clear transcript.
+        view = PairedTranscriptView(
+            self.controller.transcript, self.registry, strings.TRANSCRIPT_CLEAR, self
+        )
+        view.set_placeholder(strings.LISTEN_EMPTY)
+        layout.addWidget(view, 1)
+        self.paired_view, self.model, self.transcript_view = view, view.model, view.list
+        self.empty_label, self.new_below_label = view.placeholder, view.new_below_label
+        self.jump_button, self.clear_button = view.jump_button, view.clear_button
+        self.copy_button, self.export_button = view.copy_all_button, view.export_button
         self.page = page
         return page
