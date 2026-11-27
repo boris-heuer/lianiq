@@ -15,6 +15,7 @@ from lianiq.ui.call_bridge_panel import CallBridgePanel
 from lianiq.ui.shell.scroll import workspace_scroll
 from lianiq.ui.shell.session_owner import SessionBusy, SessionState
 from lianiq.ui.shell.workspaces import WorkspaceId, session_busy_message
+from lianiq.ui.transcript.replay import end_playback
 
 CALL_BRIDGE = WorkspaceId.CALL_BRIDGE
 
@@ -118,6 +119,7 @@ class CallBridgeLifecycle:
         except Exception as exc:  # noqa: BLE001 - GUI boundary reports setup failures.
             self._error(str(exc))
             return
+        end_playback(host, WorkspaceId.CALL_BRIDGE)  # a transcript replay ends first
         try:
             self._generation = self.owner.request_start(WorkspaceId.CALL_BRIDGE)
         except SessionBusy as busy:
