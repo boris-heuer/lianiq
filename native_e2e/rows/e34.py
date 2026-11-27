@@ -48,7 +48,7 @@ def _still(nodes: list[Node], t: Any) -> bool:
         for meter in (t.CB_LEVEL_MIC, t.CB_LEVEL_CALL)
         for caption in (t.CB_LEVEL_SIGNAL, t.CB_LEVEL_CLIPPING)
     }
-    return None not in bars and not any(n.visible and n.name in loud for n in nodes)
+    return None not in bars and not any(n.visible and n.name.startswith(tuple(loud)) for n in nodes)
 
 
 def _render_sessions(app: Any) -> int | None:
