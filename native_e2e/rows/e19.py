@@ -8,10 +8,10 @@ pair's packs *Validated*); ``run`` returns the row E-18 left in ``ctx.state["e19
 (F8); while the models load every shown warm-up text ("Loading models …", the status bar's
 "Loading the models …"; hard-coded in ``ui/workspaces/conversation_flow.py``) is read: at
 least one must be seen and none may show a percentage. After "Conversation running" the WAV
-is played into "CABLE Input"; a turn in *Original* and *Translation* must appear (300 s;
+is played into "CABLE Input"; a turn in the *Transcript* list must appear (300 s;
 SHA-256 only, the texts go to ``ctx.secrets``); F9 must end the session. The app
 interpreter's non-loopback connection count since the row started must be 0. One masked
-screenshot after the stop (both panels masked).
+screenshot after the stop (the *Transcript* list masked).
 """
 
 from __future__ import annotations
