@@ -185,4 +185,4 @@ class MeetingLayout:
         for button in self.table_mode_buttons.values():
             button.setEnabled(not busy)
             button.setToolTip(strings.MEETING_OPTIONS_LOCKED if busy else "")
-        self.end_button.setEnabled(busy)
+        self.end_button.setEnabled(busy and not self.stopping)  # disabled while draining
