@@ -152,7 +152,7 @@ def screenshot(ctx: RunContext, app, s: Any) -> tuple[Check, Any]:
     """Masked like ``ui.screenshot``, with the whole *Transcript* list masked too."""
     names = [*audio.endpoint_names(), *ui.transcript_needles(ctx.state.get("transcripts", []))]
     combos = (s.LISTEN_MICROPHONE, s.NOTICE_MICROPHONE, s.NOTICE_SPEAKERS)
-    fields = (*screens.TRANSCRIPT_FIELDS, s.LISTEN_TRANSCRIPT)
+    fields = screens.TRANSCRIPT_FIELDS  # also the Listen *Transcript* list
 
     def rects() -> list:
         return screens.mask_rects(app.nodes(), names, combos, fields)
