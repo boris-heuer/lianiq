@@ -98,7 +98,10 @@ class WrapWhenNarrow(QObject):
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         if event.type() == QEvent.Type.Resize:
-            wrapped = watched.width() < self.needed()
+            width, needed = watched.width(), self.needed()
+            # Exactly the one-line width keeps the current layout: a scroll area that holds
+            # the host at its own minimum would otherwise flip it back and forth forever.
+            wrapped = self.wrapped if width == needed else width < needed
             if wrapped != self.wrapped:
                 self.wrapped = wrapped
                 for index, widget in self.positions:
