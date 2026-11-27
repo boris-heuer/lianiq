@@ -6,7 +6,7 @@ built-in registry. ``level`` reads the Conversation level bar through UIA RangeV
 progress bar has no Value pattern). ``watch_turn`` polls one spoken turn until the app log
 has one more completed playback: on every poll that shows the paused state ("Microphone
 paused while the translation is spoken", shown from synthesis start) the new turn must
-already be in the panels and the level bar must read 0. ``measure`` records the cable around
+already be in the *Transcript* list and the level bar must read 0. ``measure`` records the cable around
 one playback and returns its speech duration only (``audio.speech_span``), never samples.
 Log lines are read in memory (``e15.log_since``) and never stored.
 """
