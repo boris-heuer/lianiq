@@ -75,6 +75,19 @@ def settle() -> None:
     QTest.qWait(20)
 
 
+def steady(bar) -> None:
+    """Wait until the list's lazy row layout settled: value and range unchanged three times."""
+    from PySide6.QtTest import QTest
+
+    last, same = None, 0
+    for _ in range(150):
+        QTest.qWait(20)
+        now = (bar.value(), bar.maximum())
+        same, last = (same + 1 if now == last else 0), now
+        if same >= 3:
+            return
+
+
 def view(window):
     return window.conversation.paired_view
 
@@ -113,14 +126,15 @@ def test_ac10_wheel_up_keeps_the_view_and_jump_to_latest_follows_again(
     transcript = view(window)
     bar = transcript.list.verticalScrollBar()
     assert wait_until(lambda: bar.maximum() > 0 and at_end(transcript))
+    steady(bar)
 
     wheel_up(transcript.list)
-    settle()
+    steady(bar)
     assert not at_end(transcript)
     kept = bar.value()
     submit(window, spies, transcript_of("Neuer Satz", "de"))
     assert wait_until(lambda: len(window.history) == 15)
-    settle()
+    steady(bar)
     assert bar.value() == kept  # the view stays where the user left it
     assert transcript.jump_button.isVisible() and transcript.new_below_label.isVisible()
 
@@ -142,16 +156,17 @@ def test_ac10_keyboard_scrolling_up_stops_following(window, spies, key) -> None:
     fill(window, spies, 14)
     transcript = view(window)
     assert wait_until(lambda: at_end(transcript))
+    steady(transcript.list.verticalScrollBar())
     transcript.list.setFocus()
     transcript.select_row(13)
     QTest.keyClick(transcript.list, getattr(Qt.Key, key))
-    settle()
+    steady(transcript.list.verticalScrollBar())
 
     assert not at_end(transcript)
     kept = transcript.list.verticalScrollBar().value()
     submit(window, spies, transcript_of("Neuer Satz", "de"))
     assert wait_until(lambda: len(window.history) == 15)
-    settle()
+    steady(transcript.list.verticalScrollBar())
     assert transcript.list.verticalScrollBar().value() == kept
 
 
