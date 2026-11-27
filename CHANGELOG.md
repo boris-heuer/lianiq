@@ -138,6 +138,12 @@ All notable user-visible changes are documented here.
   Conversation. F9 while nothing runs no longer reports *Ready* or *Capture stopped* or
   clears an error. A second Stop while stopping does nothing, a failed stop ends the session
   with a notice, and a new Start does not close unread lost-turn warnings any more.
+- Meeting: while **End meeting** drains, the page reads *Stopping — finishing {n}
+  contributions…* and **End meeting** is disabled; afterwards it reads *Meeting ended · {n}
+  contributions* instead of *Ready*, and *Could not start — see notice* after a failed start.
+  At the drain bound the unfinished table rows stay as *Not translated — stopped before it
+  was finished*, a notice counts them, and Start waits until the old worker has exited; late
+  events of an ended meeting no longer reach the next one.
 - The voice warm-up at the start of a session, including **Start meeting**, now synthesises
   in memory and no longer writes a temporary WAV file.
 - A Bluetooth headset whose PortAudio name carries a suffix that Windows does not store, such
