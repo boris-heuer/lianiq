@@ -41,6 +41,7 @@ from lianiq.translation.glossary import Glossary
 from lianiq.translation.marian_engine import MarianTranslator
 from lianiq.tts.piper_engine import PiperEngine, piper_controls
 from lianiq.tts.sherpa_onnx_engine import UNLOADED_CONTROLS, SherpaOnnxEngine, SherpaVoiceSettings
+from lianiq.tts.system_voice import SystemVoiceFirst
 from lianiq.tts.voice_controls import VoiceControls
 from lianiq.tts.voice_router import VoiceEngine, VoiceRouter, bind_options
 
@@ -95,6 +96,10 @@ def build_synthesizer(
             registry=registry,
         )
         engines.update(dict.fromkeys(group, sherpa))
+    for language_id, engine in list(engines.items()):
+        tag = selected.get(language_id, VoiceEngineConfig()).system_voice
+        if tag:  # an installed Windows voice speaks first (lianiq#81)
+            engines[language_id] = SystemVoiceFirst(engine, tag)
     return VoiceRouter(engines, registry)
 
 
