@@ -23,6 +23,7 @@ from lianiq.text_translation.jobs import TranslationJobs
 from lianiq.text_translation.playback import DevicePlayer, TextPlayback
 from lianiq.ui import strings
 from lianiq.ui.shell.workspaces import WorkspaceId
+from lianiq.ui.transcript.replay import end_playback
 from lianiq.ui.workspaces.text_translation_layout import TextTranslationLayout
 from lianiq.ui.workspaces.text_translation_render import TextTranslationRender
 
@@ -135,6 +136,7 @@ class TextTranslationWorkspace(TextTranslationRender, TextTranslationLayout, QOb
 
     def _play_clicked(self) -> None:
         if self.playback.state == "idle":
+            end_playback(self.host, WorkspaceId.TEXT_TRANSLATION)  # a transcript replay ends
             self.controller.play()
         else:
             self.controller.stop_playback()

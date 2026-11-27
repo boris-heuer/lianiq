@@ -122,6 +122,7 @@ class ConversationWorkspace(
             self.on_playback_state,
             emit_event,
         )
+        self.replayer.attach(self.pipeline.spoken)  # per-turn Replay (paired-transcript WI-03)
         self.runner = PipelineRunner(
             self.pipeline,
             # The owner generation is bound when the result is emitted, as for events.

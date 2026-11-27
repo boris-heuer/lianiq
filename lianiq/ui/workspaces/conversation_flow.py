@@ -14,6 +14,7 @@ from lianiq.packs.protection import ActiveUsage
 from lianiq.ui import strings
 from lianiq.ui.shell.session_owner import SessionBusy, SessionState
 from lianiq.ui.shell.workspaces import WorkspaceId, session_busy_message
+from lianiq.ui.transcript.replay import end_playback
 
 
 class ConversationFlow:
@@ -55,6 +56,7 @@ class ConversationFlow:
             self.diagnostic_wav = None
             self.host.show_unavailable(availability.missing)
             return
+        end_playback(self.host, WorkspaceId.CONVERSATION)  # a replay never overlaps a session
         try:
             self._generation = self.owner.request_start(WorkspaceId.CONVERSATION)
         except SessionBusy as busy:

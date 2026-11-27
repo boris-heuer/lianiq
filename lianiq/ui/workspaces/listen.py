@@ -3,9 +3,11 @@
 Sidebar entry *Listen & translate*, fourth (Ctrl+4). Showing the page opens nothing; **Start
 listening (F8)** runs the ``ListenController`` start gate, loads only the recogniser and the
 translator and opens the chosen microphone. Rows appear in capture order with their state
-in the shared ``PairedTranscriptView``; **Clear transcript** empties it. No voice is ever built
-or played. The selectors are locked while not idle. Worker callbacks
-reach the GUI thread through the queued ``posted`` signal. Choices go to ``config.listen``.
+in the shared ``PairedTranscriptView``; **Clear transcript** empties it. Listen never speaks on
+its own: only a per-turn **Replay** plays, through the app's one ``SpokenOutput``, and pauses
+the microphone meanwhile (paired-transcript WI-03). The selectors are locked while not idle.
+Worker callbacks reach the GUI thread through the queued ``posted`` signal. Choices go to
+``config.listen``.
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ from lianiq.ui.notice_catalog_base import LISTEN_MIC_LOST, model_failed_key
 from lianiq.ui.shell.session_owner import SessionBusy
 from lianiq.ui.shell.workspaces import WorkspaceId, session_busy_message
 from lianiq.ui.transcript.model import reason_text
+from lianiq.ui.transcript.replay import end_playback
 from lianiq.ui.workspaces.listen_actions import ListenTranscriptActions
 from lianiq.ui.workspaces.listen_devices import ListenDevices
 from lianiq.ui.workspaces.listen_layout import ListenLayout
@@ -65,10 +68,11 @@ class ListenWorkspace(
             self.render,
             self.notify,
             self.readiness,
+            end_replay=lambda: end_playback(host, LISTEN),
         )
         self.source, self.target = self._defaults()
         self._phase = ListenPhase.IDLE
-        self._stopped = self._error = False
+        self._stopped = self._error = self._paused = False
 
     def readiness(self, session: SessionPair) -> ListenReadiness:
         owner = self.host.session_owner
@@ -169,7 +173,7 @@ class ListenWorkspace(
 
     @Slot(float)
     def _show_level(self, level: float) -> None:
-        if self._phase is ListenPhase.LISTENING:
+        if self._phase is ListenPhase.LISTENING and not self._paused:
             self.level_bar.setValue(round(level * 100))
 
     # Rendering.
@@ -182,7 +186,7 @@ class ListenWorkspace(
             self._error = False
         elif self._phase is not ListenPhase.IDLE:
             self._stopped = True
-        self._phase = phase
+        self._phase, self._paused = phase, snapshot.paused
         self.follow(snapshot)
         for widget in (self.source_combo, self.target_combo, self.swap_button):
             widget.setEnabled(idle)
@@ -192,7 +196,7 @@ class ListenWorkspace(
             self.microphone_combo.currentText() if idle else strings.LISTEN_LOCKED
         )
         self.state_label.setText(self._state_text(snapshot))
-        if phase is not ListenPhase.LISTENING:
+        if phase is not ListenPhase.LISTENING or snapshot.paused:
             self.level_bar.setValue(0)
         session = self.session()
         block = snapshot.readiness.block if session is not None else StartBlock.UNSUPPORTED
@@ -216,6 +220,8 @@ class ListenWorkspace(
         self.paired_view.set_placeholder(empty)
 
     def _state_text(self, snapshot: ListenSnapshot) -> str:
+        if snapshot.paused:
+            return strings.VOICE_MIC_PAUSED
         if snapshot.phase is ListenPhase.LISTENING:
             busy = snapshot.busy
             return strings.LISTEN_STATE_PROCESSING if busy else strings.LISTEN_STATE_LISTENING

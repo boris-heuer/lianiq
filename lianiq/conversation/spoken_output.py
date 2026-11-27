@@ -6,6 +6,8 @@ held-turn resolution thread) after the result was delivered; ``replay`` runs on 
 thread. One playback lock serialises them, so playbacks never overlap, and every playback
 has its own cancel flag: a translation that is still synthesizing when it is stopped is
 never played. Logs carry the language ID, option values, state and error class only.
+Per-turn **Replay** of a transcript row is ``SpokenReplay.replay_turn`` (paired-transcript
+§3.3); every state change reaches each subscriber, the constructor ``on_state`` first.
 """
 
 from __future__ import annotations
@@ -14,9 +16,9 @@ import logging
 import threading
 import time
 from collections.abc import Callable
-from enum import StrEnum
 from pathlib import Path
 
+from lianiq.conversation.spoken_replay import PlaybackState, SpokenReplay
 from lianiq.conversation.voice_status import (
     VOICE_NAME_SPEAKER,
     VoiceState,
@@ -54,13 +56,7 @@ CLOSE_WAIT_SECONDS = 1.0
 REPLAY_THREAD = "spoken-output-replay"
 
 
-class PlaybackState(StrEnum):
-    IDLE = "idle"
-    SYNTHESIZING = "synthesizing"
-    PLAYING = "playing"
-
-
-class SpokenOutput:
+class SpokenOutput(SpokenReplay):
     """Synthesizes and plays translations of the languages in the plan bound at Start.
 
     ``synthesizer`` returns the voice router (constructed on first use); ``bound`` applies
@@ -81,7 +77,8 @@ class SpokenOutput:
         self._play = play
         self._stop = stop
         self._options = options
-        self._on_state = on_state
+        self._on_state = on_state  # the first subscriber
+        self._subscribers: list[Callable[[PlaybackState], None]] = []
         self._on_event = on_event
         self._playback_lock = threading.Lock()  # one playback at a time
         self._guard = threading.Lock()  # the fields below; never held while waiting
@@ -91,6 +88,7 @@ class SpokenOutput:
         self._cancel: threading.Event | None = None
         self._last: TranslationResult | None = None
         self._state = PlaybackState.IDLE
+        self._replay: threading.Thread | None = None  # the running per-turn replay
 
     @property
     def plan(self) -> frozenset[LanguageId]:
@@ -169,7 +167,8 @@ class SpokenOutput:
 
     def _set_state(self, state: PlaybackState) -> None:
         self._state = state
-        self._on_state(state)
+        for callback in (self._on_state, *self._subscribers):
+            callback(state)
 
     def _playback(self, text: str, language: LanguageId) -> None:
         with self._playback_lock:
@@ -201,7 +200,7 @@ class SpokenOutput:
                         self._cancel = None
                 self._set_state(PlaybackState.IDLE)
 
-    def _synthesize(self, text: str, language: LanguageId) -> Path | None:
+    def _synthesize(self, text: str, language: LanguageId, on_event=None) -> Path | None:
         """The WAV of ``text``, or ``None`` after a reported synthesis failure."""
         started = time.perf_counter()
         options: VoiceOptions | None = None
@@ -218,7 +217,7 @@ class SpokenOutput:
                 _options_text(options),
                 type(exc).__name__,
             )
-            self._on_event(
+            (on_event or self._on_event)(
                 PipelineEvent(
                     PipelineEventKind.SYNTHESIS_FAILED,
                     language=language,
@@ -235,7 +234,12 @@ class SpokenOutput:
         return path
 
     def _play_once(
-        self, path: Path, device: int | None, language: LanguageId, cancel: threading.Event
+        self,
+        path: Path,
+        device: int | None,
+        language: LanguageId,
+        cancel: threading.Event,
+        on_event=None,  # a replay's: its failure keeps the plan
     ) -> None:
         try:
             self._play(path, device)
@@ -244,12 +248,11 @@ class SpokenOutput:
                 LOGGER.info("Audio playback ended by a stop: language=%s", language)
                 return
             LOGGER.warning(
-                "Audio playback failed; spoken output stops for this session: language=%s error=%s",
-                language,
-                type(exc).__name__,
+                "Audio playback failed: language=%s error=%s", language, type(exc).__name__
             )
-            self.clear_plan()  # the speakers failed: the session continues text-only
-            self._on_event(
+            if on_event is None:
+                self.clear_plan()  # the speakers failed: the session continues text-only
+            (on_event or self._on_event)(
                 PipelineEvent(
                     PipelineEventKind.PLAYBACK_FAILED,
                     language=language,

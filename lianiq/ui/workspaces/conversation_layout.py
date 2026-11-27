@@ -89,6 +89,7 @@ class ConversationLayout:
             self.turns, self.pipeline.registry, strings.TRANSCRIPT_NEW_CONVERSATION, self
         )
         view.set_placeholder(strings.TRANSCRIPT_EMPTY)
+        view.set_replay_visible(True)  # per-turn Replay / Stop playback (WI-03)
         layout.addWidget(view, 1)
         self.paired_view, self.transcript_view = view, view.list
         self.export_button, self.copy_button = view.export_button, view.copy_all_button

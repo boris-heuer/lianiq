@@ -53,6 +53,7 @@ class ConversationVoice:
     voice_lock: str | None = None  # the switch lock of a running session
     voice_statuses_shown: tuple[VoiceStatus, ...] = ()
     playback_state = PlaybackState.IDLE  # the last state shown on the UI thread
+    voice_paused = False  # this page is paused by a playback (speaking thread)
     voice_controls_shown: dict[LanguageId, VoiceControls] = {}  # noqa: RUF012 - replaced
     voice_options_lock: tuple[frozenset[LanguageId], str | None] = (frozenset(), None)
     voice_dialog: VoiceOptionsDialog | None = None
@@ -203,8 +204,21 @@ class ConversationVoice:
     # Playback state (WI-04) ---------------------------------------------------------------
 
     def on_playback_state(self, state: PlaybackState) -> None:
-        """``SpokenOutput.on_state`` on the speaking thread: mute now, show it on the UI thread."""
-        self.capture.set_muted(state is not PlaybackState.IDLE)
+        """``SpokenOutput.on_state`` on the speaking thread: mute now, show it on the UI thread.
+
+        A per-turn replay pauses this page only while its session runs or when it was started
+        here (paired-transcript §3.3); a replay of the Listen page leaves it as it is.
+        """
+        paused = state is not PlaybackState.IDLE
+        if paused and not self.voice_paused:
+            replay = self.pipeline.spoken.active_replay
+            here = self.starting or self.capture.running or self.replayer.owns(replay)
+            if replay is not None and not here:
+                return
+        elif not paused and not self.voice_paused:
+            return  # the pause of another page ended
+        self.voice_paused = paused
+        self.capture.set_muted(paused)
         self.host.bridge.playback_state.emit(state.value)
 
     @Slot(str)

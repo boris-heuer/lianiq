@@ -1,6 +1,6 @@
 """``TranscriptHost``: what a workspace gives its ``PairedTranscriptView`` (spec §3.2).
 
-The replay members are used from WI-03 on; until then a host blocks replay and never plays.
+The replay members come from ``ReplayHost`` (``replay.py``, paired-transcript WI-03).
 ``workspace``, ``export_prefix`` and ``main_window`` (dialog parent, diagnostics, notices and
 status bar) let the view show the existing export messages of that workspace.
 """

@@ -222,6 +222,23 @@ selected.
 The language pair, direction, and the voice switches are bound at **Start**. While a session or
 the Call Bridge runs, these controls are disabled; stop the session to change them.
 
+Each completed turn is one row in *Transcript*: its time and spoken language, the original,
+then the translation. A turn resolved later in the held-turn bar appears at its capture time.
+While the list is at its end it follows new turns; after you scroll up, *New turns below* and
+**Jump to latest** show instead. For the selected row:
+
+- **Copy original**, **Copy translation** and **Copy pair** (also Ctrl+C, or the row context
+  menu with the Menu key or Shift+F10) put its text on the clipboard.
+- **Replay** speaks the row's translation again with the current voice options of its target
+  language on the Settings speakers; **Stop playback** ends it. While it plays, a running
+  session's microphone is paused. **Replay** is disabled, with the reason as its tooltip, when
+  the target language has no ready voice, the speakers are unavailable, another mode holds the
+  session or something already plays. Any **Start** ends a replay first.
+
+**Copy transcript** and **Export transcript** write the `# lianiq transcript v2` format of the
+translated turns, only when you click them. **New conversation** stops the session and empties
+the list; while translated turns are not exported it asks first. Nothing is saved automatically.
+
 No model is loaded before **Start**. **Start** loads only the models the selected mode needs:
 speech recognition for the spoken language(s), the translation model of each direction in use, and
 voices only when spoken output is on. A missing reverse translation model therefore does not block
@@ -327,7 +344,7 @@ Language packs page.
 ### Listen & translate
 
 **Listen & translate** (sidebar, fourth entry, **Ctrl+4**) shows what one speaker says, sentence
-by sentence, with its translation. It never speaks.
+by sentence, with its translation. It never speaks on its own; only a per-row **Replay** plays.
 
 - Choose the *Source language*, the *Target language* (**Swap languages** exchanges them) and the
   *Microphone*. They are locked while listening.
@@ -335,6 +352,11 @@ by sentence, with its translation. It never speaks.
   microphone. Each completed sentence appears in *Transcript* with its time and translation;
   **Stop (F9)** keeps the text. **Copy transcript** and **Export transcript** write the
   `# lianiq transcript v2` format of the translated rows.
+- For the selected row, **Copy original**, **Copy translation**, **Copy pair** (also Ctrl+C or
+  the context menu) and **Replay**, which speaks its translation once on the Settings speakers
+  while the microphone is paused; **Stop playback** or **Stop (F9)** ends it.
+- **Clear transcript** stops listening and empties the list; while translated rows are not
+  exported it asks first.
 - If a pack is missing, **Open Language packs** installs it; see
   [troubleshooting](docs/troubleshooting.md#listen--translate).
 

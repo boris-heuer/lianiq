@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from lianiq.listen.lifecycle import ListenPhase
+from lianiq.conversation.spoken_output import PlaybackState
+from lianiq.listen.lifecycle import ListenPhase, quietly
 from lianiq.pipeline_types import BoundUtterance, PipelineEvent, PipelineEventKind
 from lianiq.transcript.turns import TurnState
 
@@ -55,3 +56,21 @@ class ListenCallbacks:
 
     def _changed(self, row: int | None) -> None:
         self.render(() if row is None else (row,))
+
+    def playback_changed(self, state: PlaybackState) -> None:
+        """``SpokenOutput`` subscriber, on the speaking thread (paired-transcript §3.3).
+
+        While listening the capture is muted at once, so no frame reaches the segmenter; the
+        page then shows ``VOICE_MIC_PAUSED`` and level 0. At ``IDLE`` it is unmuted, which
+        never starts a capture.
+        """
+        paused = state is not PlaybackState.IDLE
+        capture = self._capture
+        if capture is not None and (not paused or self._phase is ListenPhase.LISTENING):
+            quietly(lambda: capture.set_muted(paused), "mute")
+        self._post(lambda: self._paused_changed(paused))
+
+    def _paused_changed(self, paused: bool) -> None:
+        if paused != self._paused:
+            self._paused = paused
+            self.render()

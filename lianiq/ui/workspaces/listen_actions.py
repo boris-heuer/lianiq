@@ -3,8 +3,8 @@
 ``ListenWorkspace`` base (file-size split). Follow, copy, export and the clear confirmation
 live in ``PairedTranscriptView`` (paired-transcript spec §3.4). A failed row posts
 ``listen.failed`` once; the first skipped row of a session posts ``listen.overload``.
-**Clear transcript** stops a running session first (``ListenController.clear``). Replay stays
-blocked here until WI-03; Listen never speaks on its own.
+**Clear transcript** stops a running session first (``ListenController.clear``). Per-turn
+**Replay** is ``ReplayHost`` (WI-03); Listen never speaks on its own.
 """
 
 from __future__ import annotations
@@ -12,17 +12,18 @@ from __future__ import annotations
 from lianiq.languages.errors import LanguageContractError
 from lianiq.languages.registry import LanguagePair
 from lianiq.listen.lifecycle import ListenSnapshot
-from lianiq.transcript.turns import Turn, TurnState
+from lianiq.transcript.turns import TurnState
 from lianiq.ui import notice_catalog as catalog
 from lianiq.ui import notice_catalog_listen as listen_notices
 from lianiq.ui.notices import Notice
 from lianiq.ui.shell.workspaces import WorkspaceId
 from lianiq.ui.transcript.model import reason_text
+from lianiq.ui.transcript.replay import ReplayHost
 
 LISTEN = WorkspaceId.LISTEN
 
 
-class ListenTranscriptActions:
+class ListenTranscriptActions(ReplayHost):
     """``TranscriptHost`` members and the row notices; ``connect_actions`` resets them."""
 
     workspace = LISTEN
@@ -31,6 +32,15 @@ class ListenTranscriptActions:
     def connect_actions(self) -> None:
         self._noticed: set = set()  # turn IDs whose failure was posted
         self._overloaded: set[int] = set()  # sessions whose overload was posted
+        self.paired_view.set_replay_visible(True)
+        self.attach_spoken(self.host.pipeline.spoken)
+
+    def attach_spoken(self, spoken) -> None:
+        """Follow the app's ``SpokenOutput`` (built after this page by Conversation)."""
+        if spoken is not None and getattr(self, "_spoken", None) is not spoken:
+            self._spoken = spoken
+            spoken.subscribe(self.controller.playback_changed)
+            self.replayer.attach(spoken)
 
     def follow(self, snapshot: ListenSnapshot) -> None:
         """Apply ``snapshot``'s row changes to the view, then post the row notices."""
@@ -67,18 +77,6 @@ class ListenTranscriptActions:
         except LanguageContractError:
             row = self.controller.transcript.rows[0]
             return self.registry.pair(row.source_language, row.target_language)
-
-    def replay_block(self, turn: Turn) -> str | None:
-        return None  # the Replay button stays hidden until WI-03
-
-    def replay(self, turn: Turn) -> None:
-        """Listen gets per-turn Replay in WI-03."""
-
-    def stop_playback(self) -> None:
-        """Nothing plays from Listen before WI-03."""
-
-    def playing(self) -> bool:
-        return False
 
     def clear_session(self) -> None:
         self.controller.clear()
