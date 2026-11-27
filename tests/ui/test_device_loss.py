@@ -64,6 +64,7 @@ def test_ac19_microphone_unplugged_stops_and_reconnect_reselects_it(window, spie
     fake.unplug(MICROPHONE)
 
     setup.monitor_tick()
+    assert wait_until(lambda: not window.conversation.stopping)  # the stop thread (WI-02)
 
     assert not window.capture.running and window.session_owner.state.value == "idle"
     assert len(window.history) == 1 and conv.originals(window) == ["German: Guten Tag"]
