@@ -6,8 +6,8 @@ with the Call Bridge and Settings workspaces and provides the shared status bar,
 model warm-up and the active-session owner. Accessible names and the held-turn focus return
 are set on the widgets here (CAP-0169 WI-08 DEF-04/DEF-05, formerly ``ui/accessibility.py``).
 
-CAP-0168 WI-02 (RES-06): one compact row of controls, then the held-turn bar and the
-*Original*/*Translation* splitter filling the rest. Model profile, compute device and the
+CAP-0168 WI-02 (RES-06): one compact row of controls, then the held-turn bar and the paired
+transcript view filling the rest (paired-transcript WI-02). Model profile, compute device and the
 hardware subtitle moved to Settings › Diagnostics; **Stop (F9)** is in the session strip. A
 start goes through ``ActiveSessionOwner.request_start``, so it is refused while the Call
 Bridge holds the session; then **Start** is disabled with the ``SESSION_BUSY`` tooltip.
@@ -29,12 +29,11 @@ from lianiq.audio.playback import stop_playback
 from lianiq.config_voice import VoicePreferences
 from lianiq.conversation.routing import HeldTurn
 from lianiq.conversation.spoken_output import PlaybackState, SpokenOutput
-from lianiq.domain import TranslationResult
 from lianiq.languages.modes import SessionPair
 from lianiq.languages.registry import LanguageId
 from lianiq.languages.session import SessionController
 from lianiq.pipeline import PipelineRunner
-from lianiq.ui import strings
+from lianiq.transcript.turns import TurnLog
 from lianiq.ui.shell.workspaces import WorkspaceId
 
 # CAP-0168 file-size split: the controls, the pair and availability logic and Start/Stop
@@ -45,6 +44,7 @@ from lianiq.ui.workspaces.conversation_availability import ConversationAvailabil
 from lianiq.ui.workspaces.conversation_flow import ConversationFlow
 from lianiq.ui.workspaces.conversation_layout import ConversationLayout
 from lianiq.ui.workspaces.conversation_notices import ConversationNotices
+from lianiq.ui.workspaces.conversation_transcript import ConversationTranscript
 from lianiq.ui.workspaces.conversation_voice import ConversationVoice
 from lianiq.ui.workspaces.pair_selection import PairSelection
 
@@ -53,7 +53,12 @@ if TYPE_CHECKING:
 
 
 class ConversationWorkspace(
-    ConversationLayout, ConversationAvailability, ConversationVoice, ConversationFlow, QObject
+    ConversationLayout,
+    ConversationTranscript,
+    ConversationAvailability,
+    ConversationVoice,
+    ConversationFlow,
+    QObject,
 ):
     # The voice rows changed their statuses, switches or lock (Settings mirrors them).
     voice_rows_changed = Signal()
@@ -74,8 +79,8 @@ class ConversationWorkspace(
         bridge.session_ready.connect(self._session_ready)
         self.notices = ConversationNotices(self)
         bridge.pipeline_event.connect(self.notices.pipeline_event)
-        # Completed turns, in memory only; exported as transcript v2 by capture time.
-        self.history: list[TranslationResult] = []
+        # Completed turns, in memory only, by capture time; exported as transcript v2.
+        self.turns = TurnLog()
         # Models are constructed and warmed on Start, for the started mode only.
         self.starting = False
         self.translating = False
@@ -119,7 +124,8 @@ class ConversationWorkspace(
         )
         self.runner = PipelineRunner(
             self.pipeline,
-            on_result=bridge.result.emit,
+            # The owner generation is bound when the result is emitted, as for events.
+            on_result=lambda result: bridge.result.emit(result, self._generation),
             on_error=bridge.error.emit,
             on_busy=bridge.busy.emit,
             on_held=bridge.held.emit,
@@ -162,17 +168,6 @@ class ConversationWorkspace(
         self.runner.submit(utterance)
 
     @Slot(object)
-    def _show_result(self, result: TranslationResult) -> None:
-        name = self.pipeline.registry.display_name
-        source, target = name(result.source_language), name(result.target_language)
-        self.source_panel.append_line(f"{source}: {result.source_text}\n")
-        self.target_panel.append_line(f"{target}: {result.translated_text}\n")
-        direction = strings.ROUTING_FIXED.format(source=source, target=target)
-        self.latency_label.setText(f"{direction} · Processing: {result.total_seconds:.2f} s")
-        self.history.append(result)
-        self.notices.record_result(result)
-
-    @Slot(object)
     def _show_held(self, _held: HeldTurn) -> None:
         # Nothing is translated until the user resolves the turn in the held-turn bar.
         self._refresh_held_bar()
@@ -188,7 +183,7 @@ class ConversationWorkspace(
 
     @Slot(object, str)
     def _resolve_held(self, held: HeldTurn, language: str) -> None:
-        """Re-recognise the held turn as the chosen language; its result is appended."""
+        """Re-recognise the held turn as the chosen language; its row lands at capture time."""
         self.held_turn_bar.set_resolving(True)
         self.runner.resolve(held, LanguageId(language), on_done=self.host.bridge.held_resolved.emit)
 
