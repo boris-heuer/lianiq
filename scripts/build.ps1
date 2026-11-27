@@ -107,6 +107,13 @@ try {
         Copy-Item -LiteralPath (Join-Path $ProjectRoot "config\$ConfigName") `
             -Destination (Join-Path $PackagedConfig $ConfigName) -Force
     }
+    # The Call Bridge page links the operator checklist from <app>\docs (CAP-0166, lianiq#25).
+    $PackagedDocs = Join-Path $ProjectRoot 'dist\lianiq\docs'
+    New-Item -ItemType Directory -Path $PackagedDocs -Force | Out-Null
+    foreach ($DocName in @('call-bridge-operator-setup.md', 'call-bridge-system-ok.md', 'troubleshooting.md')) {
+        Copy-Item -LiteralPath (Join-Path $ProjectRoot "docs\$DocName") `
+            -Destination (Join-Path $PackagedDocs $DocName) -Force
+    }
     $PackagedPiperData = Join-Path $ProjectRoot 'dist\lianiq\_internal\piper\espeak-ng-data'
     if (-not (Test-Path -LiteralPath $PackagedPiperData)) {
         throw 'Packaged Piper eSpeak data is missing.'
