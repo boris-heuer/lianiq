@@ -1,8 +1,12 @@
-"""The controls of ``ConversationWorkspace`` (CAP-0168 file-size split)."""
+"""The controls of ``ConversationWorkspace`` (CAP-0168 file-size split).
+
+The paired transcript view replaces the *Original*/*Translation* splitter (paired-transcript
+spec §2.3): its list fills the scroll area, with **Copy transcript**, **Export transcript** and
+**New conversation** under it.
+"""
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
@@ -10,24 +14,23 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QSizePolicy,
-    QSplitter,
     QVBoxLayout,
     QWidget,
 )
 
 from lianiq.ui import strings
-from lianiq.ui.combo_fit import StackWhenNarrow, WhenNarrow, WrapWhenNarrow, fit_current_text
+from lianiq.ui.combo_fit import StackWhenNarrow, WhenNarrow, fit_current_text
 from lianiq.ui.held_turn_bar import HeldTurnBar
-from lianiq.ui.result_panel import ResultPanel
 from lianiq.ui.shell.scroll import workspace_scroll
+from lianiq.ui.transcript.view import PairedTranscriptView
 from lianiq.ui.voice_output_rows import VoiceOutputRows
 
 
 class ConversationLayout:
-    """``ConversationWorkspace`` base: its control row, held-turn bar and result panels."""
+    """``ConversationWorkspace`` base: its control row, held-turn bar and transcript view."""
 
     def build(self, layout: QVBoxLayout) -> None:
-        """Add the compact control row, the held-turn bar and the result panels to ``layout``."""
+        """Add the compact control row, the held-turn bar and the transcript view to ``layout``."""
         controls = QGridLayout()
         controls.setHorizontalSpacing(10)
         self.pairs.build(controls)
@@ -49,18 +52,10 @@ class ConversationLayout:
         self.start_button.clicked.connect(self.start_listening)
         self.swap_button = QPushButton("⇄  Switch direction")
         self.swap_button.clicked.connect(self._swap_direction)
-        self.export_button = QPushButton("Export transcript")
-        self.export_button.clicked.connect(self.notices.export_transcript)
         action_row.addWidget(self.start_button)
         action_row.addWidget(self.swap_button)
         action_row.addStretch()
-        action_row.addWidget(self.export_button)
         layout.addLayout(action_row)
-        # With large text, Export moves to a second line (never cut).
-        second_row = QHBoxLayout()
-        second_row.addStretch(1)
-        layout.addLayout(second_row)
-        self._action_row = WrapWhenNarrow(page, action_row, second_row, [self.export_button])
         # CAP-0167 WI-03: one voice switch per pair language under the Start row; the
         # spoken plan they select is bound at Start (``refresh_availability``).
         self.voice_rows = VoiceOutputRows(page)
@@ -89,13 +84,15 @@ class ConversationLayout:
         bar = self.held_turn_bar
         self._held_fit = WhenNarrow(area.viewport(), bar.one_line_width, bar.set_stacked, bar)
 
-        splitter = QSplitter(Qt.Horizontal)
-        self.source_panel = ResultPanel("Original", strings.TRANSCRIPT_EMPTY)
-        self.target_panel = ResultPanel("Translation", "The translation appears here …")
-        splitter.addWidget(self.source_panel)
-        splitter.addWidget(self.target_panel)
-        splitter.setSizes([1, 1])
-        layout.addWidget(splitter, 1)
+        # The paired transcript (spec §3.4); ``conversation_availability`` sets its empty line.
+        view = PairedTranscriptView(
+            self.turns, self.pipeline.registry, strings.TRANSCRIPT_NEW_CONVERSATION, self
+        )
+        view.set_placeholder(strings.TRANSCRIPT_EMPTY)
+        layout.addWidget(view, 1)
+        self.paired_view, self.transcript_view = view, view.list
+        self.export_button, self.copy_button = view.export_button, view.copy_all_button
+        self.clear_button = view.clear_button
 
         activity_row = QHBoxLayout()
         self.level_bar = QProgressBar()
@@ -125,14 +122,6 @@ class ConversationLayout:
     def stop_button(self) -> QPushButton:
         """**Stop (F9)** of the session strip, which stops the active session."""
         return self.host.session_strip.stop_button
-
-    @property
-    def source_text(self):
-        return self.source_panel.text
-
-    @property
-    def target_text(self):
-        return self.target_panel.text
 
     def set_session_controls_enabled(self, enabled: bool) -> None:
         # Pair, routing and the voice switches are bound at Start (AC-13, PO decision Q2):
