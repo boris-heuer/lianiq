@@ -1,12 +1,22 @@
-"""Start, stop, languages and events of ``CallBridgeWorkspace`` (CAP-0168 file-size split)."""
+"""Start, stop, languages and events of ``CallBridgeWorkspace`` (CAP-0168 file-size split).
+
+session-status-truthfulness WI-05 (§2.2.4, AC-19): **Stop call bridge** and F9 both go
+through ``owner.stop()``. The stopper is asynchronous: captures close on the GUI thread,
+both lanes stop in parallel on a ``call-bridge-stop`` worker, and ``call_bridge_stopped``
+hands the ``LaneStopResult`` back. A lane that timed out reads *Did not stop in time*,
+``session.stop-timeout`` shows and ``owner.linger`` refuses every Start while it lives.
+"""
 
 from __future__ import annotations
+
+import logging
+import threading
 
 from PySide6.QtCore import Slot
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from lianiq.call_bridge.contracts import CallBridgeLanes, EndpointRole, LaneId
-from lianiq.call_bridge.controller import check_call_bridge
+from lianiq.call_bridge.controller import LaneStopResult, check_call_bridge
 from lianiq.languages.modes import CALL_BRIDGE_MODE, SessionPair
 from lianiq.packs.protection import ActiveUsage
 from lianiq.ui import notice_catalog as catalog
@@ -18,6 +28,7 @@ from lianiq.ui.shell.workspaces import WorkspaceId, session_busy_message
 from lianiq.ui.transcript.replay import end_playback
 
 CALL_BRIDGE = WorkspaceId.CALL_BRIDGE
+LOGGER = logging.getLogger(__name__)
 
 
 class CallBridgeLifecycle:
@@ -164,16 +175,57 @@ class CallBridgeLifecycle:
 
     @Slot()
     def stop_call_bridge(self) -> None:
+        """**Stop call bridge** (and ``MainWindow.stop_call_bridge``): through the owner."""
+        if self.owner.active is CALL_BRIDGE:
+            self.owner.stop()  # a no-op while already stopping
+        elif not self.active():
+            self._show_stopped(bool(self._lanes_not_stopped))
+
+    def _stop_session(self) -> None:
+        """The owner's asynchronous stopper: captures now, both lanes on a worker."""
         self._endpoint_monitor.stop()
         controller, self.controller = self.controller, None
-        if controller is not None and not controller.stop(timeout=10.0):
-            self._error("Call bridge workers did not stop within the shutdown contract")
         self.starting = False
         self._pending_assignments = None
         self._pending_session = None
-        if self.owner.active is WorkspaceId.CALL_BRIDGE:
-            self.owner.mark_idle(self._generation)
-        self.stop_status()  # both lanes *Stopped*; the live text stays until the next Start
+        generation = self._generation
+        if controller is None:  # models still loading: nothing was opened
+            self._call_bridge_stopped(generation, None)
+            return
+        controller.stop_captures()  # GUI thread: level bars 0 at once
+        self._stopping_controller = controller
+        timeout, stopped = self.lane_stop_timeout, self.host.bridge.call_bridge_stopped
+
+        def stop_lanes() -> None:
+            try:
+                result = controller.stop_lanes(timeout)
+            except Exception:  # worker boundary: report both lanes as not stopped
+                LOGGER.exception("Call bridge lane stop failed")
+                result = LaneStopResult(False, False)
+            try:
+                stopped.emit(generation, result)
+            except RuntimeError:  # the window was destroyed while the lanes stopped
+                pass
+
+        threading.Thread(target=stop_lanes, name="call-bridge-stop", daemon=True).start()
+
+    @Slot(int, object)
+    def _call_bridge_stopped(self, generation: int, result: LaneStopResult | None) -> None:
+        """The lanes of ``generation`` ended or timed out (GUI thread)."""
+        if generation != self._generation:
+            return
+        controller, self._stopping_controller = self._stopping_controller, None
+        self._results_generation = None  # a late lane result is not shown
+        timed_out = () if result is None else result.timed_out
+        self._lanes_not_stopped = frozenset(timed_out)
+        if timed_out and controller is not None:
+            self.owner.linger(CALL_BRIDGE, controller.alive)
+            self.host.post_notice(catalog.stop_timeout(CALL_BRIDGE, len(timed_out), generation))
+        self.owner.mark_idle(generation)
+        self._show_stopped(bool(timed_out))
+
+    def _show_stopped(self, timed_out: bool) -> None:
+        self.stop_status()  # *Stopped* or *Did not stop in time*; the live text stays
         self.panel.set_running(False)
         self.panel.set_models_ready(True)
         conversation = self.host.conversation
@@ -182,7 +234,9 @@ class CallBridgeLifecycle:
         conversation.set_session_controls_enabled(idle)
         conversation.set_devices_enabled(True)
         self.host.statusBar().showMessage(
-            "Call bridge stopped; all explicit endpoints were released"
+            "Call bridge stopped; a lane did not stop in time"
+            if timed_out
+            else "Call bridge stopped; all explicit endpoints were released"
         )
 
     def _session_changed(self, state: SessionState, active: WorkspaceId | None) -> None:
