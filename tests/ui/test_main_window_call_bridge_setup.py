@@ -207,4 +207,4 @@ def test_ac15_a_clipping_capture_shows_too_loud_on_its_path(window, role) -> Non
     capture.on_clip()  # from the capture worker thread in the app
 
     box = next(b for b in window.call_bridge_panel.paths.values() if b.capture_role is role)
-    assert wait_until(lambda: box.level_caption.text() == "Too loud (clipping)")
+    assert wait_until(lambda: box.level_caption.text().startswith("Too loud (clipping) — lower "))
