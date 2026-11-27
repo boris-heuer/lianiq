@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from lianiq.languages.requirements import DeviceReadiness
 from lianiq.languages.session import SessionController
+from lianiq.listen.callbacks import ListenCallbacks
 from lianiq.listen.lifecycle import (
     LISTEN,
     LISTEN_INFERENCE_GRACE_SECONDS,
@@ -35,15 +36,13 @@ from lianiq.pipeline import PipelineRunner
 from lianiq.pipeline_types import (
     BoundUtterance,
     FailureReason,
-    PipelineEvent,
-    PipelineEventKind,
     bind_utterance,
     classify_failure,
 )
 
 if TYPE_CHECKING:
     from lianiq.audio.device_selection import ResolvedDevice
-    from lianiq.domain import AudioUtterance, Transcript, TranslationResult
+    from lianiq.domain import AudioUtterance, Transcript
     from lianiq.languages.modes import SessionPair
     from lianiq.listen.pipeline import ListenPipeline
     from lianiq.listen.session import ListenReadiness
@@ -52,7 +51,7 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger(__name__)
 
 
-class ListenController:
+class ListenController(ListenCallbacks):
     def __init__(
         self,
         owner: ActiveSessionOwner,
@@ -235,6 +234,14 @@ class ListenController:
         if generation == self._generation:
             self.microphone_lost(self._microphone().label)
 
+    def clear(self) -> None:
+        """**Clear transcript**: stop when not idle, empty the log, render (spec §3.4)."""
+        if self._phase is not ListenPhase.IDLE:
+            self.stop()
+        self._transcript.clear()
+        self._transcript.finish_session(self._generation)  # a session without rows too
+        self.render()
+
     def shutdown(self) -> None:
         """Window close: stop with a one-second flush; nothing is saved."""
         if self._phase is ListenPhase.IDLE:
@@ -246,47 +253,6 @@ class ListenController:
             quietly(controller.stop, "shutdown stop")
         self._lost = None
         self._finish(generation)
-
-    # Worker callbacks, on the GUI thread.
-
-    def _current(self, generation: int) -> bool:
-        return generation == self._generation and self._phase is not ListenPhase.IDLE
-
-    def _captured(self, generation: int, item: BoundUtterance) -> None:
-        if self._current(generation):
-            row = self._transcript.captured(
-                item.turn_id, item.captured_at, item.session, generation
-            )
-            self.render((row,))
-
-    def _recognized(self, generation: int, item: BoundUtterance, text: str) -> None:
-        if self._current(generation):
-            self._changed(self._transcript.recognized(item.turn_id, text))
-
-    def _completed(self, generation: int, result: TranslationResult) -> None:
-        if self._current(generation):
-            self._changed(self._transcript.completed(result))
-
-    def _event(self, generation: int, event: PipelineEvent) -> None:
-        if not self._current(generation):
-            return
-        if event.kind is PipelineEventKind.QUEUE_OVERFLOW and event.turn_id is not None:
-            self._changed(self._transcript.mark(event.turn_id, SegmentState.SKIPPED))
-        elif event.kind is PipelineEventKind.TURN_FAILED and event.turn_id is not None:
-            self._changed(self._transcript.mark(event.turn_id, SegmentState.FAILED, event.failure))
-        elif event.kind is PipelineEventKind.TURNS_DROPPED:
-            rows = [
-                self._transcript.mark(turn, SegmentState.NOT_FINISHED) for turn in event.turn_ids
-            ]
-            self.render(tuple(row for row in rows if row is not None))
-
-    def _set_busy(self, generation: int, busy: bool) -> None:
-        if self._current(generation):
-            self._busy = busy
-            self.render()
-
-    def _changed(self, row: int | None) -> None:
-        self.render(() if row is None else (row,))
 
     def render(self, rows: tuple[int, ...] = ()) -> None:
         selection = self._selection
