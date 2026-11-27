@@ -10,15 +10,25 @@ whose stop takes long (the CAP-0177 meeting drains its contributions) registers 
 asynchronous stopper: the session then stays *stopping* until the mode reports
 ``mark_idle`` itself, so no other mode can start while it still holds its devices.
 
+session-status-truthfulness §3.2 (additive): ``stop()`` is a no-op while *stopping*; a
+stopper that raises ends the session and tells the ``on_stop_failed`` listeners the mode; a
+mode whose stop timed out registers a ``linger`` probe, and every ``request_start`` raises
+``SessionStillFinishing`` while that probe reports its worker alive (checked lazily, no
+timer).
+
 All calls happen on the GUI thread; worker threads hand results over through ``UiBridge``.
 """
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from enum import StrEnum
 
-from lianiq.ui.shell.workspaces import WorkspaceId, session_busy_message
+from lianiq.ui.shell.workspaces import WorkspaceId, label, session_busy_message
+from lianiq.ui.strings_session import SESSION_STILL_FINISHING
+
+LOGGER = logging.getLogger(__name__)
 
 Listener = Callable[["SessionState", WorkspaceId | None], None]
 
@@ -38,6 +48,14 @@ class SessionBusy(Exception):
         self.active = active
 
 
+class SessionStillFinishing(SessionBusy):
+    """A start was requested while the timed-out stop of ``active`` still has a live worker."""
+
+    def __init__(self, active: WorkspaceId) -> None:
+        Exception.__init__(self, SESSION_STILL_FINISHING.format(mode=label(active)))
+        self.active = active
+
+
 class ActiveSessionOwner:
     def __init__(self) -> None:
         self.active: WorkspaceId | None = None
@@ -46,6 +64,8 @@ class ActiveSessionOwner:
         self._stoppers: dict[WorkspaceId, Callable[[], None]] = {}
         self._asynchronous: set[WorkspaceId] = set()
         self._listeners: list[Listener] = []
+        self._stop_failed: list[Callable[[WorkspaceId], None]] = []
+        self._lingering: dict[WorkspaceId, Callable[[], bool]] = {}
 
     def register(
         self, mode: WorkspaceId, stopper: Callable[[], None], *, asynchronous: bool = False
@@ -65,6 +85,9 @@ class ActiveSessionOwner:
         """Record ``mode`` as starting and return its new generation, or raise ``SessionBusy``."""
         if self.state is not SessionState.IDLE:
             raise SessionBusy(self.active if self.active is not None else mode)
+        lingering = self.lingering()
+        if lingering is not None:
+            raise SessionStillFinishing(lingering)
         self.generation += 1
         self.active = mode
         self._set(SessionState.STARTING)
@@ -76,15 +99,22 @@ class ActiveSessionOwner:
             self._set(SessionState.RUNNING)
 
     def stop(self) -> None:
-        """Stop the active session from any workspace; a no-op while idle."""
-        if self.state is SessionState.IDLE or self.active is None:
+        """Stop the active session from any workspace; a no-op while idle or stopping."""
+        if self.state in (SessionState.IDLE, SessionState.STOPPING) or self.active is None:
             return
-        generation = self.generation
-        stopper = self._stoppers.get(self.active)
-        asynchronous = stopper is not None and self.active in self._asynchronous
+        generation, mode = self.generation, self.active
+        stopper = self._stoppers.get(mode)
+        asynchronous = stopper is not None and mode in self._asynchronous
         self._set(SessionState.STOPPING)
         if stopper is not None:
-            stopper()
+            try:
+                stopper()
+            except Exception:
+                LOGGER.exception("The %s stopper raised", mode.value)
+                self.mark_idle(generation)
+                for listener in tuple(self._stop_failed):
+                    listener(mode)
+                return
         if asynchronous:
             return  # the mode reports ``mark_idle`` once it has stopped
         # Stoppers are synchronous; a stopper that did not report back still ends the session.
@@ -96,6 +126,27 @@ class ActiveSessionOwner:
             return
         self.active = None
         self._set(SessionState.IDLE)
+
+    def on_stop_failed(self, listener: Callable[[WorkspaceId], None]) -> None:
+        """``listener(mode)`` runs after ``mode``'s stopper raised and the owner went idle."""
+        self._stop_failed.append(listener)
+
+    def linger(self, mode: WorkspaceId, alive: Callable[[], bool]) -> None:
+        """``mode``'s stop timed out: refuse every start while ``alive()`` is true."""
+        self._lingering[mode] = alive
+
+    def lingering(self) -> WorkspaceId | None:
+        """The mode whose timed-out worker is still alive; dead probes are dropped."""
+        for mode, alive in tuple(self._lingering.items()):
+            try:
+                still = alive()
+            except Exception:
+                LOGGER.exception("The %s linger probe raised", mode.value)
+                still = False
+            if still:
+                return mode
+            del self._lingering[mode]
+        return None
 
     def subscribe(self, listener: Listener) -> None:
         """``listener(state, active)`` runs after every state change."""
