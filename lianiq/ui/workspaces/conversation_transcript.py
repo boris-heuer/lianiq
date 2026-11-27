@@ -4,9 +4,9 @@
 (``TurnLog``, in memory only) at their capture time, with the owner generation the runner
 bound when it emitted the result. A normal **Stop** does not finish the session in the log,
 so queued turns that complete after it still appear. Only **New conversation** finishes it:
-it stops a running or starting session first, then clears the log, so a late result of that
-session never adds a row. Copy, export and the confirmation live in ``PairedTranscriptView``.
-Replay stays blocked here until WI-03.
+it ends a playback and stops a running or starting session first, then clears the log, so
+a late result of that session never adds a row. Copy, export and the confirmation live in
+``PairedTranscriptView``; per-turn **Replay** is ``ReplayHost`` (WI-03).
 """
 
 from __future__ import annotations
@@ -17,13 +17,13 @@ from PySide6.QtCore import Slot
 
 from lianiq.domain import TranslationResult
 from lianiq.languages.registry import LanguagePair
-from lianiq.transcript.turns import Turn
 from lianiq.ui import strings
 from lianiq.ui.notices import Notice
 from lianiq.ui.shell.workspaces import WorkspaceId
+from lianiq.ui.transcript.replay import ReplayHost
 
 
-class ConversationTranscript:
+class ConversationTranscript(ReplayHost):
     """``TranscriptHost`` members, the result slot and the transcript forwards."""
 
     workspace = WorkspaceId.CONVERSATION
@@ -61,20 +61,9 @@ class ConversationTranscript:
             pair = self.pipeline.registry.pair(*self.config.languages.pair)
         return pair
 
-    def replay_block(self, turn: Turn) -> str | None:
-        return None  # the Replay button stays hidden until WI-03
-
-    def replay(self, turn: Turn) -> None:
-        """Conversation gets per-turn Replay in WI-03."""
-
-    def stop_playback(self) -> None:
-        """Nothing is replayed from the transcript before WI-03."""
-
-    def playing(self) -> bool:
-        return False
-
     def clear_session(self) -> None:
-        """**New conversation**: stop a running or starting session, then clear the log."""
+        """**New conversation**: end a playback, stop a running or starting session, clear."""
+        self.stop_playback()
         if self.starting or self.capture.running:
             self.stop_listening()
         self.turns.finish_session(self._generation)  # also a session without a row yet
