@@ -4,85 +4,49 @@ VoR-02 path (spec §1.5): the N-01 WAV is checked against its SHA-256 in ``image
 before any app starts. Settings › Audio devices: "CABLE Output" is selected as Microphone
 (compared with the cable's WASAPI name; only ``name_matches`` is stored); Conversation:
 every voice switch ("Speak {language}") is off. Then **Start** (F8), wait for "Conversation running" (model
-readiness, 300 s), play the WAV into "CABLE Input" with ``sounddevice`` and wait for a turn
-in *Original* and *Translation*, recorded once two consecutive reads agree. During the
-session every enabled workspace is visited: the strip shows "Conversation running" in each,
+readiness, 300 s), play the WAV into "CABLE Input" with ``sounddevice`` and wait for a row
+with an original and a translation in the *Transcript* list (``transcript_list.py``),
+recorded once two consecutive reads agree. During the session every enabled workspace is visited: the strip shows "Conversation running" in each,
 and in Call Bridge its Start is disabled with the help text "Stop the Conversation session
 first". F9 is pressed in Settings; after the return to
-Conversation the transcript (SHA-256 only, never the text), the vertical scroll position,
+Conversation the row texts (SHA-256 only, never the text), the list's scroll position,
 the pair and the direction are unchanged; a scroll value that cannot be read fails. Two
-masked screenshots (running, after); both transcript panels are masked in each.
+masked screenshots (running, after); the *Transcript* list is masked in each.
 
-The transcript texts stay in memory: ``ctx.state["transcripts"]`` for the E-10 export check
-and ``ctx.secrets`` (also without the language label) so the artifact scan fails on any
-copy of them. The app stays open in ``ctx.state["app"]`` for E-10.
+The texts stay in memory: ``ctx.state["transcripts"]`` (the originals and the translations as
+"{language}: {text}" lines, as the former panels showed them) for the E-10 export check and
+``ctx.secrets`` (the rows, their parts and the lines without the language label) so the
+artifact scan fails on any copy of them. The app stays open in ``ctx.state["app"]`` for E-10.
 """
 
 from __future__ import annotations
 
-import hashlib
 from typing import Any
 
-from native_e2e import audio, screens, uia_app
+from native_e2e import audio, uia_app
 from native_e2e.context import RunContext
 from native_e2e.evidence.model import Check, Method, Row
 from native_e2e.rows import ui
 from native_e2e.rows.common import check, make_row
+from native_e2e.rows.transcript_list import (  # noqa: F401 - re-exported for the other rows
+    DIRECTION_LABEL,
+    LIST,
+    _scroll,
+    digest,
+    has_turn,
+    items,
+    panel,
+    panels,
+    remember,
+    transcript,
+    turn_parts,
+    view,
+)
 from native_e2e.uia import Node
 
-# Visible texts that are not in lianiq/ui/strings.py: the result panel titles
-# (ui/workspaces/conversation_layout.py, ``screens.TRANSCRIPT_FIELDS``), the direction
-# combo's accessible name (ROUTING_CONTROL_LABEL, ui/workspaces/pair_selection.py) and the
-# Call Bridge Start (ui/call_bridge_panel.py).
-PANELS = screens.TRANSCRIPT_FIELDS
-DIRECTION_LABEL = "Conversation direction"
+# Not in lianiq/ui/strings.py: the Call Bridge Start (ui/call_bridge_panel.py).
 CALL_BRIDGE_START = "Start call bridge"
-MIN_SECRET = 4  # shorter transcript lines are not useful scan needles
-
-
-def panel(nodes: list[Node], title: str) -> Node | None:
-    """The text field of a result panel (its heading label has the same name)."""
-    return next(
-        (
-            node
-            for node in nodes
-            if node.visible and node.name == title and node.control_type not in ("Text", "")
-        ),
-        None,
-    )
-
-
-def _scroll(nodes: list[Node], field: Node | None) -> float | None:
-    if field is None:
-        return None
-    if field.scroll is not None:
-        return round(field.scroll, 3)
-    # Qt offers no UIA Scroll pattern on the panels; the scroll bar shows only once the text
-    # overflows, so no shown bar means nothing is scrolled (position 0).
-    bars = [
-        n for n in nodes if n.control_type == "ScrollBar" and n.visible and field.name in n.parents
-    ]
-    if not bars:
-        return 0.0
-    return round(bars[0].scroll, 3) if bars[0].scroll is not None else None
-
-
-def view(nodes: list[Node], s: Any) -> dict[str, Any]:
-    fields = [panel(nodes, title) for title in PANELS]
-    pair = ui.find(nodes, s.PAIR_LABEL, "ComboBox")
-    direction = ui.find(nodes, DIRECTION_LABEL, "ComboBox")
-    texts = [(f.value or "") if f is not None else None for f in fields]
-    return {
-        "texts": texts if None not in texts else None,
-        "scroll": tuple(_scroll(nodes, field) for field in fields),
-        "pair": pair.value if pair is not None else None,
-        "direction": direction.value if direction is not None else None,
-    }
-
-
-def has_turn(nodes: list[Node], s: Any) -> bool:
-    texts = view(nodes, s)["texts"]
-    return texts is not None and all(text.strip() for text in texts)
+_remember = remember  # the former private name, used by E-15, E-19, E-40 and the voice rows
 
 
 def _settled(app: Any, s: Any) -> dict[str, Any]:
@@ -99,10 +63,6 @@ def _settled(app: Any, s: Any) -> dict[str, Any]:
     return ui.wait(probe, ui.MODEL_TIMEOUT_S)
 
 
-def digest(texts: list[str]) -> str:
-    return hashlib.sha256("\n".join(texts).encode("utf-8")).hexdigest()
-
-
 def _bridge_busy(nodes: list[Node], busy: str) -> bool:
     return any(
         node.visible
@@ -115,14 +75,6 @@ def _bridge_busy(nodes: list[Node], busy: str) -> bool:
 
 def _strip_gone(nodes: list[Node], s: Any, running: str) -> bool:
     return not ui.shows(nodes, running) and ui.find(nodes, s.SESSION_STRIP_NAME) is None
-
-
-def _remember(ctx: RunContext, texts: list[str]) -> None:
-    ctx.state["transcripts"] = list(texts)
-    lines = [line.strip() for text in texts for line in [text, *text.splitlines()]]
-    for line in [*lines, *ui.transcript_needles(texts)]:
-        if len(line) >= MIN_SECRET and line not in ctx.secrets:
-            ctx.secrets.append(line)
 
 
 def _visit(app, s, checks: list[Check], running: str) -> bool:
@@ -230,7 +182,7 @@ def _session(ctx, app, path, checks: list[Check], artifacts: list) -> None:
     after = view(app.nodes(), s)
     same = after["texts"] is not None and digest(after["texts"]) == digest(before["texts"])
     detail = f"sha256={digest(before['texts'])}" if same else "changed"
-    readable = None not in before["scroll"]
+    readable = before["scroll"] is not None
     scroll = readable and after["scroll"] == before["scroll"]
     checks += [
         check("transcript-sha256-unchanged", same, detail),
