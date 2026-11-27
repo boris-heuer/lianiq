@@ -35,6 +35,19 @@ def settle(window, width: int, height: int) -> None:
     QTest.qWait(40)
 
 
+def flush_layouts() -> None:
+    """Run the posted layout passes: Qt lays a changed text out before it paints it.
+
+    A label whose text just changed has its new size hint but its old geometry until the
+    posted ``LayoutRequest`` runs; measuring in between reports a clip no user ever sees.
+    """
+    from PySide6.QtCore import QEvent
+    from PySide6.QtWidgets import QApplication
+
+    for _ in range(8):  # a layout pass can post the parent's next one
+        QApplication.sendPostedEvents(None, QEvent.Type.LayoutRequest)
+
+
 def _container(widget, window):
     """The scroll content ``widget`` lives in (scrolling allowed), else the window."""
     from lianiq.ui.shell.scroll import scroll_area_of
@@ -51,6 +64,7 @@ def elided(window) -> list[str]:
     from PySide6.QtCore import QPoint, QRect
     from PySide6.QtWidgets import QAbstractButton, QLabel
 
+    flush_layouts()
     found = []
     widgets = [*window.findChildren(QAbstractButton), *window.findChildren(QLabel)]
     for widget in widgets:
