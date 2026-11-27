@@ -126,7 +126,8 @@ The same two settings apply to any call application. Each path box repeats them 
   *Muted — <reason>*, *Device lost — <device>* or *Reconnecting…*; *Starting…* and *Stopped*
   around a session.
 - **Level meters.** They move only while a stream is open (running or a route test). The caption
-  shows *Signal*, *No signal for 5 s — …* with a hint, or *Too loud (clipping)*.
+  shows *Signal*, *No signal for 5 s — …* with a hint, or *Too loud (clipping) — …* with the
+  volume to lower.
 - **Live text.** Each completed turn appears with its direction (**You → call** or
   **Call → you**), the original and the translation, newest at the bottom, at most 200 turns.
   The view is cleared at each Start and is never saved, logged, exported or shown in the
