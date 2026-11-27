@@ -25,6 +25,11 @@ All notable user-visible changes are documented here.
   copy actions, **Copy transcript** and **New conversation**, which stops the session and
   clears the list, asking first while translated turns are not exported. A held turn resolved
   later appears at its capture time; **Export transcript** is disabled until a turn exists.
+- Conversation and Listen & translate: per-turn **Replay** speaks the selected row's
+  translation again with the current voice options of its target language, and **Stop
+  playback** ends it. The session's microphone is paused meanwhile; **Replay** is disabled with
+  the reason when the voice or the speakers are not ready or another mode holds the session,
+  and any session Start ends a replay first. Listen still never speaks on its own.
 - Language pack documentation: the README explains the Language packs page, the setup
   assistant, offline import from a `.zip` or folder, *Custom path*, the licence gate and how
   packs carry over to a new release; `MODEL_LICENSES.md` lists the licence of every pack;
