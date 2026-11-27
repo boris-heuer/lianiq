@@ -29,6 +29,7 @@ class MeetingEventKind(StrEnum):
     FALLING_BEHIND = "falling_behind"
     CAUGHT_UP = "caught_up"
     ENDPOINT_LOST = "endpoint_lost"
+    NOT_FINISHED = "not_finished"  # the stop bound passed; the placeholder stays, not translated
     STOPPED = "stopped"
 
 
@@ -41,16 +42,36 @@ class MeetingLine:
 
 
 @dataclass(frozen=True, slots=True)
+class MeetingStopResult:
+    """What ``MeetingController.stop`` reports (session-status-truthfulness §2.2.4).
+
+    ``not_finished`` counts the contributions withdrawn at the bound plus the one still in
+    flight; ``timed_out`` is true when any was. Truthy for a clean drain.
+    """
+
+    not_finished: int = 0
+    timed_out: bool = False
+
+    def __bool__(self) -> bool:
+        return not self.timed_out
+
+
+@dataclass(frozen=True, slots=True)
 class MeetingEvent:
     """One controller event; the fields a kind does not use stay ``None`` or 0.
 
     * ``LISTENING``, ``UNMUTED``: ``role`` is the capture that listens again.
     * ``MUTED``: ``role`` is the muted capture, ``language`` the language being spoken.
-    * ``PENDING``, ``WITHDRAWN``: ``role`` and ``contribution_id`` of the table contribution.
+    * ``PENDING``, ``WITHDRAWN``, ``NOT_FINISHED``: ``role`` and ``contribution_id`` of the
+      table contribution.
     * ``LINE``: ``role``, ``contribution_id`` and ``line``.
     * ``IGNORED``: ``role`` and ``count``, the input's ignored counter after the increment.
     * ``ENDPOINT_LOST``: ``role`` is the lost capture or render role.
     * ``FALLING_BEHIND``, ``CAUGHT_UP``: ``count`` is the queue length.
+    * ``STOPPED``: ``stop`` is the controller's ``MeetingStopResult``.
+
+    ``generation`` is the owner generation of the controller's meeting; the page drops
+    events of another generation (session-status-truthfulness AC-18).
     """
 
     kind: MeetingEventKind
@@ -59,6 +80,8 @@ class MeetingEvent:
     line: MeetingLine | None = None
     language: LanguageId | None = None
     count: int = 0
+    generation: int = 0
+    stop: MeetingStopResult | None = None
 
 
 @dataclass(frozen=True, slots=True)
