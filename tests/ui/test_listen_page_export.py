@@ -9,10 +9,10 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtGui import QGuiApplication
 
-import lianiq.ui.workspaces.listen_actions as actions
 from lianiq.listen.lifecycle import ListenPhase
 from lianiq.listen.transcript import SegmentState
 from lianiq.ui.shell.workspaces import WorkspaceId
+from lianiq.ui.transcript import actions
 from tests._spy_window import spies  # noqa: F401 - the fixture
 from tests.ui._language_packs_helpers import wait_until
 from tests.ui._listen_helpers import listen_window, phase_is, speak, start, states
