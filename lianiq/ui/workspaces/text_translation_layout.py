@@ -143,6 +143,7 @@ class TextTranslationLayout:
         self.status_label.setObjectName("textStatus")
         self.status_label.setWordWrap(True)
         self.copy_translation_button = _button(strings.TEXT_COPY_TRANSLATION)
+        self.export_button = _button(strings.TEXT_EXPORT)  # a file the user chooses
         self.busy_indicator = QProgressBar()  # indeterminate while a request runs
         self.busy_indicator.setObjectName("textBusy")
         self.busy_indicator.setRange(0, 0)
@@ -153,6 +154,7 @@ class TextTranslationLayout:
         row.addWidget(self.busy_indicator)
         row.addWidget(self.status_label, 1)
         row.addWidget(self.copy_translation_button)
+        row.addWidget(self.export_button)
         column.addLayout(row)
         self.no_pack_button = _button(strings.PACKS_OPEN)  # with TEXT_NO_PACK_HINT
         self.no_pack_button.hide()
