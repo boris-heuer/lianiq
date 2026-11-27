@@ -2,8 +2,9 @@
 
 Sidebar entry *Listen & translate*, fourth (Ctrl+4). Showing the page opens nothing; **Start
 listening (F8)** runs the ``ListenController`` start gate, loads only the recogniser and the
-translator and opens the chosen microphone. Rows appear in capture order with their state;
-no voice is ever built or played. The selectors are locked while not idle. Worker callbacks
+translator and opens the chosen microphone. Rows appear in capture order with their state
+in the shared ``PairedTranscriptView``; **Clear transcript** empties it. No voice is ever built
+or played. The selectors are locked while not idle. Worker callbacks
 reach the GUI thread through the queued ``posted`` signal. Choices go to ``config.listen``.
 """
 
@@ -25,10 +26,10 @@ from lianiq.ui import strings
 from lianiq.ui.notice_catalog_base import LISTEN_MIC_LOST, model_failed_key
 from lianiq.ui.shell.session_owner import SessionBusy
 from lianiq.ui.shell.workspaces import WorkspaceId, session_busy_message
+from lianiq.ui.transcript.model import reason_text
 from lianiq.ui.workspaces.listen_actions import ListenTranscriptActions
 from lianiq.ui.workspaces.listen_devices import ListenDevices
 from lianiq.ui.workspaces.listen_layout import ListenLayout
-from lianiq.ui.workspaces.listen_model import ListenTranscriptModel, reason_text
 from lianiq.ui.workspaces.listen_selection import ListenSelection
 
 if TYPE_CHECKING:
@@ -95,8 +96,6 @@ class ListenWorkspace(
 
     def build_page(self):
         page = super().build_page()
-        self.model = ListenTranscriptModel(self.controller.transcript, self.registry)
-        self.transcript_view.setModel(self.model)
         self.source_combo.activated.connect(lambda _i: self._language_chosen(self.source_combo))
         self.target_combo.activated.connect(lambda _i: self._language_chosen(self.target_combo))
         self.swap_button.clicked.connect(self._swap)
@@ -214,8 +213,7 @@ class ListenWorkspace(
             empty = strings.LISTEN_WAITING
         else:
             empty = strings.LISTEN_NO_PACK_HINT if no_packs else strings.LISTEN_EMPTY
-        self.empty_label.setText(empty)
-        self.empty_label.setVisible(bool(empty))
+        self.paired_view.set_placeholder(empty)
 
     def _state_text(self, snapshot: ListenSnapshot) -> str:
         if snapshot.phase is ListenPhase.LISTENING:
