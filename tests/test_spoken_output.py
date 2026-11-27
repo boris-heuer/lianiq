@@ -301,3 +301,45 @@ def test_logs_name_language_options_and_error_class_only(tmp_path, caplog) -> No
     logged = caplog.text
     assert "secret words" not in logged and "engine failed" not in logged
     assert "language=qab" in logged and "RuntimeError" in logged and "rate=1.00" in logged
+
+
+# Per-turn replay (paired-transcript §3.3) ------------------------------------------------
+
+
+def test_replay_turn_holds_the_lock_ignores_closed_and_keeps_plan_and_last(tmp_path) -> None:
+    harness = Harness(tmp_path, blocking=True)
+    seen, events = [], []
+    harness.spoken.subscribe(seen.append)
+    harness.spoken.close()  # an idle page after Stop may replay
+    replay = harness.spoken.replay_turn(result(QAA), 3, events.append)
+    assert harness.player.playing.wait(WAIT)
+    assert harness.spoken.replay_turn(result(), 3, events.append) is None  # one at a time
+    harness.spoken.stop_playback()
+    replay.join(WAIT)
+
+    assert [device for _path, device in harness.player.played] == [3]
+    assert seen == harness.states[-3:] and seen[-1] is PlaybackState.IDLE
+    assert harness.spoken.last_spoken is None and harness.spoken.plan == frozenset()
+    assert events == [] and harness.spoken.active_replay is None
+
+
+def test_replay_turn_failure_goes_to_the_caller_and_keeps_the_plan(tmp_path) -> None:
+    harness = Harness(tmp_path)
+    events = []
+
+    def failing(_path, _device) -> None:
+        raise OSError("gone")
+
+    harness.spoken._play = failing
+    harness.spoken.replay_turn(result(), None, events.append).join(WAIT)
+    harness.engine.started.clear()
+    harness.engine.gate = threading.Event()  # a stop during synthesis: never played
+    replay = harness.spoken.replay_turn(result(), None, events.append)
+    assert harness.engine.started.wait(WAIT)
+    harness.spoken.stop_playback()
+    harness.engine.gate.set()
+    replay.join(WAIT)
+
+    assert [event.kind for event in events] == [PipelineEventKind.PLAYBACK_FAILED]
+    assert harness.events == [] and harness.spoken.plan == {QAB}
+    assert list(tmp_path.iterdir()) == []
