@@ -145,7 +145,7 @@ def test_ac18_call_bridge_and_result_labels_show_registry_names(
     window,
     spies,  # noqa: F811
 ) -> None:
-    from tests.ui._language_helpers import assert_no_language_codes, blocks
+    from tests.ui._language_helpers import assert_no_language_codes
 
     panel = window.call_bridge_panel
     assert [box.title() for box in panel.paths.values()] == [
@@ -174,7 +174,7 @@ def test_ac18_call_bridge_and_result_labels_show_registry_names(
         "You → call" + NL + "Guten Tag" + NL + "[de>zh-Hans] Guten Tag",
         "Call → you" + NL + "你好" + NL + "[zh-Hans>de] 你好",
     ]
-    assert blocks(window.source_text) == [] and window.history == []
+    assert window.conversation.turns.rows == () and window.history == ()
     assert_no_language_codes(window)
 
 
