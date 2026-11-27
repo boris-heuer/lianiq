@@ -6,6 +6,9 @@ All notable user-visible changes are documented here.
 
 ### Added
 
+- Text translation takes long texts: up to 50,000 characters (was 5,000), translated sentence
+  by sentence with "Translating… part N of M" and a progress bar; **Cancel** or **Escape**
+  stops at the next sentence and keeps the previous result (lianiq#35).
 - Clearer Mandarin voice: when the Windows Chinese (Simplified) speech voice is installed
   (Microsoft Huihui, Yaoyao or Kangkang; offline, 16 kHz), Lianiq speaks Mandarin with it
   instead of the bundled 8 kHz aishell3 voice, which stays the fallback. Rate, volume and the

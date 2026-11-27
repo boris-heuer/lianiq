@@ -44,7 +44,7 @@ def limit() -> int:
 
 
 def over_limit() -> str:
-    """D-06: ``"Ab. " * 1250 + "x"`` for the 5,000 limit (one code point too many)."""
+    """D-06: ``"Ab. "`` repeated, then ``"x"``: one code point above the limit (50,000)."""
     count = limit() + 1
     return ("Ab. " * (count // 4 + 1))[: count - 1] + "x"
 

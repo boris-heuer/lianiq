@@ -64,6 +64,7 @@ class TextSnapshot:
     status: str | None = None  # cancelled / failed text, never user text
     retry: bool = False  # Retry is offered after a cancel or failure
     no_pack: bool = False  # no translation pack for any edge: TEXT_NO_PACK_HINT
+    progress: tuple[int, int] | None = None  # (done, total) segments of the running request
 
 
 class TextTranslationController:
@@ -92,6 +93,7 @@ class TextTranslationController:
         self.no_pack = not any_translation_ready(catalog())
         self.translating = False
         self._running_revision: int | None = None  # revision of the running request
+        self.progress: tuple[int, int] | None = None
         self.status: str | None = None
         self.retry_offered = False
         self._closed = False
@@ -135,9 +137,9 @@ class TextTranslationController:
             return
         request = self.draft.request()
         self.translating, self.status, self.retry_offered = True, None, False
-        self._running_revision = request.revision
+        self._running_revision, self.progress = request.revision, None
         self._resolve(notices.TEXT_FAILURE_KEYS)
-        self.jobs.start(request, self._done, self._failed, self._cancelled)
+        self.jobs.start(request, self._done, self._failed, self._cancelled, self._progress)
         self.render()
 
     def cancel(self) -> None:
@@ -220,6 +222,11 @@ class TextTranslationController:
                 )
             )
 
+    def _progress(self, request_id: int, done: int, total: int) -> None:
+        if not self._closed and self.translating and request_id == self.draft.latest_request:
+            self.progress = (done, total)
+            self.render()
+
     def _cancelled(self, request_id: int) -> None:
         if not self._closed:
             self._finish(request_id, s.TEXT_CANCELLED, retry=True)
@@ -228,7 +235,7 @@ class TextTranslationController:
         if request_id != self.draft.latest_request:
             return False  # a superseded job: its outcome is not shown
         self.translating, self.status, self.retry_offered = False, status, retry
-        self._running_revision = None
+        self._running_revision, self.progress = None, None
         self.render()
         return True
 
@@ -257,6 +264,7 @@ class TextTranslationController:
             status=self.status,
             retry=self.retry_offered and not self.translating,
             no_pack=self.no_pack,
+            progress=self.progress if self.translating else None,
         )
 
     def render(self) -> None:

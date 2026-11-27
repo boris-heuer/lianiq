@@ -74,7 +74,7 @@ class FakeText:
         return any(EDGES[p] == (self.source, self.target) for p in self.packs if p in EDGES)
 
     def _text_page(self) -> list[Node]:
-        too_long = len(self.text) > 5000
+        too_long = len(self.text) > 50000
         voice = any(VOICES.get(p) == self.target for p in self.packs)
         stale = bool(self.result) and not self.current
         label = "Stop" if self.playing else "Replay" if self.replay else "Play translation"
@@ -95,7 +95,7 @@ class FakeText:
                 Node("Out of date — the text or a language changed. Translate again.", "Text")
             )
         if too_long:
-            limit = "Shorten the text to 5000 characters."
+            limit = "Shorten the text to 50000 characters."
             out.append(Node(f"Too long to translate: {len(self.text)} characters. {limit}", "Text"))
         if not voice:
             out += [

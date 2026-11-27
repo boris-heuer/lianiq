@@ -32,7 +32,7 @@ class TextTranslationRender:
             snapshot.check is not SourceCheck.TOO_LONG
             and snapshot.readiness.translate is TranslateBlock.PACK_MISSING
         )
-        self.busy_indicator.setVisible(snapshot.translating)
+        self._render_progress(snapshot)
         if self.controller.cancellable:
             self.translate_button.setText(strings.TEXT_CANCEL)
             self.translate_button.setEnabled(True)
@@ -43,7 +43,14 @@ class TextTranslationRender:
         self.retry_button.setVisible(snapshot.retry)
         playing = snapshot.playback != "idle"
         status = strings.TEXT_PLAYING if playing else snapshot.status or ""
-        self.status_label.setText(strings.TEXT_TRANSLATING if snapshot.translating else status)
+        if snapshot.translating:
+            status = strings.TEXT_TRANSLATING
+            if snapshot.progress is not None and snapshot.progress[1] > 1:
+                done, total = snapshot.progress
+                status = strings.TEXT_PROGRESS.format(
+                    done=min(done + 1, total), total=total, percent=done * 100 // total
+                )
+        self.status_label.setText(status)
         self._render_play(snapshot, playing)
         result = self.controller.draft.result
         result_id = None if result is None else result.result_id
@@ -66,6 +73,17 @@ class TextTranslationRender:
             )
         )
         self.copy_translation_button.setEnabled(snapshot.result_state is ResultState.CURRENT)
+
+    def _render_progress(self, snapshot: TextSnapshot) -> None:
+        """Indeterminate until the segment count is known, then done of total segments."""
+        bar = self.busy_indicator
+        bar.setVisible(snapshot.translating)
+        if snapshot.progress is None or snapshot.progress[1] <= 1:
+            bar.setRange(0, 0)
+        else:
+            done, total = snapshot.progress
+            bar.setRange(0, total)
+            bar.setValue(done)
 
     def _render_play(self, snapshot: TextSnapshot, playing: bool) -> None:
         """Play translation, then Replay after the first playback; Stop while playing."""

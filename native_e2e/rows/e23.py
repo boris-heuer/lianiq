@@ -4,8 +4,8 @@ Image models. Settings › Audio devices: "CABLE Output" as Microphone, "CABLE I
 (``name_matches`` only). Conversation **Start** (F8); Text translation: D-03 is translated
 while Conversation runs; **Play translation** is refused with "Stop the Conversation session
 first" and nothing plays; F9 stops Conversation and Play then runs; F9 pressed in Settings
-stops it and both texts are unchanged on return. Limit: D-06 (5,001 code points, pasted)
-shows ``TEXT_TOO_LONG`` with the count and disables **Translate**; one Backspace (5,000)
+stops it and both texts are unchanged on return. Limit: D-06 (50,001 code points, pasted)
+shows ``TEXT_TOO_LONG`` with the count and disables **Translate**; one Backspace (50,000)
 enables it. Privacy: the sentinel D-05 is translated and played (F9 ends it), Settings ›
 Diagnostics **Export…** writes ``%TEMP%\\lianiq-e2e\\diagnostics-E23.txt``; after a restart
 *Source text* is empty and no log, the export or a ``config\\settings*.json`` holds "QX7"
