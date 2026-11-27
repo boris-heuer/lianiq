@@ -78,6 +78,7 @@ def test_ac24_held_turns_discarded_on_stop_is_a_warning(window, spies) -> None: 
     assert not banner(window).isVisible()  # the held-turn bar stays primary while running
 
     click(window.stop_button)
+    assert wait_until(lambda: not window.conversation.stopping)  # the stop thread (WI-02)
 
     title, detail, labels = shown(window)
     assert title == "Warning: 1 turn(s) with an unclear language were discarded"
