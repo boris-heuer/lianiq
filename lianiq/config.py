@@ -128,7 +128,9 @@ class TtsConfig:
     engines: dict[str, VoiceEngineConfig] = field(
         default_factory=lambda: {
             "de": VoiceEngineConfig("piper"),
-            "zh-Hans": VoiceEngineConfig("sherpa-onnx", speaker_id=20, length_scale=1.15),
+            "zh-Hans": VoiceEngineConfig(
+                "sherpa-onnx", speaker_id=20, length_scale=1.15, system_voice="zh-CN"
+            ),
             "en": VoiceEngineConfig("piper"),
         }
     )
