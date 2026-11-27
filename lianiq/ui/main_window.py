@@ -143,6 +143,7 @@ class MainWindow(MainWindowLayout, MainWindowServices, QMainWindow):
         theme.follow_system(self)
 
         self.conversation.start_session_services()
+        self.listen.attach_spoken(self.pipeline.spoken)  # Listen's Replay (paired-transcript)
         self.call_bridge_panel.set_models_ready(True)
         self.conversation.connect_selection()
         self.meeting.connect_selection()
