@@ -94,3 +94,10 @@ def test_frozen_builds_ship_the_builtin_catalog() -> None:
     assert package_data["lianiq.packs"] == ["builtin_catalog.json"]
     build = (ROOT / "scripts/build.ps1").read_text(encoding="utf-8")
     assert '--add-data "lianiq/packs/builtin_catalog.json;lianiq/packs"' in build
+
+
+def test_frozen_builds_ship_the_call_bridge_checklist() -> None:
+    """The Call Bridge checklist link resolves to <app>/docs in a packaged build (lianiq#25)."""
+    build = (ROOT / "scripts/build.ps1").read_text(encoding="utf-8")
+    assert r"'dist\lianiq\docs'" in build
+    assert "'call-bridge-operator-setup.md'" in build
