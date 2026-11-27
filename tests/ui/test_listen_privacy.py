@@ -18,10 +18,10 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-import lianiq.ui.workspaces.listen_actions as actions
 from lianiq.listen.lifecycle import ListenPhase
 from lianiq.listen.transcript import SegmentState
 from lianiq.ui.shell.workspaces import WorkspaceId
+from lianiq.ui.transcript import actions
 from tests._spy_window import spies  # noqa: F401 - the fixture
 from tests.meeting.test_controller_privacy import static_findings
 from tests.packs.conftest import network_attempts  # noqa: F401 - the socket guard
@@ -32,6 +32,8 @@ ROOT = Path(__file__).resolve().parents[2] / "lianiq"
 LISTEN_FILES = sorted((ROOT / "listen").glob("*.py")) + sorted(
     (ROOT / "ui" / "workspaces").glob("listen*.py")
 )
+LISTEN_FILES += sorted((ROOT / "transcript").glob("*.py"))  # the shared turn log and view
+LISTEN_FILES += sorted((ROOT / "ui" / "transcript").glob("*.py"))
 SENTINELS = ("Zebraquark 4711.", "Mondfisch Orakel 0815.")
 LEAK = "Geheimnis Kobold 1234"
 NETWORK = {"socket", "ssl", "urllib", "http", "requests", "httpx", "aiohttp", "ftplib"}
