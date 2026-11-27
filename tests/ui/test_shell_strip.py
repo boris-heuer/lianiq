@@ -21,6 +21,7 @@ from tests.ui import _conversation_helpers as conv
 from tests.ui._call_bridge_window import (
     FakeCaptureStream,
     assign,
+    bridge_stopped,
     build_call_bridge_window,
 )
 from tests.ui._language_helpers import start, submit, transcript, wait_until
@@ -170,6 +171,7 @@ def test_ac07_conversation_start_is_refused_while_the_call_bridge_runs(window) -
 
     click(window.navigation.buttons[WorkspaceId.SETTINGS])
     click(window.stop_button)  # the strip stops the Call Bridge too
+    assert bridge_stopped(window)
 
     assert window.call_bridge_controller is None
     assert window.session_owner.state is SessionState.IDLE
@@ -193,6 +195,7 @@ def test_f9_from_settings_stops_a_running_call_bridge(window) -> None:
     assert wait_until(lambda: QApplication.focusWidget() is field)
 
     QTest.keyClick(field, Qt.Key.Key_F9)
+    assert bridge_stopped(window)
 
     assert wait_until(lambda: window.call_bridge_controller is None)
     assert window.session_owner.state is SessionState.IDLE
