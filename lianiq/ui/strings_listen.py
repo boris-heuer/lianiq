@@ -6,6 +6,15 @@ always one of the ``LISTEN_REASON_*`` texts, never an exception message.
 
 from __future__ import annotations
 
+from lianiq.ui.strings_transcript import (
+    TRANSCRIPT_COPIED,
+    TRANSCRIPT_COPY_ALL,
+    TRANSCRIPT_EXPORT_ALL,
+    TRANSCRIPT_JUMP,
+    TRANSCRIPT_LIST,
+    TRANSCRIPT_NEW_BELOW,
+)
+
 LISTEN_SOURCE_LANGUAGE = "Source language"
 LISTEN_TARGET_LANGUAGE = "Target language"
 LISTEN_MICROPHONE = "Microphone"
@@ -28,8 +37,8 @@ LISTEN_NOT_UNDERSTOOD = "Not understood"
 LISTEN_SEGMENT_FAILED = "Not translated: {reason}"
 LISTEN_SKIPPED = "Skipped — too much speech at once"
 LISTEN_NOT_FINISHED = "Not translated before Stop"
-LISTEN_NEW_BELOW = "New segments below"
-LISTEN_JUMP = "Jump to latest"
+LISTEN_NEW_BELOW = TRANSCRIPT_NEW_BELOW
+LISTEN_JUMP = TRANSCRIPT_JUMP
 LISTEN_UNSUPPORTED = "Listening in {source} with translation to {target} is not supported."
 LISTEN_NO_PACK_HINT = (
     "Listen & translate needs speech recognition and a translation pack. "
@@ -44,10 +53,10 @@ LISTEN_MIC_LOST = (
 )
 LISTEN_OVERLOAD = "Speech arrived faster than it could be translated; some segments were skipped."
 LISTEN_FAILED = "A segment could not be translated: {reason}"
-LISTEN_COPY = "Copy transcript"
-LISTEN_EXPORT = "Export transcript"
-LISTEN_COPIED = "Copied"
-LISTEN_TRANSCRIPT = "Transcript"
+LISTEN_COPY = TRANSCRIPT_COPY_ALL
+LISTEN_EXPORT = TRANSCRIPT_EXPORT_ALL
+LISTEN_COPIED = TRANSCRIPT_COPIED
+LISTEN_TRANSCRIPT = TRANSCRIPT_LIST
 LISTEN_REASON_MODEL = "the model could not be used"
 LISTEN_REASON_MEMORY = "not enough memory"
 LISTEN_REASON_OTHER = "unexpected error (details in Diagnostics)"
