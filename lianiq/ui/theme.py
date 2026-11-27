@@ -170,7 +170,8 @@ QPushButton:focus, QPushButton#primaryButton:focus, QComboBox:focus {{
 QPlainTextEdit:focus {{ border: {f}px solid {c["focus"]}; padding: {SPACING[2] - 1}px; }}
 QCheckBox:focus, QRadioButton:focus, QLabel#readOnlyValue:focus,
 QFrame#navigationSidebar QToolButton:focus,
-QFrame#noticeBanner:focus, QFrame#heldTurnBar:focus {{ border: {f}px solid {c["focus"]}; }}
+QFrame#noticeBanner:focus, QFrame#heldTurnBar:focus, QListView:focus {{
+    border: {f}px solid {c["focus"]}; }}
 """
 
 
