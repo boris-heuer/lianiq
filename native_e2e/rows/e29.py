@@ -9,8 +9,9 @@ the playback ended by the stop. After ``WINDOW_S`` of recording the fixture is p
 and, while it is spoken, the time is marked and F9 pressed; the strip and the paused state
 must go and **Stop playback** be disabled. For each stop the last cable signal in the
 ``WINDOW_S`` after the mark must lie at most 0.5 s after it (the fixture itself is silent
-by then). Then, with the fixture played once more into the cable, the state reads "Ready"
-and the level bar 0 on every poll for 10 s, and the log has no "Microphone capture started"
+by then). Then, with the fixture played once more into the cable, the state reads
+"Stopped · {n} turns kept" (session-status-truthfulness; "Ready" is first launch only) and the
+level bar 0 on every poll for 10 s, and the log has no "Microphone capture started"
 after F9. Only the two latencies are stored; the samples stay in memory. The app is closed
 and the settings reset to the S-03 baseline at the end.
 """
@@ -82,7 +83,7 @@ def _hold(ctx, app, s, path, offset: int, checks: list[Check]) -> None:
     ready, polls, deadline = True, 0, time.monotonic() + HOLD_S
     while time.monotonic() < deadline or polls == 0:
         nodes = app.nodes()
-        ready &= ui.shows(nodes, voice.READY_STATE) and voice.level(nodes) == 0
+        ready &= voice.stopped(nodes) and voice.level(nodes) == 0
         polls += 1
         time.sleep(ui.POLL_S)
     thread.join()
