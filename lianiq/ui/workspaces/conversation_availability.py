@@ -78,7 +78,7 @@ class ConversationAvailability:
         if pair is None:
             self.start_button.setEnabled(False)
             self.refresh_voice_rows()  # no pair: no rows
-            self.state_label.setText("Not available")
+            self._show_unavailable_state()
             status.showMessage(strings.NO_PAIR_READY)
             self._no_pair_notice(True)
             return
@@ -105,11 +105,15 @@ class ConversationAvailability:
         self.notices.availability(availability.available)
         if availability.available:
             if self.state_label.text() == "Not available":
-                self.state_label.setText("Ready")
+                self.show_activity()
             status.showMessage("Models load on Start, only for the selected mode.")
         else:
-            self.state_label.setText("Not available")
+            self._show_unavailable_state()
             status.showMessage(self.host.describe_missing(availability))
+
+    def _show_unavailable_state(self) -> None:
+        if not self.error_open():  # a sticky error stays (session-status-truthfulness)
+            self.state_label.setText("Not available")
 
     def _no_pair_notice(self, missing: bool) -> None:
         """Post ``conversation.no-pair-ready`` once while no pair is ready (CAP-0171 C §12)."""
