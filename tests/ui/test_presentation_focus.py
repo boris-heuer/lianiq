@@ -168,20 +168,15 @@ def test_ac28_ctrl_number_and_focus_returns_after_switching_back(window) -> None
 
 
 def test_ac28_focus_returns_to_export_transcript_after_its_dialogs(window, spies, monkeypatch):  # noqa: F811
-    from PySide6.QtWidgets import QFileDialog, QMessageBox
+    from PySide6.QtWidgets import QFileDialog
 
     button = window.conversation.export_button
-    shown = []
-    monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a: shown.append(a)))
-    button.setFocus()
-    window.statusBar().setFocus()  # the dialog took focus away
-    button.click()
-    assert shown and focused() is button
+    assert not button.isEnabled()  # no translated turn: no "no history yet" box any more
 
     start(window)
     submit(window, spies, transcript("Guten Tag", "de"))
     assert wait_until(lambda: len(window.history) == 1)
     monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *_a: ("", "")))
-    window.source_text.setFocus()
+    window.conversation.transcript_view.setFocus()
     button.click()
     assert focused() is button
