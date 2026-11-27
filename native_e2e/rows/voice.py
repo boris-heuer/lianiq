@@ -26,8 +26,15 @@ from native_e2e.rows import e03, e15, ui
 from native_e2e.uia import Node
 
 GERMAN, MANDARIN = "de", "zh-Hans"  # registry language IDs of the image pair
-READY_STATE = "Ready"  # Conversation's idle state (ui/workspaces/conversation.py, not a string)
+READY_STATE = "Ready"  # Conversation's state on first launch only (session-status-truthfulness)
+# After a session Conversation reads ``strings_session.STATE_STOPPED`` ("Stopped · {n} turns kept").
+STOPPED_STATE = re.compile(r"Stopped · \d+ turns? kept")
 PLAYED = re.compile(r"Audio playback completed: language=(\S+)")  # spoken_output.py
+
+
+def stopped(nodes: list[Node]) -> bool:
+    """Conversation shows ``STOPPED_STATE`` (any turn count): idle after a session."""
+    return any(node.visible and STOPPED_STATE.fullmatch(node.name or "") for node in nodes)
 
 
 def name(language: str) -> str:
