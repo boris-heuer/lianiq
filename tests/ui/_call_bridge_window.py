@@ -42,6 +42,18 @@ def wait_until(condition, timeout_ms: int = 3_000) -> bool:
     return condition()
 
 
+def bridge_stopped(window) -> bool:
+    """Wait for the asynchronous Call Bridge stop to end (session-status-truthfulness WI-05)."""
+    from lianiq.ui.shell.session_owner import SessionState
+
+    return wait_until(
+        lambda: (
+            window.session_owner.state is SessionState.IDLE
+            and window.call_bridge._stopping_controller is None
+        )
+    )
+
+
 def click(widget) -> None:
     from PySide6.QtCore import Qt
     from PySide6.QtTest import QTest
