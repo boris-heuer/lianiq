@@ -5,6 +5,13 @@ runs on a worker thread (see ``meeting.py``). ``_ControllerOwner`` is the sessio
 the controller sees it. Its events reach ``running_event`` (``meeting_running``) on the GUI
 thread; ``STOPPED`` ends the page's meeting, then offers the end-of-meeting dialog
 (``meeting_notices``).
+
+session-status-truthfulness §2.2.4: while the meeting drains the label counts the
+contributions still to finish and **End meeting** is disabled; ``STOPPED`` carries the
+controller's ``MeetingStopResult``: *Meeting ended · {n} contributions*, or at the drain
+bound *Stopped — {n} not finished*, ``session.stop-timeout`` and the owner's lingering guard
+while the worker lives. After a start failure the label reads *Could not start — see
+notice* while that notice is open. Events of another controller generation are dropped.
 """
 
 from __future__ import annotations
@@ -20,6 +27,8 @@ from lianiq.meeting.events import MeetingEvent, MeetingEventKind, MeetingOptions
 from lianiq.packs.protection import ActiveUsage
 from lianiq.ui import notice_catalog as catalog
 from lianiq.ui import strings
+from lianiq.ui import strings_session as session_strings
+from lianiq.ui.notice_catalog_base import model_failed_key, start_failed_key, unavailable_key
 from lianiq.ui.shell.session_owner import ActiveSessionOwner, SessionBusy
 from lianiq.ui.shell.workspaces import WorkspaceId
 from lianiq.ui.transcript.replay import end_playback
@@ -128,6 +137,7 @@ class MeetingLifecycle:
         else:
             self.host.resolve_notices(catalog.keys_resolved_by_start(MEETING))
             self.host.resolve_notices(keys_resolved_by_meeting_start())
+            self.ended_state = None  # running: "Ready" never returns after a session
             self.refresh()
             self.state_label.setText(strings.SESSION_RUNNING.format(mode=strings.NAV_MEETING))
 
@@ -172,21 +182,37 @@ class MeetingLifecycle:
                 self.owner.mark_idle(self._generation)
             return
         self.stopping = True
+        self.captures_closed()
+        self.refresh()
         threading.Thread(
             target=_drain,
-            args=(controller, self.meeting_event.emit),
+            args=(controller, self.meeting_event.emit, self.drain_bounds, self._generation),
             name="meeting-stop",
             daemon=True,
         ).start()
 
     @Slot(object)
     def _event(self, event) -> None:
+        if event.generation != self._generation:
+            return  # an event of another controller (AC-18)
         if event.kind is not MeetingEventKind.STOPPED:
             if self.controller is not None:  # a late event of an ended meeting is ignored
                 self.running_event(event)
+                if self.stopping:
+                    self.show_state()
             return
-        controller = self.controller
+        controller, result = self.controller, event.stop
         self.controller, self.stopping = None, False
+        timed_out = result is not None and result.timed_out
+        if timed_out:
+            if controller is not None:  # refuse every start while its worker lives
+                self.owner.linger(MEETING, controller.worker_alive)
+            n = result.not_finished
+            self.ended_state = session_strings.counted(session_strings.STATE_STOPPED_LOSS, n)
+            self.host.post_notice(catalog.stop_timeout(MEETING, n, self._generation))
+        else:
+            n = 0 if controller is None else len(controller.results)
+            self.ended_state = session_strings.counted(session_strings.MEETING_ENDED, n)
         self.owner.mark_idle(self._generation)  # drained: other modes may start now
         self.reset_running(running=False)
         self.refresh()
@@ -194,11 +220,35 @@ class MeetingLifecycle:
         if controller is not None:  # after the drain: the end-of-meeting dialog (WI-05)
             self.meeting_ended(controller)
 
+    def show_state(self, problem: str = "") -> None:
+        """The page label from the session state (session-status-truthfulness §2.3)."""
+        if self.stopping:
+            n = 0 if self.controller is None else self.controller.unfinished()
+            text = session_strings.STATE_STOPPING
+            if n:
+                text = session_strings.counted(session_strings.MEETING_STOPPING, n)
+        elif self.active():
+            return  # *starting* and *running* keep the text their step set
+        elif any(self.host.notices.get(key) for key in _START_FAILURES):
+            text = session_strings.MEETING_START_FAILED_STATE
+        elif self.ended_state is not None:
+            text = self.ended_state
+        else:
+            text = "" if problem else strings.DIAG_READY
+        self.state_label.setText(text)
 
-def _drain(controller, publish) -> None:
+    def _notice_changed(self, _change: str, notice) -> None:
+        if notice.key in _START_FAILURES and hasattr(self, "state_label"):
+            self.show_state(self.availability_label.text())
+
+
+_START_FAILURES = (model_failed_key(MEETING), start_failed_key(MEETING), unavailable_key(MEETING))
+
+
+def _drain(controller, publish, bounds: tuple[float, float], generation: int) -> None:
     """``controller.stop()`` on the stopping thread; a failure still ends the page's meeting."""
     try:
-        controller.stop()
+        controller.stop(*bounds)
     except Exception as exc:  # noqa: BLE001 - worker boundary: the type only, no transcript
         LOGGER.error("The meeting did not stop cleanly: %s", type(exc).__name__)
-        publish(MeetingEvent(MeetingEventKind.STOPPED))
+        publish(MeetingEvent(MeetingEventKind.STOPPED, generation=generation))

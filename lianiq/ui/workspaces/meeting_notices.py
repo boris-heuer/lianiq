@@ -140,7 +140,7 @@ class MeetingEnd:
             button.setAccessibleName(button.text())
         dialog.setDefaultButton(save)
         dialog.setEscapeButton(dont)  # closing the dialog = Don't save
-        dialog.finished.connect(lambda _result: self._answered(dialog.clickedButton() is save))
+        dialog.finished.connect(lambda _result: self._answered(_accepted(dialog)))
         self.save_dialog = dialog
         dialog.open()
 
@@ -166,6 +166,12 @@ class MeetingEnd:
             return
         self._unsaved = None
         self.host.notices.resolve(SAVE_FAILED)
+
+
+def _accepted(dialog: QMessageBox) -> bool:
+    """**Save…** was clicked; by role, as a PySide wrapper of the button can be replaced."""
+    clicked = dialog.clickedButton()
+    return clicked is not None and dialog.buttonRole(clicked) is QMessageBox.ButtonRole.AcceptRole
 
 
 def _assigned(endpoints) -> dict:

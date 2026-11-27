@@ -77,6 +77,8 @@ class MeetingWorkspace(
         self.controller = None
         self.starting = False
         self.stopping = False
+        self.ended_state: str | None = None  # the label after a meeting (spec §2.3)
+        self.drain_bounds = (120.0, 2.0)  # seconds: the CAP-0177 drain bound, the abort grace
         self._generation = 0  # the owner generation of this workspace's latest start
         self._pending: SessionPair | None = None
         self.models_ready.connect(self._models_ready)
@@ -85,6 +87,7 @@ class MeetingWorkspace(
         self.owner_idle.connect(self.owner.mark_idle)
         self.owner.register(MEETING, self.stop_meeting, asynchronous=True)
         self.owner.subscribe(self._session_changed)
+        host.notices.subscribe(self._notice_changed)
 
     def connect_selection(self) -> None:
         """After the Conversation pair control is filled: follow it and list the devices."""
@@ -173,8 +176,7 @@ class MeetingWorkspace(
         checkbox.setAccessibleDescription(speech_reason)
         checkbox.blockSignals(False)
         self.show_running(busy)
-        if not busy:
-            self.state_label.setText("" if problem else strings.DIAG_READY)
+        self.show_state(problem)
 
     def _show_pairs(self) -> None:
         """The session pair, as the Conversation pair control lists and selects it."""
