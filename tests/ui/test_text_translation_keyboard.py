@@ -31,6 +31,7 @@ TAB_ORDER = [
     strings.TEXT_COPY_SOURCE,
     strings.TEXT_RESULT_LABEL,
     strings.TEXT_COPY_TRANSLATION,
+    strings.TEXT_EXPORT,
     strings.TEXT_TRANSLATE,
     strings.TEXT_PLAY,
 ]
