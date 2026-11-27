@@ -13,6 +13,7 @@ from lianiq.listen.lifecycle import ListenPhase
 from lianiq.listen.transcript import SegmentState
 from lianiq.pipeline_types import FailureReason
 from lianiq.ui import strings
+from lianiq.ui import strings_session as session_strings
 from lianiq.ui.shell.session_owner import SessionState
 from lianiq.ui.shell.workspaces import WorkspaceId
 from tests._spy_window import spies  # noqa: F401 - the fixture
@@ -143,3 +144,84 @@ def test_the_listen_pipeline_follows_a_readiness_refresh(window) -> None:
     replacement = object()
     window.pipeline.catalog = replacement
     assert window.listen.pipeline.catalog is replacement
+
+
+# session-status-truthfulness WI-03 (AC-13, AC-14).
+
+STOP_TIMEOUT = "session.stop-timeout"
+STILL_FINISHING = "session.still-finishing"
+MODEL_FAILED = "listen-and-translate.model-failed"
+MIC_LOST = "listen.microphone-lost"
+
+
+def start_held(window, spies) -> None:
+    """**Start listening** with the models still loading."""
+    spies.release_warm_up.clear()
+    window.listen.start()
+    assert window.listen.controller.phase is ListenPhase.LOADING
+
+
+def test_ac13_a_model_failed_notice_stays_while_loading_and_resolves_on_listening(
+    window, spies
+) -> None:
+    spies.failing_warm_up_calls.add(1)
+    window.start_current_page()
+    assert wait_until(lambda: MODEL_FAILED in keys(window))
+    start_held(window, spies)
+    assert MODEL_FAILED in keys(window)  # not resolved at the click
+    spies.release_warm_up.set()
+    assert phase_is(window, ListenPhase.LISTENING)
+    assert MODEL_FAILED not in keys(window)
+    assert window.listen.state_label.text() == strings.LISTEN_STATE_LISTENING
+
+
+def test_ac13_microphone_lost_state_and_the_notice_resolves_on_listening(window, spies) -> None:
+    start(window)
+    capture = window.listen_captures[-1]
+    error = threading.Thread(target=capture.on_error, args=("PortAudio error -9999",))
+    error.start()
+    error.join()
+    assert phase_is(window, ListenPhase.IDLE)
+    assert wait_until(lambda: MIC_LOST in keys(window))
+    assert window.listen.state_label.text() == session_strings.LISTEN_STOPPED_MIC_LOST
+    start_held(window, spies)
+    assert MIC_LOST in keys(window)
+    spies.release_warm_up.set()
+    assert phase_is(window, ListenPhase.LISTENING)
+    assert MIC_LOST not in keys(window)
+    window.stop_active_session()
+    assert phase_is(window, ListenPhase.IDLE)
+    assert window.listen.state_label.text() == strings.LISTEN_STATE_STOPPED
+
+
+def test_ac14_a_stuck_recognizer_reads_not_finished_and_start_waits_for_it(window, spies) -> None:
+    controller = window.listen.controller
+    controller._flush = controller._grace = 0.05  # the bounds as parameters (spec §8)
+    start(window)  # builds the recognizer spy
+    release, transcribe = threading.Event(), spies.recognizer.transcribe
+
+    def stuck(samples, rate, language=None):
+        assert release.wait(10.0)
+        return transcribe(samples, rate, language)
+
+    spies.recognizer.transcribe = stuck
+    try:
+        speak(window, spies, "Hallo.")
+        window.stop_active_session()  # F9
+        assert phase_is(window, ListenPhase.IDLE)
+        text = session_strings.counted(session_strings.STATE_STOPPED_LOSS, 1)
+        assert window.listen.state_label.text() == text == "Stopped — 1 not finished"
+        assert STOP_TIMEOUT in keys(window)
+        assert window.session_owner.lingering() is LISTEN
+
+        window.listen.start()  # AC-05: refused while the worker lives, nothing opens
+        assert STILL_FINISHING in keys(window)
+        assert len(window.listen_captures) == 1
+    finally:
+        release.set()
+    assert wait_until(lambda: window.session_owner.lingering() is None)
+    start(window)
+    assert len(window.listen_captures) == 2
+    assert STOP_TIMEOUT in keys(window)  # a lost-turn notice survives Start
+    assert STILL_FINISHING not in keys(window)
+    assert window.listen.controller.transcript.results() == ()

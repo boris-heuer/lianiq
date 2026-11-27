@@ -25,6 +25,7 @@ from lianiq.listen.pipeline import ListenPipeline
 from lianiq.listen.session import ListenReadiness, StartBlock, listen_readiness
 from lianiq.ui import notice_catalog as catalog
 from lianiq.ui import strings
+from lianiq.ui import strings_session as session_strings
 from lianiq.ui.notice_catalog_base import LISTEN_MIC_LOST, model_failed_key
 from lianiq.ui.shell.session_owner import SessionBusy
 from lianiq.ui.shell.workspaces import WorkspaceId, session_busy_message
@@ -38,6 +39,8 @@ from lianiq.ui.workspaces.listen_selection import ListenSelection
 if TYPE_CHECKING:
     from lianiq.ui.main_window import MainWindow
 
+# Resolved when a session reaches *listening*, not at the click (session-status-truthfulness AC-13).
+RESOLVED_ON_RUNNING = (model_failed_key(LISTEN), LISTEN_MIC_LOST, catalog.STILL_FINISHING_KEY)
 BUSY_STATES = {
     ListenPhase.LOADING: strings.LISTEN_STATE_LOADING,
     ListenPhase.STOPPING: strings.LISTEN_STATE_STOPPING,
@@ -111,6 +114,7 @@ class ListenWorkspace(
         self.open_audio_button.clicked.connect(self.open_audio_settings)
         self.connect_actions()
         page.installEventFilter(self)
+        self.host.notices.subscribe(self._notice_changed)
         self._sync_combos()
         self.refresh()
         return page
@@ -147,7 +151,6 @@ class ListenWorkspace(
         if (other := owner.busy_for(LISTEN)) is not None:
             self.host.show_busy(LISTEN, other)
             return
-        self.host.resolve_notices((model_failed_key(LISTEN), LISTEN_MIC_LOST))
         self.remember_microphone()
         try:
             self.controller.start(session)
@@ -164,8 +167,14 @@ class ListenWorkspace(
             self.state_label.setText(strings.LISTEN_STATE_MODEL_ERROR)
             reason = reason_text(alert.reason)
             self.host.post_notice(catalog.model_failed(LISTEN, reason, where, self.start))
+        elif alert.kind is AlertKind.STOP_TIMEOUT:
+            self.host.post_notice(catalog.stop_timeout(LISTEN, alert.count, alert.generation))
         else:  # MICROPHONE_LOST, after the stop policy ran
             self.microphone_lost(alert.device_name, alert.generation)
+
+    def _notice_changed(self, _change: str, notice) -> None:
+        if notice.key == LISTEN_MIC_LOST:
+            self.controller.render()  # *Stopped — microphone lost* only while it is open
 
     @Slot(object)
     def _run_posted(self, callback) -> None:
@@ -184,7 +193,8 @@ class ListenWorkspace(
         phase, idle = snapshot.phase, snapshot.phase is ListenPhase.IDLE
         if not idle:
             self._error = False
-        elif self._phase is not ListenPhase.IDLE:
+        running = phase is ListenPhase.LISTENING and self._phase is not ListenPhase.LISTENING
+        if idle and self._phase is not ListenPhase.IDLE:
             self._stopped = True
         self._phase, self._paused = phase, snapshot.paused
         self.follow(snapshot)
@@ -218,6 +228,8 @@ class ListenWorkspace(
         else:
             empty = strings.LISTEN_NO_PACK_HINT if no_packs else strings.LISTEN_EMPTY
         self.paired_view.set_placeholder(empty)
+        if running:  # the session reached *listening*
+            self.host.resolve_notices(RESOLVED_ON_RUNNING)
 
     def _state_text(self, snapshot: ListenSnapshot) -> str:
         if snapshot.paused:
@@ -229,6 +241,12 @@ class ListenWorkspace(
             return BUSY_STATES[snapshot.phase]
         if self._error:
             return strings.LISTEN_STATE_MODEL_ERROR
+        if self.host.notices.get(LISTEN_MIC_LOST) is not None:
+            return session_strings.LISTEN_STOPPED_MIC_LOST
+        if snapshot.not_finished:
+            return session_strings.counted(
+                session_strings.STATE_STOPPED_LOSS, snapshot.not_finished
+            )
         return strings.LISTEN_STATE_STOPPED if self._stopped else strings.LISTEN_STATE_READY
 
     def _readiness_text(self, block: StartBlock, readiness: ListenReadiness) -> str:

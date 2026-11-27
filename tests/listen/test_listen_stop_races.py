@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import threading
+import time
+
+import pytest
 
 from lianiq.listen.lifecycle import ListenPhase
 from lianiq.listen.transcript import SegmentState
-from lianiq.ui.shell.session_owner import SessionState
+from lianiq.ui.shell.session_owner import SessionState, SessionStillFinishing
 from tests.listen._listen_helpers import GatedTranslator, Harness
 
 
@@ -21,6 +24,16 @@ class GatedWarmUp:
         raise AssertionError("not reached")
 
 
+def ended(harness, timeout: float = 5.0) -> bool:
+    """Poll the lingering guard without running the posted callbacks."""
+    deadline = time.monotonic() + timeout
+    while harness.owner.lingering() is not None:
+        if time.monotonic() > deadline:
+            return False
+        time.sleep(0.01)
+    return True
+
+
 def test_ac11_a_late_result_after_idle_and_after_a_new_start_never_appears(tmp_path) -> None:
     translator = GatedTranslator()
     harness = Harness(tmp_path, translator=translator, flush_seconds=0.05, grace_seconds=0.05)
@@ -33,11 +46,14 @@ def test_ac11_a_late_result_after_idle_and_after_a_new_start_never_appears(tmp_p
     harness.pump(lambda: controller.phase is ListenPhase.IDLE)
     assert harness.states() == [SegmentState.NOT_FINISHED]
     assert harness.owner.state is SessionState.IDLE
-    controller.start(harness.session)  # a new session while the old turn still runs
-    harness.pump(lambda: controller.phase is ListenPhase.LISTENING)
+    with pytest.raises(SessionStillFinishing):  # the old turn still runs (AC-05)
+        controller.start(harness.session)
     translator.release.set()
     assert translator.finished.wait(5.0)
-    harness.drain(0.3)  # the old worker posts its late result after translate returns
+    assert ended(harness)
+    controller.start(harness.session)  # its late result is queued behind this start
+    harness.pump(lambda: controller.phase is ListenPhase.LISTENING)
+    harness.drain(0.3)
     assert harness.states() == [SegmentState.NOT_FINISHED]
     assert controller.transcript.results() == ()
 

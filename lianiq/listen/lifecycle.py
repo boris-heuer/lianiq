@@ -29,6 +29,7 @@ class ListenPhase(StrEnum):
 class AlertKind(StrEnum):
     START_FAILED = "start_failed"  # model load or capture open failed
     MICROPHONE_LOST = "microphone_lost"
+    STOP_TIMEOUT = "stop_timeout"  # the worker outlived flush bound plus grace
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +38,7 @@ class ListenAlert:
     generation: int
     reason: FailureReason | None = None
     device_name: str = ""
+    count: int = 0  # STOP_TIMEOUT: turns not finished
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +49,7 @@ class ListenSnapshot:  # rendered by the page; never holds audio
     rows_changed: tuple[int, ...]  # row indexes to refresh
     can_export: bool  # at least one DONE row
     paused: bool = False  # listening, the microphone paused while a translation is spoken
+    not_finished: int = 0  # idle after a stop that timed out: turns not finished
 
 
 class Capture(Protocol):
