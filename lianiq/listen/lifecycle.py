@@ -46,6 +46,7 @@ class ListenSnapshot:  # rendered by the page; never holds audio
     busy: bool  # worker processing → *Processing…*
     rows_changed: tuple[int, ...]  # row indexes to refresh
     can_export: bool  # at least one DONE row
+    paused: bool = False  # listening, the microphone paused while a translation is spoken
 
 
 class Capture(Protocol):
@@ -56,6 +57,8 @@ class Capture(Protocol):
     def start(self) -> None: ...
 
     def stop(self) -> None: ...
+
+    def set_muted(self, muted: bool) -> None: ...
 
 
 class UsageBinding(Protocol):
