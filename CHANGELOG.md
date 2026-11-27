@@ -144,6 +144,11 @@ All notable user-visible changes are documented here.
   notice, and Start waits until the unfinished turn has ended. A failed turn keeps
   *Error — see notice* until its notice is closed, and late results of a stopped session
   are never shown.
+- Listen & translate: a stop that runs out of time reads *Stopped — {n} not finished* with a
+  notice instead of a clean *Stopped*, and Start waits until the unfinished turn has ended.
+  After a microphone loss the page reads *Stopped — microphone lost* while its notice is open;
+  that notice and a model-load failure notice now close when listening begins, not at the
+  click on **Start listening**.
 - The voice warm-up at the start of a session, including **Start meeting**, now synthesises
   in memory and no longer writes a temporary WAV file.
 - A Bluetooth headset whose PortAudio name carries a suffix that Windows does not store, such
