@@ -7,9 +7,8 @@ contribution enters one no-drop ``TurnQueue`` ordered by speech end; one worker 
 STT → MT → TTS → playback for each, serialised, with one ``EndpointPlaybackStream`` per
 render endpoint and the cross-device ``FeedbackGuard`` around every playback.
 
-``stop`` stops both captures, lets the worker drain the queued and in-flight contributions,
-then publishes ``STOPPED``. The worker never blocks forever on ``TurnQueue.take`` and ``stop``
-waits at most ``timeout`` seconds; after that the remaining contributions are withdrawn.
+``stop`` (``stopping``) drains the queued and in-flight contributions within its bound and
+publishes ``STOPPED`` with its result. Every event carries the meeting's owner generation.
 
 Endpoint loss follows ``call_bridge/controller.py``: the lost capture stops or the lost
 render is skipped, ``ENDPOINT_LOST`` names the role, no other device is opened and queued
@@ -25,6 +24,7 @@ import logging
 import threading
 import time
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 from datetime import datetime
 from functools import partial
 from types import MappingProxyType
@@ -56,6 +56,8 @@ from lianiq.meeting.events import (
 from lianiq.meeting.feedback_guard import FeedbackGuard
 from lianiq.meeting.language_gate import LanguageGate
 from lianiq.meeting.processing import ContributionProcessing
+from lianiq.meeting.stopping import CAPTURE_ORDER as _CAPTURE_ORDER
+from lianiq.meeting.stopping import MeetingStopping
 from lianiq.meeting.turn_queue import Contribution, TurnQueue
 from lianiq.pipeline_types import DEFAULT_DETECTION_MIN_PROBABILITY
 from lianiq.ui.shell.session_owner import ActiveSessionOwner
@@ -71,14 +73,13 @@ __all__ = [
 ]
 
 LOGGER = logging.getLogger(__name__)
-_CAPTURE_ORDER = (MeetingRole.TABLE_CAPTURE, MeetingRole.USER_CAPTURE)
 
 
 def _now() -> datetime:
     return datetime.now().astimezone()
 
 
-class MeetingController(ContributionProcessing):
+class MeetingController(MeetingStopping, ContributionProcessing):
     def __init__(
         self,
         session: SessionPair,
@@ -157,6 +158,9 @@ class MeetingController(ContributionProcessing):
         self._stopping = threading.Event()
         self._abort = threading.Event()
         self._worker: threading.Thread | None = None
+        self._last_worker: threading.Thread | None = None
+        self._current = None  # the contribution the worker processes
+        self._abandoned = 0  # withdrawn at the stop bound
         self._generation: int | None = None
         owner.register(WorkspaceId.MEETING, self.stop)
 
@@ -185,6 +189,7 @@ class MeetingController(ContributionProcessing):
         if self._worker is not None or self._generation is not None:
             raise RuntimeError("A meeting controller runs one meeting")
         generation = self.owner.request_start(WorkspaceId.MEETING)  # raises SessionBusy
+        self._generation = generation  # stamped on every event, also the first contribution
         started: list[MeetingCapture] = []
         try:
             for role in _CAPTURE_ORDER:
@@ -193,10 +198,12 @@ class MeetingController(ContributionProcessing):
         except Exception:
             for capture in reversed(started):
                 capture.stop()
+            self._generation = None
             self.owner.mark_idle(generation)
             raise
-        self._generation = generation
-        self._worker = threading.Thread(target=self._run, name="meeting-inference", daemon=True)
+        self._last_worker = self._worker = threading.Thread(
+            target=self._run, name="meeting-inference", daemon=True
+        )
         self._worker.start()
         self.owner.mark_running(generation)
         for role in _CAPTURE_ORDER:
@@ -207,30 +214,6 @@ class MeetingController(ContributionProcessing):
         if on and MeetingRole.LOCAL_RENDER not in self._renders:
             raise ValueError("Local-language speech needs its own output, not the table speaker")
         self._speak_local = on
-
-    def stop(self, timeout: float = 120.0) -> bool:
-        """Stop both captures, drain the queue, publish ``STOPPED``; ``False`` on a timeout."""
-        worker = self._worker
-        if worker is None:
-            return True
-        for role in _CAPTURE_ORDER:  # a failing stop must not keep the other input open
-            try:
-                self._captures[role].stop()
-            except Exception as exc:  # noqa: BLE001 - external capture adapter boundary.
-                LOGGER.error(
-                    "Meeting capture stop failed: role=%s %s", role.value, type(exc).__name__
-                )
-        self._stopping.set()
-        worker.join(timeout)
-        drained = not worker.is_alive()
-        if not drained:
-            self._abort.set()
-            worker.join(2.0)
-        self._worker = None
-        self._publish(MeetingEvent(MeetingEventKind.STOPPED))
-        if self._generation is not None:
-            self.owner.mark_idle(self._generation)
-        return drained
 
     def endpoint_lost(self, role: MeetingRole) -> None:
         """Stop the lost capture or skip the lost render; no other device is opened."""
@@ -272,4 +255,4 @@ class MeetingController(ContributionProcessing):
         self._check_backlog()
 
     def _publish(self, event: MeetingEvent) -> None:
-        self._publish_event(event)
+        self._publish_event(replace(event, generation=self._generation or 0))
